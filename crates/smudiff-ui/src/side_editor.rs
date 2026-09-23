@@ -5,9 +5,12 @@ use gpui::{
     App, Bounds, ContentMask, Hsla, Pixels, ShapedLine, SharedString, TextRun, Window, fill, point,
     px, quad, size,
 };
-use smudiff_view::{FileDiff, StripeMarker, thumb_range};
+use smudiff_core::side::Side;
+use smudiff_view::separator::{stroke_width, wave};
+use smudiff_view::{FileDiff, Folding, StripeMarker, thumb_range};
 
 use crate::cache::LineCache;
+use crate::divider::stroke_path;
 use crate::geometry::SideGeometry;
 use crate::tabs::ExpandedLine;
 use crate::text::TextStyle;
@@ -68,6 +71,7 @@ impl StripeRects {
 
 pub struct SideEditor<'a> {
     pub diff: &'a FileDiff,
+    pub folding: &'a Folding,
     pub geom: &'a SideGeometry,
     pub theme: &'a UiTheme,
     pub style: &'a TextStyle,
@@ -107,7 +111,7 @@ impl SideEditor<'_> {
         let g = self.geom;
         let side = g.side;
         let lh = self.style.line_height();
-        let layout = self.diff.layout(side, lh);
+        let layout = self.folding.layout(side, lh);
         let (top, bottom) = (self.top, self.top + self.height);
         let screen_y = |y: f32| self.top + y - self.scroll_y;
 
@@ -118,6 +122,13 @@ impl SideEditor<'_> {
 
         let (first, last) = layout.painted_lines(self.scroll_y, self.height);
         let last_line = last.min(layout.line_count() - 1);
+        let (first_visual, last_visual) = layout.painted_visual_lines(self.scroll_y, self.height);
+        let last_visual = last_visual.min(layout.visual_line_count() - 1);
+        // Kollapsede folds har ingen tekst og ikke linjenummer (`hideLineNumberPredicate`)
+        let lines: Vec<usize> = (first_visual..=last_visual)
+            .filter(|&v| layout.fold_at_visual(v).is_none())
+            .map(|v| layout.visual_to_logical(v))
+            .collect();
         let mut widest: f32 = 0.;
 
         window.with_content_mask(mask(side_bounds), |window| {
@@ -130,10 +141,11 @@ impl SideEditor<'_> {
             ));
 
             self.paint_block_backgrounds(first, last, window);
+            self.paint_folds(first_visual..=last_visual, window);
 
             window.with_content_mask(mask(text_bounds), |window| {
                 let text_x = g.text.start - self.scroll_x;
-                for line in first..=last_line {
+                for &line in &lines {
                     let y = screen_y(layout.line_top(line));
                     let entry = cache.get_or_insert_with(line, || self.shape(line, window));
                     widest = widest.max(entry.width());
@@ -160,7 +172,7 @@ impl SideEditor<'_> {
             });
 
             window.with_content_mask(mask(gutter_bounds), |window| {
-                for line in first..=last_line {
+                for &line in &lines {
                     let y = screen_y(layout.line_top(line)) + self.style.number_dy;
                     let caret;
                     let number = if line == self.caret_line {
@@ -183,12 +195,37 @@ impl SideEditor<'_> {
         widest
     }
 
+    /// `DiffLineSeparatorRenderer`: bølge over gutter og tekst, med fasen fra divideren.
+    fn paint_folds(&self, visual: std::ops::RangeInclusive<usize>, window: &mut Window) {
+        let g = self.geom;
+        let lh = self.style.line_height();
+        let layout = self.folding.layout(g.side, lh);
+        let (edge, mirrored) = match g.side {
+            Side::Left => (g.gutter.end, true),
+            Side::Right => (g.gutter.start, false),
+        };
+        let hovered = self.folding.hovered();
+        for (id, fold) in self.folding.visible(g.side) {
+            if fold.visual < *visual.start() {
+                continue;
+            }
+            if fold.visual > *visual.end() {
+                break;
+            }
+            let y = self.top + layout.visual_line_to_y(fold.visual) - self.scroll_y;
+            let path = wave(g.bounds(), edge, mirrored, y, lh);
+            let width = stroke_width(hovered == Some(id));
+            let p = |pt: smudiff_view::Point| point(px(pt.x), px(pt.y));
+            stroke_path(window, &path, p, width, self.theme.separator_wave);
+        }
+    }
+
     /// Per blokk, ikke per linje, så en stor endring blir ett rektangel.
     fn paint_block_backgrounds(&self, first: usize, last: usize, window: &mut Window) {
         let g = self.geom;
         let side = g.side;
         let gl = g.gutter_layout;
-        let layout = self.diff.layout(side, self.style.line_height());
+        let layout = self.folding.layout(side, self.style.line_height());
         let blocks = self.diff.blocks();
         let start = blocks.partition_point(|b| b.lines(side).end < first);
         let whole = g.text.start.min(g.gutter.start)..g.text.end.max(g.gutter.end);

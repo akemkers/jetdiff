@@ -4,6 +4,7 @@
 
 use smudiff_core::side::Side;
 
+use crate::folding::Folding;
 use crate::layout::LineLayout;
 use crate::model::{DiffType, FileDiff};
 
@@ -60,8 +61,14 @@ pub fn thumb_range(
     ))
 }
 
-pub fn stripe_markers(diff: &FileDiff, side: Side, line_height: f32) -> Vec<StripeMarker> {
-    let layout = diff.layout(side, line_height);
+/// Med folds: y er visuell, som `offsetToY` i `EditorMarkupModelImpl`.
+pub fn stripe_markers(
+    diff: &FileDiff,
+    folding: &Folding,
+    side: Side,
+    line_height: f32,
+) -> Vec<StripeMarker> {
+    let layout = folding.layout(side, line_height);
     let height = layout.content_height();
     diff.blocks()
         .iter()
@@ -110,11 +117,26 @@ mod tests {
     }
 
     #[test]
+    fn markorer_med_folds_er_visuelle() {
+        let a: String = (0..100).map(|i| format!("a{i}\n")).collect();
+        let b = a.replace("a50\n", "x\n");
+        let d = diff(&a, &b);
+        let f = Folding::new(&d, crate::folding::FoldSettings::default());
+        let m = stripe_markers(&d, &f, Side::Left, 10.);
+        // 0..46 foldes til én linje, så linje 50 er visuell linje 5
+        assert_eq!(f.layout(Side::Left, 10.).logical_to_visual(50), 5);
+        assert_eq!(m[0].start_y, 50.);
+        // 11 visuelle linjer pluss fem ekstra
+        assert_eq!(m[0].start, 50. / 160.);
+        assert_eq!(m.len(), 1);
+    }
+
+    #[test]
     fn markorer_per_side() {
         // Venstre linje 1..2 slettet, høyre har tom side på linje 1
         let d = diff("a\nb\nc\nd\ne\n", "a\nc\nx\ny\nz\n");
-        let left = stripe_markers(&d, Side::Left, 10.);
-        let right = stripe_markers(&d, Side::Right, 10.);
+        let left = stripe_markers(&d, &Folding::none(&d), Side::Left, 10.);
+        let right = stripe_markers(&d, &Folding::none(&d), Side::Right, 10.);
         assert_eq!(d.blocks()[0].lines, [1..2, 1..1]);
         assert_eq!((left[0].start_y, left[0].end_y), (10., 10.));
         assert_eq!((right[0].start_y, right[0].end_y), (10., 10.));
@@ -131,7 +153,7 @@ mod tests {
         // Venstre mangler '\n' på slutten, blokken ligger på linje 3 av 3
         let d = diff("one\ntwo\nthree", "one\ntwo\nthree\n");
         assert_eq!(d.blocks()[0].lines, [3..3, 3..4]);
-        let left = stripe_markers(&d, Side::Left, 10.);
+        let left = stripe_markers(&d, &Folding::none(&d), Side::Left, 10.);
         assert_eq!((left[0].start_y, left[0].end_y), (20., 20.));
     }
 

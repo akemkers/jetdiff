@@ -15,7 +15,15 @@ Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode.
 cargo run --release -p smudiff -- <venstre> <høyre> [--light]
 ```
 
-F7 og Shift+F7 hopper til neste og forrige endring. Cmd+Q eller Cmd+W lukker. JetBrains Mono brukes hvis den er installert eller finnes i en JetBrains-IDE under `/Applications`, ellers Menlo.
+F7 og Shift+F7 hopper til neste og forrige endring. Cmd+Q eller Cmd+W lukker.
+
+Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer. Snarveiene følger IntelliJ på macOS:
+
+- Cmd+= og Cmd+- åpner og lukker folden ved caret
+- Cmd+Shift+= og Cmd+Shift+- åpner og lukker alle
+- Cmd+Alt+C bytter kontekst: 1, 2, 4, 8 linjer eller ingen folding
+
+JetBrains Mono brukes hvis den er installert eller finnes i en JetBrains-IDE under `/Applications`, ellers Menlo.
 
 ## Kjøre spiken
 

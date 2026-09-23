@@ -4,6 +4,7 @@
 
 use smudiff_core::side::Side;
 
+use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{Block, FileDiff, idx};
 
@@ -185,26 +186,46 @@ impl ScrollState {
     }
 
     /// Siden brukeren scroller er master. Slave regnes ut i samme frame.
-    pub fn scroll_to(&mut self, diff: &FileDiff, master: Side, y: f32, viewport: Viewport) {
-        let layout = diff.layout(master, viewport.line_height);
+    pub fn scroll_to(
+        &mut self,
+        diff: &FileDiff,
+        folding: &Folding,
+        master: Side,
+        y: f32,
+        viewport: Viewport,
+    ) {
+        let layout = folding.layout(master, viewport.line_height);
         let y = layout.clamp_scroll(y, viewport.height);
         // `visibleAreaChanged` synker bare når y faktisk endret seg
         if y == self.y(master) {
             return;
         }
         self.y[idx(master)] = y;
-        self.sync_from(diff, master, viewport);
+        self.sync_from(diff, folding, master, viewport);
     }
 
-    pub fn scroll_by(&mut self, diff: &FileDiff, master: Side, dy: f32, viewport: Viewport) {
-        self.scroll_to(diff, master, self.y(master) + dy, viewport);
+    pub fn scroll_by(
+        &mut self,
+        diff: &FileDiff,
+        folding: &Folding,
+        master: Side,
+        dy: f32,
+        viewport: Viewport,
+    ) {
+        self.scroll_to(diff, folding, master, self.y(master) + dy, viewport);
     }
 
     /// Regner slave på nytt, f.eks. etter endret viewport-høyde.
-    pub fn sync_from(&mut self, diff: &FileDiff, master: Side, viewport: Viewport) {
+    pub fn sync_from(
+        &mut self,
+        diff: &FileDiff,
+        folding: &Folding,
+        master: Side,
+        viewport: Viewport,
+    ) {
         let slave = master.other();
-        let master_layout = diff.layout(master, viewport.line_height);
-        let slave_layout = diff.layout(slave, viewport.line_height);
+        let master_layout = folding.layout(master, viewport.line_height);
+        let slave_layout = folding.layout(slave, viewport.line_height);
         self.y[idx(slave)] = sync_vertical_scroll(
             diff.mapping(),
             master,
@@ -220,6 +241,66 @@ impl ScrollState {
     /// `max_x` kommer fra UI-et, som kjenner tekstbredden.
     pub fn scroll_x_to(&mut self, x: f32, max_x: f32) {
         self.x = x.clamp(0., max_x.max(0.));
+    }
+}
+
+/// `EditorScrollingPositionKeeper` per side: holder caret, eller øverste linje hvis caret er
+/// utenfor, på samme sted på skjermen gjennom en fold-endring.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PositionKeeper {
+    /// Logisk linje og avstand fra toppen av viewporten.
+    anchors: [(usize, f32); 2],
+    caret: [bool; 2],
+}
+
+impl PositionKeeper {
+    pub fn save(
+        state: &ScrollState,
+        folding: &Folding,
+        carets: [usize; 2],
+        viewport: Viewport,
+    ) -> Self {
+        let mut anchors = [(0, 0.); 2];
+        let mut caret = [false; 2];
+        for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
+            let layout = folding.layout(side, viewport.line_height);
+            let top = state.y[i];
+            let caret_y = layout.line_top(carets[i]);
+            let off_screen =
+                caret_y + layout.line_height() <= top || caret_y >= top + viewport.height;
+            anchors[i] = if off_screen {
+                // `xyToLogicalPosition`: første linje i folden hvis toppen står på en
+                let line = layout.y_to_logical_line(top).min(layout.line_count() - 1);
+                (line, layout.line_top(line) - top)
+            } else {
+                (carets[i], caret_y - top)
+            };
+            caret[i] = !off_screen;
+        }
+        Self { anchors, caret }
+    }
+
+    /// `carets` er etter endringen, flyttet ut av kollapsede folds. Venstre gjenopprettes
+    /// først uten sync, siden høyre fortsatt er i batch. Flytter høyre seg, synker den
+    /// venstre som i `runBatchOperation`.
+    pub fn restore(
+        &self,
+        state: &mut ScrollState,
+        diff: &FileDiff,
+        folding: &Folding,
+        carets: [usize; 2],
+        viewport: Viewport,
+    ) {
+        let before = state.y[1];
+        for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
+            let layout = folding.layout(side, viewport.line_height);
+            let (line, shift) = self.anchors[i];
+            let line = if self.caret[i] { carets[i] } else { line };
+            state.y[i] = layout.clamp_scroll(layout.line_top(line) - shift, viewport.height);
+        }
+        if state.y[1] != before {
+            state.sync_from(diff, folding, Side::Right, viewport);
+        }
     }
 }
 
@@ -366,7 +447,11 @@ mod tests {
     };
 
     fn sync(d: &FileDiff, master: Side, master_y: f32, slave_y: f32) -> f32 {
-        let (ml, sl) = (d.layout(master, 20.), d.layout(master.other(), 20.));
+        sync_folded(d, &Folding::none(d), master, master_y, slave_y)
+    }
+
+    fn sync_folded(d: &FileDiff, f: &Folding, master: Side, master_y: f32, slave_y: f32) -> f32 {
+        let (ml, sl) = (f.layout(master, 20.), f.layout(master.other(), 20.));
         sync_vertical_scroll(
             d.mapping(),
             master,
@@ -377,6 +462,121 @@ mod tests {
             slave_y,
             VP.height,
         )
+    }
+
+    /// Endringer på linjene 10, 40 og 90 av 100. Kollapset: folds 0..6, 15..36, 45..86 og
+    /// 95..101 på begge sider.
+    fn three_changes() -> FileDiff {
+        let a = lines("a", 100);
+        let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
+        for i in [10, 40, 90] {
+            b[i] = format!("x{i}");
+        }
+        diff(&a, &(b.join("\n") + "\n"))
+    }
+
+    fn folded(d: &FileDiff) -> Folding {
+        Folding::new(d, crate::folding::FoldSettings::default())
+    }
+
+    #[test]
+    fn expand_holder_caret_pa_plass() {
+        let d = three_changes();
+        let mut f = folded(&d);
+        let mut s = ScrollState::default();
+        s.scroll_to(&d, &f, L, 400., VP);
+        assert_eq!(s.y, [400., 400.]);
+        let carets = [90, 90];
+        let screen = |f: &Folding, s: &ScrollState| {
+            [L, R].map(|side| f.layout(side, 20.).line_top(90) - s.y(side))
+        };
+        let before = screen(&f, &s);
+        let keeper = PositionKeeper::save(&s, &f, carets, VP);
+        let id = f.fold_at_line(L, 45).unwrap();
+        f.set_expanded(id, true);
+        keeper.restore(&mut s, &d, &f, carets, VP);
+        // 45..86 ble 4 + fold + 4 linjer, altså 8 visuelle linjer mer over caret
+        assert_eq!(s.y, [560., 560.]);
+        assert_eq!(screen(&f, &s), before);
+    }
+
+    #[test]
+    fn caret_utenfor_holder_overste_linje() {
+        let d = three_changes();
+        let mut f = folded(&d);
+        let mut s = ScrollState::default();
+        // Visuell linje 11 er logisk 36
+        s.scroll_to(&d, &f, L, 220., VP);
+        let carets = [0, 0];
+        let keeper = PositionKeeper::save(&s, &f, carets, VP);
+        // 0..6 blir fold 0..2 og fire linjer, altså fire visuelle linjer mer
+        let id = f.fold_at_line(R, 0).unwrap();
+        f.set_expanded(id, true);
+        keeper.restore(&mut s, &d, &f, carets, VP);
+        assert_eq!(s.y, [300., 300.]);
+        assert_eq!(f.layout(L, 20.).y_to_logical_line(s.y[0]), 36);
+
+        // Toppen står på en fold som åpnes: første linje blir liggende
+        let mut s = ScrollState::default();
+        s.scroll_to(&d, &f, L, 480., VP);
+        assert_eq!(f.layout(L, 20.).y_to_logical_line(480.), 45);
+        let keeper = PositionKeeper::save(&s, &f, carets, VP);
+        f.expand_at(L, 45);
+        keeper.restore(&mut s, &d, &f, carets, VP);
+        assert_eq!(s.y, [480., 480.]);
+    }
+
+    #[test]
+    fn collapse_flytter_caret_til_folden() {
+        let d = three_changes();
+        let mut f = folded(&d);
+        f.expand_all(true);
+        let mut s = ScrollState::default();
+        s.scroll_to(&d, &f, L, 1000., VP);
+        let carets = [60, 60];
+        let keeper = PositionKeeper::save(&s, &f, carets, VP);
+        f.expand_all(false);
+        let carets = carets.map(|c| f.caret_after(L, c));
+        assert_eq!(carets, [45, 45]);
+        keeper.restore(&mut s, &d, &f, carets, VP);
+        // Folden havner der caret-linja sto
+        assert_eq!(f.layout(L, 20.).line_top(45) - s.y[0], 1200. - 1000.);
+    }
+
+    #[test]
+    fn sync_med_ulike_folds() {
+        // Høyre har 30 ekstra linjer ved 40, så gapene og foldene er ulike
+        let a = lines("a", 100);
+        let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
+        b[10] = "x".into();
+        b[90] = "y".into();
+        for i in 0..30 {
+            b.insert(40, format!("n{i}"));
+        }
+        let d = diff(&a, &(b.join("\n") + "\n"));
+        let f = folded(&d);
+        let (ml, sl) = (f.layout(L, 20.), f.layout(R, 20.));
+        assert_ne!(ml.folds(), sl.folds());
+        let anchor = (VP.height / 3.).floor();
+        let mut checked = 0;
+        let mut y = 0.;
+        while y <= ml.max_scroll(VP.height) {
+            let slave = sync_folded(&d, &f, L, y, 0.);
+            let master_line = ml.y_to_logical_line(y + anchor);
+            let in_block = d.blocks().iter().any(|b| b.lines[0].contains(&master_line));
+            let in_fold = ml
+                .folds()
+                .iter()
+                .any(|fold| fold.lines.contains(&master_line));
+            let clamped = slave == 0. || slave == sl.max_scroll(VP.height);
+            if !in_block && !in_fold && !clamped {
+                let slave_line = sl.y_to_logical_line(slave + anchor);
+                assert_eq!(slave_line, d.mapping().transfer(L, master_line), "y={y}");
+                checked += 1;
+            }
+            y += 5.;
+        }
+        assert!(checked > 20);
     }
 
     #[test]
@@ -442,10 +642,10 @@ mod tests {
         let a = lines("a", 5);
         let b = lines("a", 200);
         let d = diff(&a, &b);
-        let right_max = d.layout(R, 20.).max_scroll(VP.height);
+        let right_max = Folding::none(&d).layout(R, 20.).max_scroll(VP.height);
         assert_eq!(
             sync(&d, R, right_max, 0.),
-            d.layout(L, 20.).max_scroll(VP.height)
+            Folding::none(&d).layout(L, 20.).max_scroll(VP.height)
         );
         assert_eq!(sync(&d, L, 0., 500.), 0.);
     }
@@ -467,14 +667,17 @@ mod tests {
         );
         let d = diff(&a, &b);
         let mut s = ScrollState::default();
-        s.scroll_to(&d, L, 1100., VP);
+        s.scroll_to(&d, &Folding::none(&d), L, 1100., VP);
         assert_eq!(s.y, [1100., 1300.]);
-        s.scroll_by(&d, R, -1300., VP);
+        s.scroll_by(&d, &Folding::none(&d), R, -1300., VP);
         assert_eq!(s.y, [0., 0.]);
-        s.scroll_to(&d, L, -50., VP);
+        s.scroll_to(&d, &Folding::none(&d), L, -50., VP);
         assert_eq!(s.y, [0., 0.]);
-        s.scroll_to(&d, L, 1e9, VP);
-        assert_eq!(s.y(L), d.layout(L, 20.).max_scroll(VP.height));
+        s.scroll_to(&d, &Folding::none(&d), L, 1e9, VP);
+        assert_eq!(
+            s.y(L),
+            Folding::none(&d).layout(L, 20.).max_scroll(VP.height)
+        );
         s.scroll_x_to(-4., 100.);
         assert_eq!(s.x, 0.);
         s.scroll_x_to(400., 100.);

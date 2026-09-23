@@ -1,14 +1,39 @@
-//! Trakten mellom editorene. Geometrien kommer ferdig fra `divider_bands`, lokal for
-//! divideren med samme y-akse som editorene.
+//! Trakten mellom editorene. Geometrien kommer ferdig fra `divider_bands` og
+//! `divider_separators`, lokal for divideren med samme y-akse som editorene.
 
-use gpui::{Bounds, ContentMask, PathBuilder, Window, fill, point, px, size};
+use gpui::{Bounds, ContentMask, Hsla, PathBuilder, Pixels, Window, fill, point, px, size};
 use smudiff_view::divider::DIVIDER_WIDTH;
-use smudiff_view::{Cubic, FileDiff, Point, Viewport, divider_bands};
+use smudiff_view::separator::stroke_width;
+use smudiff_view::{
+    Cubic, FileDiff, Folding, PathSeg, Point, Viewport, divider_bands, divider_separators,
+};
 
 use crate::theme::UiTheme;
 
+/// Streker en sti fra `smudiff-view`. `map` gir vindus-koordinater.
+pub fn stroke_path(
+    window: &mut Window,
+    segs: &[PathSeg],
+    map: impl Fn(Point) -> gpui::Point<Pixels>,
+    width: f32,
+    color: Hsla,
+) {
+    let mut b = PathBuilder::stroke(px(width));
+    for seg in segs {
+        match *seg {
+            PathSeg::Move(p) => b.move_to(map(p)),
+            PathSeg::Quad { ctrl, to } => b.curve_to(map(to), map(ctrl)),
+            PathSeg::Cubic { c1, c2, to } => b.cubic_bezier_to(map(to), map(c1), map(c2)),
+        }
+    }
+    if let Ok(path) = b.build() {
+        window.paint_path(path, color);
+    }
+}
+
 pub struct Divider<'a> {
     pub diff: &'a FileDiff,
+    pub folding: &'a Folding,
     pub theme: &'a UiTheme,
     pub x: f32,
     pub top: f32,
@@ -27,7 +52,13 @@ impl Divider<'_> {
 
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             window.paint_quad(fill(bounds, self.theme.divider_bg));
-            for band in divider_bands(self.diff, self.scroll_y, self.viewport, DIVIDER_WIDTH) {
+            for band in divider_bands(
+                self.diff,
+                self.folding,
+                self.scroll_y,
+                self.viewport,
+                DIVIDER_WIDTH,
+            ) {
                 let color = self.theme.diff(band.diff_type).background;
 
                 let mut b = PathBuilder::fill();
@@ -47,6 +78,12 @@ impl Divider<'_> {
                 if let Ok(path) = b.build() {
                     window.paint_path(path, color);
                 }
+            }
+            let seps =
+                divider_separators(self.folding, self.scroll_y, self.viewport, DIVIDER_WIDTH);
+            for sep in seps {
+                let width = stroke_width(sep.hovered);
+                stroke_path(window, &sep.path, p, width, self.theme.separator_wave);
             }
         });
     }

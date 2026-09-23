@@ -10,5 +10,8 @@ pub mod tabs;
 pub mod text;
 pub mod theme;
 
-pub use file_diff::{FileDiffView, NextChange, PreviousChange};
+pub use file_diff::{
+    CollapseAllFolds, CollapseFold, ExpandAllFolds, ExpandFold, FileDiffView, NextChange,
+    NextContextRange, PreviousChange,
+};
 pub use theme::UiTheme;

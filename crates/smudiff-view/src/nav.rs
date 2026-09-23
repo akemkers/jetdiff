@@ -4,6 +4,7 @@
 
 use smudiff_core::side::Side;
 
+use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{FileDiff, idx};
 
@@ -47,19 +48,35 @@ impl Navigation {
         prev_block(diff, self.side, self.caret()).is_some()
     }
 
-    pub fn go_next(&mut self, diff: &FileDiff, viewport: Viewport) -> Option<NavTarget> {
+    pub fn go_next(
+        &mut self,
+        diff: &FileDiff,
+        folding: &Folding,
+        viewport: Viewport,
+    ) -> Option<NavTarget> {
         let block = next_block(diff, self.side, self.caret())?;
-        Some(self.go_to(diff, block, viewport))
+        Some(self.go_to(diff, folding, block, viewport))
     }
 
-    pub fn go_prev(&mut self, diff: &FileDiff, viewport: Viewport) -> Option<NavTarget> {
+    pub fn go_prev(
+        &mut self,
+        diff: &FileDiff,
+        folding: &Folding,
+        viewport: Viewport,
+    ) -> Option<NavTarget> {
         let block = prev_block(diff, self.side, self.caret())?;
-        Some(self.go_to(diff, block, viewport))
+        Some(self.go_to(diff, folding, block, viewport))
     }
 
     /// Også for startposisjon: `InitialScrollPositionSupport` faller tilbake til første endring.
-    pub fn go_to(&mut self, diff: &FileDiff, block: usize, viewport: Viewport) -> NavTarget {
-        let target = target_for_block(diff, block, viewport);
+    pub fn go_to(
+        &mut self,
+        diff: &FileDiff,
+        folding: &Folding,
+        block: usize,
+        viewport: Viewport,
+    ) -> NavTarget {
+        let target = target_for_block(diff, folding, block, viewport);
         self.caret_lines = target.caret_lines;
         target
     }
@@ -93,12 +110,15 @@ pub fn prev_block(diff: &FileDiff, side: Side, caret_line: usize) -> Option<usiz
     })
 }
 
-pub fn target_for_block(diff: &FileDiff, block: usize, viewport: Viewport) -> NavTarget {
+/// Endringer ligger aldri i en fold, og `scrollToChange` åpner ingenting.
+pub fn target_for_block(
+    diff: &FileDiff,
+    folding: &Folding,
+    block: usize,
+    viewport: Viewport,
+) -> NavTarget {
     let b = &diff.blocks()[block];
-    let layouts = [
-        diff.layout(Side::Left, viewport.line_height),
-        diff.layout(Side::Right, viewport.line_height),
-    ];
+    let layouts = folding.layouts(viewport.line_height);
     let starts = [b.lines[0].start, b.lines[1].start];
     let ends = [b.lines[0].end, b.lines[1].end];
     NavTarget {
@@ -185,6 +205,37 @@ mod tests {
     };
 
     #[test]
+    fn navigasjon_over_folds() {
+        let d = three_changes();
+        let f = Folding::new(&d, crate::folding::FoldSettings::default());
+        let mut nav = Navigation::default();
+        let mut seen = vec![];
+        let mut t = nav.go_to(&d, &f, 0, VP);
+        loop {
+            seen.push(t.block);
+            let start = d.blocks()[t.block].lines[0].start;
+            for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
+                let layout = f.layout(side, 20.);
+                // Endringen er synlig, og foldene over tar én linje hver
+                let y = layout.line_top(start) - t.scroll_y[i];
+                assert!((0. ..VP.height).contains(&y), "{t:?}");
+                assert!(
+                    layout.line_top(start) < Folding::none(&d).layout(side, 20.).line_top(start)
+                );
+            }
+            match nav.go_next(&d, &f, VP) {
+                Some(next) => t = next,
+                None => break,
+            }
+        }
+        assert_eq!(seen, [0, 1, 2]);
+        // Blokk 2 på linje 90 er visuell linje 25 med tre folds over
+        assert_eq!(nav.caret_lines, [90, 90]);
+        assert_eq!(t.scroll_y, [400., 400.]);
+        assert_eq!(nav.go_prev(&d, &f, VP).map(|t| t.block), Some(1));
+    }
+
+    #[test]
     fn neste_og_forrige_fra_caret() {
         let d = three_changes();
         let s = Side::Right;
@@ -221,7 +272,7 @@ mod tests {
     #[test]
     fn liten_endring_havner_en_tredjedel_ned() {
         let d = three_changes();
-        let t = target_for_block(&d, 1, VP);
+        let t = target_for_block(&d, &Folding::none(&d), 1, VP);
         assert_eq!(t.caret_lines, [40, 40]);
         // shift = min(300 - 40 - 40, 100) = 100
         assert_eq!(t.scroll_y, [700., 700.]);
@@ -231,9 +282,15 @@ mod tests {
     fn endring_ved_toppen() {
         let d = three_changes();
         // top = 200 over shift 100, så shift blir 100
-        assert_eq!(target_for_block(&d, 0, VP).scroll_y, [100., 100.]);
+        assert_eq!(
+            target_for_block(&d, &Folding::none(&d), 0, VP).scroll_y,
+            [100., 100.]
+        );
         let d = FileDiff::new("a\nb\n", "x\nb\n", ComparisonPolicy::Default).unwrap();
-        assert_eq!(target_for_block(&d, 0, VP).scroll_y, [0., 0.]);
+        assert_eq!(
+            target_for_block(&d, &Folding::none(&d), 0, VP).scroll_y,
+            [0., 0.]
+        );
     }
 
     #[test]
@@ -248,14 +305,17 @@ mod tests {
         let d = FileDiff::new(&a, &b, ComparisonPolicy::Default).unwrap();
         assert_eq!(d.blocks()[0].lines, [20..20, 20..50]);
         // Høyre kan ikke vises helt: shift = gap = 40 på begge
-        assert_eq!(target_for_block(&d, 0, VP).scroll_y, [360., 360.]);
+        assert_eq!(
+            target_for_block(&d, &Folding::none(&d), 0, VP).scroll_y,
+            [360., 360.]
+        );
     }
 
     #[test]
     fn endring_ved_slutten_klemmes() {
         let d = three_changes();
         // top = 1800, max = (101 + 5) * 20 - 300 = 1820
-        let t = target_for_block(&d, 2, VP);
+        let t = target_for_block(&d, &Folding::none(&d), 2, VP);
         // Første forsøk 1700 < 1820, altså nok plass
         assert_eq!(t.scroll_y, [1700., 1700.]);
 
@@ -264,7 +324,10 @@ mod tests {
             line_height: 20.,
         };
         // Lavt vindu: shift = gap = 40 fordi 2*40 + 40 > 100
-        assert_eq!(target_for_block(&d, 2, short).scroll_y, [1760., 1760.]);
+        assert_eq!(
+            target_for_block(&d, &Folding::none(&d), 2, short).scroll_y,
+            [1760., 1760.]
+        );
     }
 
     #[test]
@@ -273,13 +336,15 @@ mod tests {
         let a = lines("a", 10) + "tail\n";
         let b = lines("a", 10) + "tail2\n" + &lines("z", 50);
         let d = FileDiff::new(&a, &b, ComparisonPolicy::Default).unwrap();
-        let t = target_for_block(&d, 0, VP);
-        let max_left = d.layout(Side::Left, 20.).max_scroll(300.);
+        let t = target_for_block(&d, &Folding::none(&d), 0, VP);
+        let max_left = Folding::none(&d).layout(Side::Left, 20.).max_scroll(300.);
         assert_eq!(max_left, 40.);
         assert!(t.scroll_y[0] <= max_left);
         // Toppen av endringen er synlig på begge sider
         for (i, s) in [Side::Left, Side::Right].into_iter().enumerate() {
-            let top = d.layout(s, 20.).line_top(d.blocks()[0].lines(s).start);
+            let top = Folding::none(&d)
+                .layout(s, 20.)
+                .line_top(d.blocks()[0].lines(s).start);
             assert!(top >= t.scroll_y[i] && top < t.scroll_y[i] + 300.);
         }
     }
@@ -289,12 +354,21 @@ mod tests {
         let d = three_changes();
         let mut nav = Navigation::default();
         assert!(!nav.can_go_prev(&d));
-        assert_eq!(nav.go_next(&d, VP).map(|t| t.block), Some(0));
-        assert_eq!(nav.go_next(&d, VP).map(|t| t.block), Some(1));
+        assert_eq!(
+            nav.go_next(&d, &Folding::none(&d), VP).map(|t| t.block),
+            Some(0)
+        );
+        assert_eq!(
+            nav.go_next(&d, &Folding::none(&d), VP).map(|t| t.block),
+            Some(1)
+        );
         assert_eq!(nav.caret_lines, [40, 40]);
-        assert_eq!(nav.go_prev(&d, VP).map(|t| t.block), Some(0));
+        assert_eq!(
+            nav.go_prev(&d, &Folding::none(&d), VP).map(|t| t.block),
+            Some(0)
+        );
         assert!(!nav.can_go_prev(&d));
-        nav.go_to(&d, 2, VP);
+        nav.go_to(&d, &Folding::none(&d), 2, VP);
         assert!(!nav.can_go_next(&d));
     }
 }

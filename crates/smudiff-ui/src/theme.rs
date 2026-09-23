@@ -41,6 +41,8 @@ pub struct UiTheme {
     pub line_number: Hsla,
     pub line_number_caret_row: Hsla,
     pub indent_guide: Hsla,
+    /// `DIFF_SEPARATOR_WAVE`.
+    pub separator_wave: Hsla,
     pub scrollbar_thumb: Hsla,
     inserted: UiDiffColors,
     deleted: UiDiffColors,
@@ -58,6 +60,7 @@ impl UiTheme {
             line_number: hsla(theme.line_number),
             line_number_caret_row: hsla(theme.line_number_caret_row),
             indent_guide: hsla(theme.indent_guide),
+            separator_wave: hsla(theme.separator_wave),
             // Grå tommel med alfa, som macOS-scrollbaren i IntelliJ
             scrollbar_thumb: if dark {
                 hsla([0x80, 0x80, 0x80, 0x59])

@@ -6,14 +6,14 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
-    Bounds, Context, FocusHandle, Focusable, MouseButton, MouseDownEvent, Pixels, Render,
-    ScrollWheelEvent, Window, actions, canvas, div, prelude::*, px,
+    Bounds, Context, FocusHandle, Focusable, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels,
+    Point, Render, ScrollWheelEvent, Window, actions, canvas, div, prelude::*, px,
 };
 use smudiff_core::side::Side;
 use smudiff_view::divider::DIVIDER_WIDTH;
 use smudiff_view::{
-    FileDiff, NavTarget, Navigation, ScrollAnimation, ScrollState, StripeMarker, Viewport,
-    stripe_markers,
+    FileDiff, FoldId, FoldSettings, Folding, NavTarget, Navigation, PositionKeeper,
+    ScrollAnimation, ScrollState, StripeMarker, Viewport, stripe_markers,
 };
 
 use crate::geometry::{SideGeometry, gutter_layout};
@@ -22,7 +22,18 @@ use crate::tabs::display_width;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
-actions!(smudiff, [NextChange, PreviousChange]);
+actions!(
+    smudiff,
+    [
+        NextChange,
+        PreviousChange,
+        ExpandAllFolds,
+        CollapseAllFolds,
+        ExpandFold,
+        CollapseFold,
+        NextContextRange,
+    ]
+);
 
 /// Varighet på animert hopp til endring.
 pub const NAV_ANIMATION_MS: f32 = 170.;
@@ -51,6 +62,7 @@ struct Shared {
 
 pub struct FileDiffView {
     diff: Rc<FileDiff>,
+    folding: Rc<Folding>,
     theme: UiTheme,
     family: &'static str,
     style: Option<TextStyle>,
@@ -80,7 +92,9 @@ impl FileDiffView {
             .map(|(s, l)| display_width(diff.line(s, l)))
             .max()
             .unwrap_or(0);
+        let folding = Folding::new(&diff, FoldSettings::default());
         Self {
+            folding: Rc::new(folding),
             diff: Rc::new(diff),
             theme,
             family,
@@ -123,14 +137,81 @@ impl FileDiffView {
             return;
         }
         let style = TextStyle::new(self.family, window);
-        let lh = style.line_height();
-        self.markers = Rc::new(SIDES.map(|s| stripe_markers(&self.diff, s, lh)));
         let mut caches = self.shared.caches.borrow_mut();
         for cache in caches.iter_mut() {
             cache.set_key(style.cache_key());
         }
-        *self.shared.stripes.borrow_mut() = Default::default();
+        drop(caches);
         self.style = Some(style);
+        self.update_markers();
+    }
+
+    /// Stripen følger visuelle linjer, så den må regnes på nytt når foldene endres.
+    fn update_markers(&mut self) {
+        let Some(style) = &self.style else {
+            return;
+        };
+        let lh = style.line_height();
+        self.markers = Rc::new(SIDES.map(|s| stripe_markers(&self.diff, &self.folding, s, lh)));
+        *self.shared.stripes.borrow_mut() = Default::default();
+    }
+
+    /// `FoldingModelImpl.runBatchFoldingOperation`: animasjonen fullføres, og caret eller
+    /// øverste linje holdes på plass. Umiddelbart, uten animasjon.
+    fn change_folding(
+        &mut self,
+        cx: &mut Context<Self>,
+        op: impl FnOnce(&FileDiff, &mut Folding) -> bool,
+    ) {
+        let Some(vp) = self.viewport() else {
+            return;
+        };
+        if let Some(a) = self.animation.take() {
+            self.scroll = a.anim.target();
+        }
+        let keeper = PositionKeeper::save(&self.scroll, &self.folding, self.nav.caret_lines, vp);
+        if !op(&self.diff, Rc::make_mut(&mut self.folding)) {
+            return;
+        }
+        let carets = SIDES.map(|s| self.folding.caret_after(s, self.nav.caret_lines[idx(s)]));
+        self.nav.caret_lines = carets;
+        keeper.restore(&mut self.scroll, &self.diff, &self.folding, carets, vp);
+        self.update_markers();
+        cx.notify();
+    }
+
+    /// Side og logisk linje under musa, `None` i divideren.
+    fn line_at(&self, position: Point<Pixels>) -> Option<(Side, usize)> {
+        let (vp, bounds, style) = (
+            self.viewport()?,
+            self.shared.bounds.get()?,
+            self.style.as_ref()?,
+        );
+        let geoms = side_geometry(&self.diff, style, bounds);
+        let x = f32::from(position.x);
+        let side = SIDES
+            .into_iter()
+            .find(|&s| geoms[idx(s)].bounds().contains(&x))?;
+        let layout = self.folding.layout(side, vp.line_height);
+        let y = f32::from(position.y - bounds.origin.y) + self.scroll.y(side);
+        Some((
+            side,
+            layout.y_to_logical_line(y).min(layout.line_count() - 1),
+        ))
+    }
+
+    fn fold_at(&self, position: Point<Pixels>) -> Option<FoldId> {
+        let (side, line) = self.line_at(position)?;
+        self.folding.fold_at_line(side, line)
+    }
+
+    /// `FoldingModelSupport.MyMouseListener`: hover gjelder blokken på begge sider.
+    fn on_mouse_move(&mut self, ev: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let id = self.fold_at(ev.position);
+        if self.folding.hovered() != id {
+            Rc::make_mut(&mut self.folding).set_hovered(id);
+            cx.notify();
+        }
     }
 
     fn geometry(&self, bounds: Bounds<Pixels>) -> Option<[SideGeometry; 2]> {
@@ -170,7 +251,8 @@ impl FileDiffView {
         let side = self.side_at(ev.position.x);
         self.master = side;
         if dy != 0. {
-            self.scroll.scroll_by(&self.diff, side, -dy, vp);
+            self.scroll
+                .scroll_by(&self.diff, &self.folding, side, -dy, vp);
         }
         if dx != 0. {
             let max_x = self.max_scroll_x();
@@ -179,26 +261,55 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// Klikk gir fokus og caret, som navigasjonen regner fra.
+    /// Klikk gir fokus og caret, som navigasjonen regner fra. Klikk på en fold åpner neste
+    /// nivå på begge sider (`DiffLineSeparatorRenderer.doAction`).
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
-        let (Some(vp), Some(bounds)) = (self.viewport(), self.shared.bounds.get()) else {
+        let Some((side, line)) = self.line_at(ev.position) else {
             return;
         };
-        let side = self.side_at(ev.position.x);
-        let layout = self.diff.layout(side, vp.line_height);
-        let y = f32::from(ev.position.y - bounds.origin.y) + self.scroll.y(side);
-        let line = layout.y_to_logical_line(y).min(layout.line_count() - 1);
         self.nav.side = side;
         self.nav.caret_lines[idx(side)] = line;
+        if let Some(id) = self.folding.fold_at_line(side, line) {
+            self.change_folding(cx, |_, f| f.set_expanded(id, true));
+            // Musa står fortsatt på linja, som nå kan være neste nivå
+            let id = self.fold_at(ev.position);
+            Rc::make_mut(&mut self.folding).set_hovered(id);
+        }
         cx.notify();
+    }
+
+    fn expand_all(&mut self, _: &ExpandAllFolds, _: &mut Window, cx: &mut Context<Self>) {
+        self.change_folding(cx, |_, f| f.expand_all(true));
+    }
+
+    fn collapse_all(&mut self, _: &CollapseAllFolds, _: &mut Window, cx: &mut Context<Self>) {
+        self.change_folding(cx, |_, f| f.expand_all(false));
+    }
+
+    fn expand_fold(&mut self, _: &ExpandFold, _: &mut Window, cx: &mut Context<Self>) {
+        let (side, line) = (self.nav.side, self.nav.caret_lines[idx(self.nav.side)]);
+        self.change_folding(cx, |_, f| f.expand_at(side, line));
+    }
+
+    fn collapse_fold(&mut self, _: &CollapseFold, _: &mut Window, cx: &mut Context<Self>) {
+        let (side, line) = (self.nav.side, self.nav.caret_lines[idx(self.nav.side)]);
+        self.change_folding(cx, |_, f| f.collapse_at(side, line));
+    }
+
+    /// `TextDiffSettings.setContextRange`: foldene bygges på nytt med tilstanden bevart.
+    fn next_context_range(&mut self, _: &NextContextRange, _: &mut Window, cx: &mut Context<Self>) {
+        self.change_folding(cx, |diff, f| {
+            *f = f.with_settings(diff, f.settings().next_context_range());
+            true
+        });
     }
 
     fn next_change(&mut self, _: &NextChange, _: &mut Window, cx: &mut Context<Self>) {
         let Some(vp) = self.viewport() else {
             return;
         };
-        if let Some(target) = self.nav.go_next(&self.diff, vp) {
+        if let Some(target) = self.nav.go_next(&self.diff, &self.folding, vp) {
             self.animate_to(&target, cx);
         }
     }
@@ -207,7 +318,7 @@ impl FileDiffView {
         let Some(vp) = self.viewport() else {
             return;
         };
-        if let Some(target) = self.nav.go_prev(&self.diff, vp) {
+        if let Some(target) = self.nav.go_prev(&self.diff, &self.folding, vp) {
             self.animate_to(&target, cx);
         }
     }
@@ -231,7 +342,7 @@ impl FileDiffView {
             self.initialized = true;
             // `InitialScrollPositionSupport` faller tilbake til første endring
             if !self.diff.blocks().is_empty() {
-                let t = self.nav.go_to(&self.diff, 0, vp);
+                let t = self.nav.go_to(&self.diff, &self.folding, 0, vp);
                 self.scroll.y = t.scroll_y;
                 self.scroll.x = t.scroll_x;
             }
@@ -263,9 +374,9 @@ impl FileDiffView {
             self.animation = None;
         }
         let master = self.master;
-        let layout = self.diff.layout(master, vp.line_height);
+        let layout = self.folding.layout(master, vp.line_height);
         self.scroll.y[idx(master)] = layout.clamp_scroll(self.scroll.y(master), vp.height);
-        self.scroll.sync_from(&self.diff, master, vp);
+        self.scroll.sync_from(&self.diff, &self.folding, master, vp);
     }
 }
 
@@ -314,6 +425,7 @@ impl Render for FileDiffView {
         let scroll_y = self.scroll.y.map(|y| snap(y, scale));
         let scroll_x = snap(self.scroll.x, scale);
         let diff = self.diff.clone();
+        let folding = self.folding.clone();
         let theme = self.theme;
         let style = self.style.clone();
         let markers = self.markers.clone();
@@ -326,8 +438,15 @@ impl Render for FileDiffView {
             .track_focus(&self.focus)
             .on_action(cx.listener(Self::next_change))
             .on_action(cx.listener(Self::previous_change))
+            .on_action(cx.listener(Self::expand_all))
+            .on_action(cx.listener(Self::collapse_all))
+            .on_action(cx.listener(Self::expand_fold))
+            .on_action(cx.listener(Self::collapse_fold))
+            .on_action(cx.listener(Self::next_context_range))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .when(self.folding.hovered().is_some(), |d| d.cursor_pointer())
             .child(
                 canvas(
                     |_, _, _| {},
@@ -346,11 +465,12 @@ impl Render for FileDiffView {
                             let side = SIDES[i];
                             if stripes[i].track_height != height {
                                 let content =
-                                    diff.layout(side, style.line_height()).content_height();
+                                    folding.layout(side, style.line_height()).content_height();
                                 stripes[i] = StripeRects::new(&markers[i], content, height, &theme);
                             }
                             let editor = SideEditor {
                                 diff: &diff,
+                                folding: &folding,
                                 geom,
                                 theme: &theme,
                                 style: &style,
@@ -366,6 +486,7 @@ impl Render for FileDiffView {
                         shared.widest.set(widest);
                         crate::divider::Divider {
                             diff: &diff,
+                            folding: &folding,
                             theme: &theme,
                             x: geoms[0].gutter.end,
                             top,

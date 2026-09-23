@@ -1,6 +1,6 @@
-//! Vertikal geometri for én side. Alt som går fra linje til y går hit, så folding kan
-//! byttes inn her uten å røre scroll, divider og stripe. Uten folding er visuell linje
-//! lik logisk linje.
+//! Vertikal geometri for én side. Alt som går fra linje til y går hit, så scroll, divider
+//! og stripe ser folding bare gjennom visuelle linjer. En kollapset fold er én visuell
+//! linje med vanlig høyde, som `FoldRegion` med placeholder i `EditorImpl`.
 
 use std::ops::Range;
 
@@ -13,19 +13,65 @@ pub struct Viewport {
     pub line_height: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LineLayout {
-    line_count: usize,
-    line_height: f32,
+/// Kollapset fold: logiske linjer `lines` vises som den ene visuelle linja `visual`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VisualFold {
+    pub lines: Range<usize>,
+    pub visual: usize,
 }
 
-impl LineLayout {
+impl VisualFold {
+    /// Linjer skjult til og med denne folden.
+    fn hidden_through(&self) -> usize {
+        self.lines.end - self.visual - 1
+    }
+}
+
+/// Folds må være sortert, disjunkte og minst to linjer, som `FoldingModelSupport` lager dem.
+pub fn visual_folds(ranges: impl IntoIterator<Item = Range<usize>>) -> Vec<VisualFold> {
+    let mut hidden = 0;
+    let mut out: Vec<VisualFold> = Vec::new();
+    for lines in ranges {
+        debug_assert!(lines.len() >= 2);
+        debug_assert!(out.last().is_none_or(|f| f.lines.end <= lines.start));
+        let visual = lines.start - hidden;
+        hidden += lines.len() - 1;
+        out.push(VisualFold { lines, visual });
+    }
+    out
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LineLayout<'a> {
+    line_count: usize,
+    line_height: f32,
+    folds: &'a [VisualFold],
+}
+
+impl LineLayout<'static> {
     pub fn new(line_count: usize, line_height: f32) -> Self {
+        LineLayout::with_folds(line_count, line_height, &[])
+    }
+}
+
+impl<'a> LineLayout<'a> {
+    pub fn with_folds(line_count: usize, line_height: f32, folds: &'a [VisualFold]) -> Self {
         assert!(line_height > 0.);
         Self {
             line_count: line_count.max(1),
             line_height,
+            folds,
         }
+    }
+
+    pub fn folds(&self) -> &'a [VisualFold] {
+        self.folds
+    }
+
+    /// Kollapset fold som vises på den visuelle linja.
+    pub fn fold_at_visual(&self, visual: usize) -> Option<&'a VisualFold> {
+        let i = self.folds.partition_point(|f| f.visual < visual);
+        self.folds.get(i).filter(|f| f.visual == visual)
     }
 
     pub fn line_height(&self) -> f32 {
@@ -37,16 +83,28 @@ impl LineLayout {
     }
 
     pub fn visual_line_count(&self) -> usize {
-        self.line_count
+        self.line_count - self.folds.last().map_or(0, VisualFold::hidden_through)
     }
 
-    /// Linjer forbi slutten mappes lineært, som `logicalToVisualPosition` i virtuelt rom.
+    /// Linjer inne i en fold gir foldens linje. Forbi slutten mappes lineært, som
+    /// `logicalToVisualPosition` i virtuelt rom.
     pub fn logical_to_visual(&self, line: usize) -> usize {
-        line
+        let i = self.folds.partition_point(|f| f.lines.start <= line);
+        match i.checked_sub(1).map(|i| &self.folds[i]) {
+            None => line,
+            Some(f) if line < f.lines.end => f.visual,
+            Some(f) => line - f.hidden_through(),
+        }
     }
 
+    /// En fold gir sin første linje, som `visualToLogicalPosition` for kolonne 0.
     pub fn visual_to_logical(&self, visual: usize) -> usize {
-        visual
+        let i = self.folds.partition_point(|f| f.visual <= visual);
+        match i.checked_sub(1).map(|i| &self.folds[i]) {
+            None => visual,
+            Some(f) if f.visual == visual => f.lines.start,
+            Some(f) => visual + f.hidden_through(),
+        }
     }
 
     pub fn visual_line_to_y(&self, visual: usize) -> f32 {
@@ -122,6 +180,14 @@ impl LineLayout {
             self.y_to_logical_line(scroll_y + viewport_height),
         )
     }
+
+    /// Samme intervall i visuelle linjer, det editoren faktisk tegner.
+    pub fn painted_visual_lines(&self, scroll_y: f32, viewport_height: f32) -> (usize, usize) {
+        (
+            self.y_to_visual_line(scroll_y),
+            self.y_to_visual_line(scroll_y + viewport_height),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -163,5 +229,67 @@ mod tests {
         assert_eq!(l.clamp_scroll(-3., 600.), 0.);
         assert_eq!(l.clamp_scroll(9999., 600.), 1500.);
         assert_eq!(LineLayout::new(3, 20.).max_scroll(600.), 0.);
+    }
+
+    /// 20 linjer, 3..7 og 10..15 kollapset.
+    fn folded() -> Vec<VisualFold> {
+        visual_folds([3..7, 10..15])
+    }
+
+    #[test]
+    fn fold_gir_en_visuell_linje() {
+        let folds = folded();
+        assert_eq!(folds[0].visual, 3);
+        assert_eq!(folds[1].visual, 7);
+        let l = LineLayout::with_folds(20, 10., &folds);
+        assert_eq!(l.visual_line_count(), 20 - 3 - 4);
+        let expected = [
+            0, 1, 2, 3, 3, 3, 3, 4, 5, 6, 7, 7, 7, 7, 7, 8, 9, 10, 11, 12,
+        ];
+        for (line, &v) in expected.iter().enumerate() {
+            assert_eq!(l.logical_to_visual(line), v, "linje {line}");
+        }
+        // Forbi slutten lineært
+        assert_eq!(l.logical_to_visual(25), 18);
+        let back: Vec<_> = (0..14).map(|v| l.visual_to_logical(v)).collect();
+        assert_eq!(back, [0, 1, 2, 3, 7, 8, 9, 10, 15, 16, 17, 18, 19, 20]);
+    }
+
+    #[test]
+    fn visuell_og_logisk_er_konsistente() {
+        let folds = visual_folds([0..4, 5..7, 9..12, 18..20]);
+        let l = LineLayout::with_folds(20, 10., &folds);
+        for v in 0..l.visual_line_count() + 10 {
+            assert_eq!(
+                l.logical_to_visual(l.visual_to_logical(v)),
+                v,
+                "visuell {v}"
+            );
+        }
+        for line in 0..30 {
+            let v = l.logical_to_visual(line);
+            let start = l.visual_to_logical(v);
+            assert!(start <= line);
+            match l.fold_at_visual(v) {
+                Some(f) => assert!(f.lines.contains(&line)),
+                None => assert_eq!(start, line),
+            }
+        }
+    }
+
+    #[test]
+    fn y_med_folds() {
+        let folds = folded();
+        let l = LineLayout::with_folds(20, 10., &folds);
+        assert_eq!(l.line_top(5), 30.);
+        assert_eq!(l.line_bottom(6), 40.);
+        assert_eq!(l.line_top(7), 40.);
+        assert_eq!(l.y_to_logical_line(35.), 3);
+        assert_eq!(l.y_to_logical_line(45.), 7);
+        assert_eq!(l.content_height(), (13 + 5) as f32 * 10.);
+        assert_eq!(l.painted_lines(30., 50.), (3, 15));
+        assert_eq!(l.painted_visual_lines(30., 50.), (3, 8));
+        assert_eq!(l.fold_at_visual(7).map(|f| f.lines.clone()), Some(10..15));
+        assert_eq!(l.fold_at_visual(6), None);
     }
 }

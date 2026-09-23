@@ -2,10 +2,10 @@
 //! `DividerPolygon.paint`) og `DiffDrawUtil.drawCurveTrapezium`. Koordinater er lokale for
 //! divideren: x fra 0 til bredden, y fra toppen av editorene.
 
-use smudiff_core::side::Side;
-
+use crate::folding::{FoldId, Folding};
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{DiffType, FileDiff};
+use crate::separator::{PathSeg, connector};
 
 /// `diff.divider.width` i registry.
 pub const DIVIDER_WIDTH: f32 = 24.;
@@ -64,14 +64,12 @@ pub struct DividerBand {
 /// Blokker som er synlige i minst én editor. `scroll_y` er per side, `[venstre, høyre]`.
 pub fn divider_bands(
     diff: &FileDiff,
+    folding: &Folding,
     scroll_y: [f32; 2],
     viewport: Viewport,
     width: f32,
 ) -> Vec<DividerBand> {
-    let layouts = [
-        diff.layout(Side::Left, viewport.line_height),
-        diff.layout(Side::Right, viewport.line_height),
-    ];
+    let layouts = folding.layouts(viewport.line_height);
     let painted = [
         layouts[0].painted_lines(scroll_y[0], viewport.height),
         layouts[1].painted_lines(scroll_y[1], viewport.height),
@@ -101,6 +99,44 @@ pub fn divider_bands(
         });
     }
     bands
+}
+
+/// Kobling mellom to kollapsede folds, strekes med `separator::stroke_width(hovered)`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DividerSeparator {
+    pub id: FoldId,
+    pub hovered: bool,
+    pub path: Vec<PathSeg>,
+}
+
+/// `FoldingModelSupport.createVisibleSeparators`: koblinger for folds som er malt på minst
+/// én side.
+pub fn divider_separators(
+    folding: &Folding,
+    scroll_y: [f32; 2],
+    viewport: Viewport,
+    width: f32,
+) -> Vec<DividerSeparator> {
+    let lh = viewport.line_height;
+    let layouts = folding.layouts(lh);
+    let painted = [0, 1].map(|i| layouts[i].painted_lines(scroll_y[i], viewport.height));
+    let mut result = Vec::new();
+    for c in folding.connectors() {
+        let [l1, l2] = c.lines;
+        if painted[0].0 > l1 + 1 && painted[1].0 > l2 + 1 {
+            continue;
+        }
+        if painted[0].1 < l1 && painted[1].1 < l2 {
+            break;
+        }
+        let y = [0, 1].map(|i| layouts[i].line_top(c.lines[i]) - scroll_y[i]);
+        result.push(DividerSeparator {
+            id: c.id,
+            hovered: c.hovered,
+            path: connector(width, y[0], y[1], lh),
+        });
+    }
+    result
 }
 
 /// `DividerPolygon.paint`: under 2px høyde blir `[start-1, start]`, ellers `[start, end-1]`.
@@ -164,7 +200,7 @@ mod tests {
         // Venstre linje 2..4, høyre linje 2..5
         let d = diff("a\nb\nc\nd\ne\n", "a\nb\nx\ny\nz\ne\n");
         assert_eq!(d.blocks()[0].lines, [2..4, 2..5]);
-        let bands = divider_bands(&d, [0., 10.], VP, 24.);
+        let bands = divider_bands(&d, &Folding::none(&d), [0., 10.], VP, 24.);
         assert_eq!(bands.len(), 1);
         let b = bands[0];
         assert_eq!(b.diff_type, DiffType::Modified);
@@ -178,7 +214,7 @@ mod tests {
     fn tom_side_blir_2px() {
         let d = diff("a\nb\n", "a\nx\ny\nb\n");
         assert_eq!(d.blocks()[0].lines, [1..1, 1..3]);
-        let b = divider_bands(&d, [0., 0.], VP, 24.)[0];
+        let b = divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.)[0];
         assert_eq!(b.diff_type, DiffType::Inserted);
         // Grense på y=20: [19, 21)
         assert_eq!((b.top.p0.y, b.bottom.p0.y), (19., 21.));
@@ -189,7 +225,7 @@ mod tests {
     #[test]
     fn tom_side_pa_forste_linje_flyttes_ned() {
         let d = diff("b\n", "x\nb\n");
-        let b = divider_bands(&d, [0., 0.], VP, 24.)[0];
+        let b = divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.)[0];
         // `getGutterMarkerPaintRange` gir y=1 for linje 0, så båndet blir [0, 2)
         assert_eq!((b.top.p0.y, b.bottom.p0.y), (0., 2.));
     }
@@ -206,10 +242,10 @@ mod tests {
         let d = diff(&a, &b);
         assert_eq!(d.blocks().len(), 3);
         // Viewport dekker linje 25..35
-        let bands = divider_bands(&d, [500., 500.], VP, 24.);
+        let bands = divider_bands(&d, &Folding::none(&d), [500., 500.], VP, 24.);
         assert_eq!(bands.iter().map(|b| b.block).collect::<Vec<_>>(), vec![1]);
         // Synlig på bare én side holder
-        let bands = divider_bands(&d, [0., 500.], VP, 24.);
+        let bands = divider_bands(&d, &Folding::none(&d), [0., 500.], VP, 24.);
         assert_eq!(
             bands.iter().map(|b| b.block).collect::<Vec<_>>(),
             vec![0, 1]
@@ -224,8 +260,42 @@ mod tests {
             &(lines("a", 10) + "x\n" + &lines("a", 20)[lines("a", 11).len()..]),
         );
         assert_eq!(d.blocks()[0].lines, [10..11, 10..11]);
-        assert_eq!(divider_bands(&d, [0., 0.], VP, 24.).len(), 1);
-        assert_eq!(divider_bands(&d, [1., 1.], VP, 24.).len(), 1);
+        assert_eq!(
+            divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.).len(),
+            1
+        );
+        assert_eq!(
+            divider_bands(&d, &Folding::none(&d), [1., 1.], VP, 24.).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn koblinger_for_synlige_folds() {
+        use crate::folding::FoldSettings;
+        // Endringer på linje 10, 40 og 90 av 100: folds 0..6, 15..36, 45..86 og 95..101
+        let a = lines("a", 100);
+        let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
+        for i in [10, 40, 90] {
+            b[i] = format!("x{i}");
+        }
+        let d = diff(&a, &(b.join("\n") + "\n"));
+        let f = Folding::new(&d, FoldSettings::default());
+        let seps = divider_separators(&f, [0., 0.], VP, 24.);
+        // Viewport på 10 visuelle linjer: fold 0 og 1 (visuell linje 0 og 10)
+        assert_eq!(seps.len(), 2);
+        assert_eq!(seps[0].path[0], PathSeg::Move(Point { x: -0.5, y: 10. }));
+        assert_eq!(seps[1].path[0], PathSeg::Move(Point { x: -0.5, y: 210. }));
+        // Delvis synlig fold er med, helt skjult er ikke
+        let groups = |y: f32| -> Vec<usize> {
+            let seps = divider_separators(&f, [y, y], VP, 24.);
+            seps.iter().map(|s| s.id.group).collect()
+        };
+        assert_eq!(groups(10.), [0, 1]);
+        assert_eq!(groups(20.), [1]);
+        assert_eq!(groups(210.), [1, 2]);
+        assert_eq!(groups(230.), [2]);
+        assert!(divider_separators(&Folding::none(&d), [0., 0.], VP, 24.).is_empty());
     }
 
     #[test]
@@ -239,7 +309,7 @@ mod tests {
         let d = diff(&a, &(b.join("\n") + "\n"));
         assert_eq!(d.blocks().len(), 400);
         let y = 10_000. * VP.line_height;
-        let bands = divider_bands(&d, [y, y], VP, 24.);
+        let bands = divider_bands(&d, &Folding::none(&d), [y, y], VP, 24.);
         assert_eq!(bands.iter().map(|b| b.block).collect::<Vec<_>>(), vec![200]);
     }
 }

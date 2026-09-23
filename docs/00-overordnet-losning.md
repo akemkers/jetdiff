@@ -40,6 +40,17 @@ smudiff-ui     GPUI
 smudiff        binær: CLI og git difftool
 ```
 
+Planlagt rundt diff-viewen (fase 5):
+
+```
+smudiff-changes  ChangeSet: FileChange { path, old_path, status, left, right } + trait ChangeSource
+smudiff-git      ChangeSource for commit og working tree. Mappe mot mappe og CLI er egne kilder
+smudiff-tree     ren tremodell: mapper først, slåtte enkeltbarn-mapper, ekspandert-tilstand
+smudiff-ui       + ChangesTree
+```
+
+Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy og kontekstnivå. Treet skriver til `Selection` ved klikk, diff-viewen følger den, og F7 forbi siste endring skriver neste fil. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.
+
 Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, folding og geometri skal kunne testes uten vindu. `ui` skal bare tegne det `view` sier.
 
 ## Viktige valg

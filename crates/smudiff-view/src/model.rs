@@ -6,7 +6,6 @@ use std::ops::Range;
 use smudiff_core::side::Side;
 use smudiff_core::{ComparisonPolicy, DiffFragment, DiffTooBig, LineOffsets, compare_for_viewer};
 
-use crate::layout::LineLayout;
 use crate::scroll::LineMapping;
 
 /// `TextDiffType` uten CONFLICT, som bare brukes i merge.
@@ -148,10 +147,6 @@ impl FileDiff {
     pub fn line(&self, side: Side, line: usize) -> &str {
         let s = self.side(side);
         &s.text[s.line_offsets.line_start(line)..s.line_offsets.line_end(line)]
-    }
-
-    pub fn layout(&self, side: Side, line_height: f32) -> LineLayout {
-        LineLayout::new(self.line_count(side), line_height)
     }
 
     pub fn line_offsets(&self, side: Side) -> &LineOffsets {

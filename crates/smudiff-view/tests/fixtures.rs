@@ -4,9 +4,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use smudiff_view::folding::CONTEXT_RANGE_MODES;
 use smudiff_view::{
-    ComparisonPolicy, DiffType, FileDiff, InlineHighlight, Navigation, ScrollState, Side, Viewport,
-    divider_bands, stripe_markers,
+    ComparisonPolicy, DiffType, FileDiff, FoldSettings, Folding, InlineHighlight, Navigation,
+    PositionKeeper, ScrollState, Side, Viewport, divider_bands, divider_separators, stripe_markers,
 };
 
 const L: Side = Side::Left;
@@ -97,9 +98,10 @@ fn manglende_linjeskift_til_venstre() {
     assert!(right.background.unwrap().ignored);
     assert!(right.inline.is_empty());
     // Blokken ligger etter siste venstre linje, så 2px-båndet går under linje 2
-    let layout = d.layout(L, 18.);
+    let none = Folding::none(&d);
+    let layout = none.layout(L, 18.);
     assert_eq!(layout.block_band(b.lines(L)), (53., 55.));
-    let band = divider_bands(&d, [0., 0.], VP, 24.)[0];
+    let band = divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.)[0];
     assert_eq!((band.top.p0.y, band.bottom.p0.y), (53., 55.));
     assert_eq!((band.top.p3.y, band.bottom.p3.y), (54., 72.));
 }
@@ -155,14 +157,14 @@ fn scroll_og_divider_holder_seg_innenfor() {
     for (name, d) in all() {
         let mut s = ScrollState::default();
         let max = [
-            d.layout(L, 18.).max_scroll(VP.height),
-            d.layout(R, 18.).max_scroll(VP.height),
+            Folding::none(&d).layout(L, 18.).max_scroll(VP.height),
+            Folding::none(&d).layout(R, 18.).max_scroll(VP.height),
         ];
         let mut y = 0.;
         while y <= max[0] + 50. {
-            s.scroll_to(&d, L, y, VP);
+            s.scroll_to(&d, &Folding::none(&d), L, y, VP);
             assert!(s.y[1] >= 0. && s.y[1] <= max[1], "{name} {s:?}");
-            for band in divider_bands(&d, s.y, VP, 24.) {
+            for band in divider_bands(&d, &Folding::none(&d), s.y, VP, 24.) {
                 assert!(band.top.p0.y < band.bottom.p0.y, "{name}");
                 assert!(band.top.p3.y < band.bottom.p3.y, "{name}");
                 // Lukket intervall: en blokk som slutter på første malte linje er med
@@ -182,13 +184,13 @@ fn navigasjon_besoker_alle_blokker() {
         }
         // Startposisjon er første endring, som i `InitialScrollPositionSupport`
         let mut nav = Navigation::default();
-        let mut seen = vec![nav.go_to(&d, 0, VP).block];
-        while let Some(t) = nav.go_next(&d, VP) {
+        let mut seen = vec![nav.go_to(&d, &Folding::none(&d), 0, VP).block];
+        while let Some(t) = nav.go_next(&d, &Folding::none(&d), VP) {
             seen.push(t.block);
             for (i, side) in [L, R].into_iter().enumerate() {
                 assert!(t.scroll_y[i] >= 0., "{name}");
                 assert!(
-                    t.scroll_y[i] <= d.layout(side, 18.).max_scroll(VP.height),
+                    t.scroll_y[i] <= Folding::none(&d).layout(side, 18.).max_scroll(VP.height),
                     "{name}"
                 );
             }
@@ -197,7 +199,7 @@ fn navigasjon_besoker_alle_blokker() {
         assert_eq!(seen, expected, "{name}");
         // Og tilbake igjen
         let mut back = vec![];
-        while let Some(t) = nav.go_prev(&d, VP) {
+        while let Some(t) = nav.go_prev(&d, &Folding::none(&d), VP) {
             back.push(t.block);
         }
         back.reverse();
@@ -208,11 +210,187 @@ fn navigasjon_besoker_alle_blokker() {
 #[test]
 fn stripe_per_side() {
     let d = load("insert-middle");
-    let left = stripe_markers(&d, L, 18.);
-    let right = stripe_markers(&d, R, 18.);
+    let left = stripe_markers(&d, &Folding::none(&d), L, 18.);
+    let right = stripe_markers(&d, &Folding::none(&d), R, 18.);
     assert_eq!(left.len(), d.blocks().len());
     assert_eq!(left[0].diff_type, DiffType::Inserted);
     assert!(left[0].start == left[0].end);
     assert!(right[0].start <= right[0].end);
     assert!(right[0].end < 1.);
+}
+
+fn settings() -> Vec<FoldSettings> {
+    CONTEXT_RANGE_MODES
+        .iter()
+        .map(|&context_range| FoldSettings {
+            context_range,
+            expand_by_default: false,
+        })
+        .collect()
+}
+
+#[test]
+fn folds_ligger_i_gapene_pa_alle_nivaer() {
+    for (name, d) in all() {
+        for s in settings() {
+            let f = Folding::new(&d, s);
+            let Some(range) = s.context_range else {
+                assert!(f.groups().is_empty(), "{name}");
+                continue;
+            };
+            for (i, side) in [L, R].into_iter().enumerate() {
+                let count = d.line_count(side);
+                // Gapene per side: før første blokk, mellom og etter siste
+                let mut bounds = vec![0];
+                for b in d.blocks() {
+                    bounds.extend([b.lines[i].start, b.lines[i].end]);
+                }
+                bounds.push(count);
+                let gaps: Vec<(usize, usize)> = bounds.chunks(2).map(|c| (c[0], c[1])).collect();
+                for group in f.groups() {
+                    let mut outer: Option<std::ops::Range<usize>> = None;
+                    for (level, block) in group.iter().enumerate() {
+                        let Some(r) = block.lines(side) else { continue };
+                        assert!(r.len() >= 2 && r.end <= count, "{name} {r:?}");
+                        let shift = range << level;
+                        let g = gaps
+                            .iter()
+                            .position(|(s, e)| *s <= r.start && r.end <= *e)
+                            .unwrap_or_else(|| panic!("{name} {side:?} {r:?} utenfor gap"));
+                        let (gs, ge) = gaps[g];
+                        // Første og siste gap går helt ut til kanten
+                        let start = if g == 0 { 0 } else { gs + shift };
+                        let end = if g == gaps.len() - 1 {
+                            count
+                        } else {
+                            ge - shift
+                        };
+                        assert_eq!(r, start..end, "{name} {side:?} nivå {level}");
+                        if let Some(o) = &outer {
+                            assert!(o.start <= r.start && r.end <= o.end, "{name}");
+                        }
+                        outer = Some(r);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn kotlin_folds_per_niva() {
+    let d = load("kotlin-realistic-edit");
+    let blocks: Vec<_> = d.blocks().iter().map(|b| b.lines.clone()).collect();
+    let visible = |range| {
+        let f = Folding::new(
+            &d,
+            FoldSettings {
+                context_range: Some(range),
+                expand_by_default: false,
+            },
+        );
+        let v: Vec<_> = f.visible(L).map(|(_, v)| v.lines.clone()).collect();
+        (v, f.layout(L, 18.).visual_line_count())
+    };
+    assert_eq!(blocks[5..7], [[45..46, 42..43], [47..47, 44..45]]);
+    assert_eq!(
+        visible(1),
+        (vec![0..2, 4..9, 11..18, 33..37, 40..44, 48..56], 35)
+    );
+    assert_eq!(visible(2), (vec![5..8, 12..17, 34..36, 41..43, 49..55], 46));
+    // Standardnivået: bare gapet 47..57 er langt nok, 4 linjer kontekst på hver side
+    let (folds, count) = visible(4);
+    assert_eq!((folds.len(), count), (1, 58));
+    assert_eq!(folds[0], 51..53);
+    assert_eq!(visible(8), (vec![], 59));
+}
+
+#[test]
+fn scroll_og_navigasjon_med_folds() {
+    for (name, d) in all() {
+        for s in settings() {
+            let f = Folding::new(&d, s);
+            let layouts = f.layouts(VP.line_height);
+            let mut state = ScrollState::default();
+            let mut y = 0.;
+            while y <= layouts[0].max_scroll(VP.height) + 50. {
+                state.scroll_to(&d, &f, L, y, VP);
+                assert!(state.y[1] >= 0. && state.y[1] <= layouts[1].max_scroll(VP.height));
+                for sep in divider_separators(&f, state.y, VP, 24.) {
+                    assert!(!sep.path.is_empty(), "{name}");
+                }
+                y += 13.;
+            }
+            if d.blocks().is_empty() {
+                continue;
+            }
+            let mut nav = Navigation::default();
+            let mut t = nav.go_to(&d, &f, 0, VP);
+            loop {
+                for (i, side) in [L, R].into_iter().enumerate() {
+                    let layout = &layouts[i];
+                    let line = d.blocks()[t.block].lines(side).start;
+                    // Endringer ligger aldri i en fold
+                    assert_eq!(f.caret_after(side, line), line, "{name}");
+                    assert!(t.scroll_y[i] <= layout.max_scroll(VP.height), "{name}");
+                    let top = layout.line_top(line) - t.scroll_y[i];
+                    assert!((0. ..VP.height).contains(&top), "{name} {s:?} {t:?}");
+                }
+                match nav.go_next(&d, &f, VP) {
+                    Some(next) => t = next,
+                    None => break,
+                }
+            }
+            assert_eq!(t.block, d.blocks().len() - 1, "{name}");
+        }
+    }
+}
+
+/// Samme rekkefølge som UI-et: lagre posisjon, endre folds, flytt caret og gjenopprett.
+#[test]
+fn fold_operasjoner_holder_seg_innenfor() {
+    for (name, d) in all() {
+        let mut f = Folding::new(&d, FoldSettings::default());
+        let mut state = ScrollState::default();
+        let mut carets = [0, 0];
+        let lines = d.line_count(L).max(d.line_count(R));
+        for step in 0..40usize {
+            let side = if step % 2 == 0 { L } else { R };
+            let line = (step * 7) % lines.min(d.line_count(side));
+            carets[step % 2] = line;
+            let keeper = PositionKeeper::save(&state, &f, carets, VP);
+            match step % 5 {
+                0 => {
+                    f.expand_at(side, line);
+                }
+                1 => {
+                    f.collapse_at(side, line);
+                }
+                2 => f = f.with_settings(&d, f.settings().next_context_range()),
+                3 => {
+                    f.expand_all(step % 3 == 0);
+                }
+                _ => {
+                    if let Some(id) = f.fold_at_line(side, line) {
+                        f.set_expanded(id, true);
+                    }
+                }
+            }
+            carets = [L, R].map(|s| f.caret_after(s, carets[if s == L { 0 } else { 1 }]));
+            keeper.restore(&mut state, &d, &f, carets, VP);
+            for (i, s) in [L, R].into_iter().enumerate() {
+                let layout = f.layout(s, VP.line_height);
+                assert!(state.y[i] >= 0. && state.y[i] <= layout.max_scroll(VP.height));
+                // Caret er aldri skjult i en fold
+                assert_eq!(f.caret_after(s, carets[i]), carets[i], "{name}");
+                assert_eq!(
+                    stripe_markers(&d, &f, s, VP.line_height).len(),
+                    d.blocks().len(),
+                    "{name}"
+                );
+            }
+            divider_separators(&f, state.y, VP, 24.);
+            state.scroll_by(&d, &f, side, 97., VP);
+        }
+    }
 }

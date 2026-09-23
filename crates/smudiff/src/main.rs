@@ -7,7 +7,10 @@ use gpui::{
     actions, px, size,
 };
 use smudiff_ui::text::load_font;
-use smudiff_ui::{FileDiffView, NextChange, PreviousChange, UiTheme};
+use smudiff_ui::{
+    CollapseAllFolds, CollapseFold, ExpandAllFolds, ExpandFold, FileDiffView, NextChange,
+    NextContextRange, PreviousChange, UiTheme,
+};
 use smudiff_view::{ComparisonPolicy, FileDiff};
 
 actions!(smudiff, [Quit]);
@@ -45,6 +48,13 @@ fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("f7", NextChange, None),
         KeyBinding::new("shift-f7", PreviousChange, None),
+        // IntelliJ macOS-keymap. GPUI gjør cmd-shift-= til cmd-+ og cmd-shift-- til cmd-_
+        KeyBinding::new("cmd-=", ExpandFold, None),
+        KeyBinding::new("cmd--", CollapseFold, None),
+        KeyBinding::new("cmd-+", ExpandAllFolds, None),
+        KeyBinding::new("cmd-_", CollapseAllFolds, None),
+        // IntelliJ har ingen snarvei, bare en meny i verktøylinja
+        KeyBinding::new("cmd-alt-c", NextContextRange, None),
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-w", Quit, None),
     ]);
