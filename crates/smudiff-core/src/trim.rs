@@ -5,8 +5,8 @@
 //! byte-for-byte på UTF-8 gir samme svar som Java på UTF-16-enheter.
 
 use crate::character_utils::{
-    is_alphabetic, is_bmp_code_point, is_decimal_digit, is_hiragana_script, is_ideographic,
-    is_javanese_script, is_katakana_script, is_thai_script,
+    is_bmp_code_point, is_decimal_digit, is_hiragana_script, is_ideographic, is_javanese_script,
+    is_katakana_script, is_thai_script,
 };
 use crate::lcs::Range;
 use crate::policy::{ComparisonPolicy, is_equal_texts, is_ws_byte};
@@ -50,7 +50,7 @@ pub fn is_continuous_script(c: char) -> bool {
     if is_ideographic(code) {
         return true;
     }
-    if !is_alphabetic(c) {
+    if !c.is_alphabetic() {
         return true;
     }
 

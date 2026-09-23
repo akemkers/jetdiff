@@ -1,12 +1,7 @@
 //! Port av `CharacterUtils.kt`. Tabellene er kopiert fra IntelliJ (Unicode 16.0).
 //!
-//! `isAlphabetic` bruker `Character.getType` i Java, som i JDK 25 er Unicode 16.0. Vi bruker
-//! `char::is_alphabetic`, som er samme egenskap, men i Rust sin Unicode-versjon. Tegn som er nye
-//! bokstaver siden Unicode 16 er listet i `NEW_ALPHABETIC_SINCE_UNICODE_16`.
-
-pub(crate) fn is_alphabetic(c: char) -> bool {
-    c.is_alphabetic() && !NEW_ALPHABETIC_SINCE_UNICODE_16.contains(&(c as u32))
-}
+//! `isAlphabetic` er `char::is_alphabetic`, som følger Rust sin Unicode-versjon. Nyere bokstaver
+//! enn JDK-en til IntelliJ kjenner kan derfor splitte ord ulikt. Det godtar vi.
 
 pub(crate) fn is_ideographic(c: u32) -> bool {
     in_ranges(c, IDEOGRAPHIC)
@@ -43,12 +38,6 @@ fn in_ranges(c: u32, ranges: &[(u32, u32)]) -> bool {
         Err(i) => c <= ranges[i - 1].1,
     }
 }
-
-// Alphabetic i Unicode 17 (Rust 1.97), men ikke tildelt i Unicode 16 (JDK 25). Funnet ved å
-// sammenligne hele BMP mot Java. Må sjekkes på nytt når Rust bytter Unicode-versjon.
-const NEW_ALPHABETIC_SINCE_UNICODE_16: &[u32] = &[
-    0x088f, 0x0c5c, 0x0cdc, 0xa7ce, 0xa7cf, 0xa7d2, 0xa7d4, 0xa7f1,
-];
 
 const IDEOGRAPHIC: &[(u32, u32)] = &[
     (0x3006, 0x3006),
@@ -218,8 +207,5 @@ mod tests {
         assert!(is_thai_script('ก' as u32));
         assert!(is_decimal_digit('٣' as u32));
         assert!(!is_decimal_digit('a' as u32));
-        assert!(is_alphabetic('æ'));
-        assert!(!is_alphabetic('\u{a7ce}'));
-        assert!(!is_alphabetic('→'));
     }
 }
