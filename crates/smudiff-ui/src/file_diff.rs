@@ -1,0 +1,384 @@
+//! To editorer med divider mellom. Eier scroll, navigasjon og animasjon, og kobler
+//! GPUI-hendelser til `smudiff-view`.
+
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+use std::time::Instant;
+
+use gpui::{
+    Bounds, Context, FocusHandle, Focusable, MouseButton, MouseDownEvent, Pixels, Render,
+    ScrollWheelEvent, Window, actions, canvas, div, prelude::*, px,
+};
+use smudiff_core::side::Side;
+use smudiff_view::divider::DIVIDER_WIDTH;
+use smudiff_view::{
+    FileDiff, NavTarget, Navigation, ScrollAnimation, ScrollState, StripeMarker, Viewport,
+    stripe_markers,
+};
+
+use crate::geometry::{SideGeometry, gutter_layout};
+use crate::side_editor::{SideCache, SideEditor, StripeRects};
+use crate::tabs::display_width;
+use crate::text::TextStyle;
+use crate::theme::UiTheme;
+
+actions!(smudiff, [NextChange, PreviousChange]);
+
+/// Varighet på animert hopp til endring.
+pub const NAV_ANIMATION_MS: f32 = 170.;
+
+/// Linjer utenfor viewporten som beholdes shapet per side.
+const CACHE_CAPACITY: usize = 2000;
+
+const SIDES: [Side; 2] = [Side::Left, Side::Right];
+
+fn idx(side: Side) -> usize {
+    side.select(0, 1)
+}
+
+struct Animation {
+    anim: ScrollAnimation,
+    start: Instant,
+}
+
+/// Det paint trenger å dele med hendelsene: siste bounds og shapede linjer.
+struct Shared {
+    bounds: Cell<Option<Bounds<Pixels>>>,
+    caches: RefCell<[SideCache; 2]>,
+    stripes: RefCell<[StripeRects; 2]>,
+    widest: Cell<f32>,
+}
+
+pub struct FileDiffView {
+    diff: Rc<FileDiff>,
+    theme: UiTheme,
+    family: &'static str,
+    style: Option<TextStyle>,
+    scroll: ScrollState,
+    master: Side,
+    nav: Navigation,
+    animation: Option<Animation>,
+    initialized: bool,
+    viewport_height: f32,
+    markers: Rc<[Vec<StripeMarker>; 2]>,
+    /// Lengste linje i tegn, regnet én gang. Gir maks horisontal scroll uten å shape alt.
+    max_cols: usize,
+    shared: Rc<Shared>,
+    focus: FocusHandle,
+}
+
+impl FileDiffView {
+    pub fn new(
+        diff: FileDiff,
+        theme: UiTheme,
+        family: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let max_cols = SIDES
+            .iter()
+            .flat_map(|&s| (0..diff.line_count(s)).map(move |l| (s, l)))
+            .map(|(s, l)| display_width(diff.line(s, l)))
+            .max()
+            .unwrap_or(0);
+        Self {
+            diff: Rc::new(diff),
+            theme,
+            family,
+            style: None,
+            scroll: ScrollState::default(),
+            master: Side::Left,
+            nav: Navigation::default(),
+            animation: None,
+            initialized: false,
+            viewport_height: 0.,
+            markers: Rc::new([Vec::new(), Vec::new()]),
+            max_cols,
+            shared: Rc::new(Shared {
+                bounds: Cell::new(None),
+                caches: RefCell::new([
+                    SideCache::new(CACHE_CAPACITY),
+                    SideCache::new(CACHE_CAPACITY),
+                ]),
+                stripes: RefCell::new([StripeRects::default(), StripeRects::default()]),
+                widest: Cell::new(0.),
+            }),
+            focus: cx.focus_handle(),
+        }
+    }
+
+    fn viewport(&self) -> Option<Viewport> {
+        let style = self.style.as_ref()?;
+        Some(Viewport {
+            height: self.viewport_height,
+            line_height: style.line_height(),
+        })
+    }
+
+    fn ensure_style(&mut self, window: &mut Window) {
+        if self
+            .style
+            .as_ref()
+            .is_some_and(|s| s.font.family == self.family)
+        {
+            return;
+        }
+        let style = TextStyle::new(self.family, window);
+        let lh = style.line_height();
+        self.markers = Rc::new(SIDES.map(|s| stripe_markers(&self.diff, s, lh)));
+        let mut caches = self.shared.caches.borrow_mut();
+        for cache in caches.iter_mut() {
+            cache.set_key(style.cache_key());
+        }
+        *self.shared.stripes.borrow_mut() = Default::default();
+        self.style = Some(style);
+    }
+
+    fn geometry(&self, bounds: Bounds<Pixels>) -> Option<[SideGeometry; 2]> {
+        let style = self.style.as_ref()?;
+        Some(side_geometry(&self.diff, style, bounds))
+    }
+
+    fn side_at(&self, x: Pixels) -> Side {
+        let Some(bounds) = self.shared.bounds.get() else {
+            return self.master;
+        };
+        if x < bounds.center().x {
+            Side::Left
+        } else {
+            Side::Right
+        }
+    }
+
+    fn max_scroll_x(&self) -> f32 {
+        let (Some(bounds), Some(style)) = (self.shared.bounds.get(), self.style.as_ref()) else {
+            return 0.;
+        };
+        let Some([left, _]) = self.geometry(bounds) else {
+            return 0.;
+        };
+        let content = (self.max_cols + 1) as f32 * style.char_width;
+        content.max(self.shared.widest.get()) - (left.text.end - left.text.start)
+    }
+
+    fn on_scroll(&mut self, ev: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(vp) = self.viewport() else {
+            return;
+        };
+        let delta = ev.delta.pixel_delta(px(vp.line_height));
+        let (dx, dy) = (f32::from(delta.x), f32::from(delta.y));
+        self.animation = None;
+        let side = self.side_at(ev.position.x);
+        self.master = side;
+        if dy != 0. {
+            self.scroll.scroll_by(&self.diff, side, -dy, vp);
+        }
+        if dx != 0. {
+            let max_x = self.max_scroll_x();
+            self.scroll.scroll_x_to(self.scroll.x - dx, max_x);
+        }
+        cx.notify();
+    }
+
+    /// Klikk gir fokus og caret, som navigasjonen regner fra.
+    fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus);
+        let (Some(vp), Some(bounds)) = (self.viewport(), self.shared.bounds.get()) else {
+            return;
+        };
+        let side = self.side_at(ev.position.x);
+        let layout = self.diff.layout(side, vp.line_height);
+        let y = f32::from(ev.position.y - bounds.origin.y) + self.scroll.y(side);
+        let line = layout.y_to_logical_line(y).min(layout.line_count() - 1);
+        self.nav.side = side;
+        self.nav.caret_lines[idx(side)] = line;
+        cx.notify();
+    }
+
+    fn next_change(&mut self, _: &NextChange, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(vp) = self.viewport() else {
+            return;
+        };
+        if let Some(target) = self.nav.go_next(&self.diff, vp) {
+            self.animate_to(&target, cx);
+        }
+    }
+
+    fn previous_change(&mut self, _: &PreviousChange, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(vp) = self.viewport() else {
+            return;
+        };
+        if let Some(target) = self.nav.go_prev(&self.diff, vp) {
+            self.animate_to(&target, cx);
+        }
+    }
+
+    fn animate_to(&mut self, target: &NavTarget, cx: &mut Context<Self>) {
+        // Midt i en animasjon står scroll der forrige frame satte den
+        let from = self.scroll;
+        self.master = self.nav.side;
+        self.animation = Some(Animation {
+            anim: ScrollAnimation::new(self.nav.side, from, target, NAV_ANIMATION_MS),
+            start: Instant::now(),
+        });
+        cx.notify();
+    }
+
+    fn step(&mut self, window: &mut Window) {
+        let Some(vp) = self.viewport() else {
+            return;
+        };
+        if !self.initialized {
+            self.initialized = true;
+            // `InitialScrollPositionSupport` faller tilbake til første endring
+            if !self.diff.blocks().is_empty() {
+                let t = self.nav.go_to(&self.diff, 0, vp);
+                self.scroll.y = t.scroll_y;
+                self.scroll.x = t.scroll_x;
+            }
+        }
+        if let Some(a) = &self.animation {
+            let elapsed = a.start.elapsed().as_secs_f32() * 1000.;
+            let (state, done) = a.anim.sample(elapsed);
+            self.scroll = state;
+            if done {
+                self.animation = None;
+            } else {
+                window.request_animation_frame();
+            }
+        }
+    }
+
+    /// Ny viewport-høyde: klem master og regn slave på nytt.
+    fn resize(&mut self, height: f32) {
+        if height == self.viewport_height {
+            return;
+        }
+        self.viewport_height = height;
+        let Some(vp) = self.viewport() else {
+            return;
+        };
+        if let Some(a) = &mut self.animation {
+            // Målet er regnet for den gamle høyden. Hopp dit og la sync rette opp.
+            self.scroll = a.anim.target();
+            self.animation = None;
+        }
+        let master = self.master;
+        let layout = self.diff.layout(master, vp.line_height);
+        self.scroll.y[idx(master)] = layout.clamp_scroll(self.scroll.y(master), vp.height);
+        self.scroll.sync_from(&self.diff, master, vp);
+    }
+}
+
+pub fn side_geometry(
+    diff: &FileDiff,
+    style: &TextStyle,
+    bounds: Bounds<Pixels>,
+) -> [SideGeometry; 2] {
+    let x0 = f32::from(bounds.origin.x);
+    let width = f32::from(bounds.size.width);
+    let side_width = ((width - DIVIDER_WIDTH) / 2.).floor().max(0.);
+    SIDES.map(|side| {
+        // Siste linjenummer bestemmer bredden, som `getMaxLineNumberString`
+        let digits = diff.line_count(side).to_string().len();
+        let gutter = gutter_layout(digits as f32 * style.number_char_width);
+        let x = match side {
+            Side::Left => x0,
+            Side::Right => x0 + side_width + DIVIDER_WIDTH,
+        };
+        let w = match side {
+            Side::Left => side_width,
+            Side::Right => width - side_width - DIVIDER_WIDTH,
+        };
+        SideGeometry::new(side, x, w, gutter)
+    })
+}
+
+/// Snapper til hele device-piksler så kanter og tekst ikke blir uskarpe midt i en scroll.
+fn snap(y: f32, scale: f32) -> f32 {
+    (y * scale).round() / scale
+}
+
+impl Focusable for FileDiffView {
+    fn focus_handle(&self, _: &gpui::App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl Render for FileDiffView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_style(window);
+        self.resize(f32::from(window.viewport_size().height));
+        self.step(window);
+
+        let scale = window.scale_factor();
+        let scroll_y = self.scroll.y.map(|y| snap(y, scale));
+        let scroll_x = snap(self.scroll.x, scale);
+        let diff = self.diff.clone();
+        let theme = self.theme;
+        let style = self.style.clone();
+        let markers = self.markers.clone();
+        let shared = self.shared.clone();
+        let carets = self.nav.caret_lines;
+
+        div()
+            .size_full()
+            .bg(theme.editor_bg)
+            .track_focus(&self.focus)
+            .on_action(cx.listener(Self::next_change))
+            .on_action(cx.listener(Self::previous_change))
+            .on_scroll_wheel(cx.listener(Self::on_scroll))
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .child(
+                canvas(
+                    |_, _, _| {},
+                    move |bounds, _, window, cx| {
+                        let Some(style) = style else {
+                            return;
+                        };
+                        shared.bounds.set(Some(bounds));
+                        let top = f32::from(bounds.origin.y);
+                        let height = f32::from(bounds.size.height);
+                        let geoms = side_geometry(&diff, &style, bounds);
+                        let mut caches = shared.caches.borrow_mut();
+                        let mut stripes = shared.stripes.borrow_mut();
+                        let mut widest = shared.widest.get();
+                        for (i, geom) in geoms.iter().enumerate() {
+                            let side = SIDES[i];
+                            if stripes[i].track_height != height {
+                                let content =
+                                    diff.layout(side, style.line_height()).content_height();
+                                stripes[i] = StripeRects::new(&markers[i], content, height, &theme);
+                            }
+                            let editor = SideEditor {
+                                diff: &diff,
+                                geom,
+                                theme: &theme,
+                                style: &style,
+                                top,
+                                height,
+                                scroll_y: scroll_y[i],
+                                scroll_x,
+                                caret_line: carets[i],
+                                stripe: &stripes[i],
+                            };
+                            widest = widest.max(editor.paint(&mut caches[i], window, cx));
+                        }
+                        shared.widest.set(widest);
+                        crate::divider::Divider {
+                            diff: &diff,
+                            theme: &theme,
+                            x: geoms[0].gutter.end,
+                            top,
+                            viewport: Viewport {
+                                height,
+                                line_height: style.line_height(),
+                            },
+                            scroll_y,
+                        }
+                        .paint(window);
+                    },
+                )
+                .size_full(),
+            )
+    }
+}

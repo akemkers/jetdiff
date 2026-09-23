@@ -1,0 +1,361 @@
+//! Diffmodell for én fil. Tilsvarer det `SimpleDiffViewer` bygger av `SimpleDiffChange`
+//! og highlighterne fra `SimpleDiffChangeUi`. Kolonner er UTF-8 bytes innen linja.
+
+use std::ops::Range;
+
+use smudiff_core::side::Side;
+use smudiff_core::{ComparisonPolicy, DiffFragment, DiffTooBig, LineOffsets, compare_for_viewer};
+
+use crate::layout::LineLayout;
+use crate::scroll::LineMapping;
+
+/// `TextDiffType` uten CONFLICT, som bare brukes i merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DiffType {
+    Inserted,
+    Deleted,
+    Modified,
+}
+
+impl DiffType {
+    /// `DiffUtil.getDiffType(hasDeleted, hasInserted)`.
+    pub fn from_sides(has_deleted: bool, has_inserted: bool) -> Self {
+        match (has_deleted, has_inserted) {
+            (true, false) => DiffType::Deleted,
+            (false, true) => DiffType::Inserted,
+            // Begge tomme logges som feil i IntelliJ og blir MODIFIED
+            _ => DiffType::Modified,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Block {
+    pub lines: [Range<usize>; 2],
+    /// Absolutte byte-offsets for hele linjer, som i `LineFragment`.
+    pub offsets: [Range<usize>; 2],
+    pub diff_type: DiffType,
+    /// `None` er hel-linje-highlight i full farge. `Some(vec![])` er ignored-farge uten ord.
+    pub inner: Option<Vec<DiffFragment>>,
+}
+
+impl Block {
+    pub fn lines(&self, side: Side) -> Range<usize> {
+        self.lines[idx(side)].clone()
+    }
+
+    pub fn is_empty(&self, side: Side) -> bool {
+        self.lines[idx(side)].is_empty()
+    }
+
+    /// `SimpleDiffChangeUi.createHighlighter`: `ignored = innerFragments != null`.
+    pub fn ignored(&self) -> bool {
+        self.inner.is_some()
+    }
+}
+
+/// Bakgrunn for en linje som ligger i en blokk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineBackground {
+    pub block: usize,
+    pub diff_type: DiffType,
+    /// Tekstområdet og ytterste 3px av gutteren får ignored-farge, linjenummer-området full farge.
+    pub ignored: bool,
+}
+
+/// Ord-highlight i full farge for sin egen type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineHighlight {
+    /// Tom range er en tom side av et ord-fragment: 2px vertikal strek ved `cols.start`
+    /// (`DiffEmptyHighlighterRenderer`).
+    pub cols: Range<usize>,
+    pub diff_type: DiffType,
+    /// Fragmentet dekker linjeskiftet, så fargen fortsetter til høyre kant av viewporten.
+    pub past_line_end: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LineHighlight<'a> {
+    pub background: Option<LineBackground>,
+    pub inline: &'a [InlineHighlight],
+}
+
+#[derive(Debug, Clone)]
+struct SideData {
+    text: String,
+    line_offsets: LineOffsets,
+    /// Blokk per linje, for oppslag uten søk.
+    line_block: Vec<Option<usize>>,
+    /// Ord-highlights per linje, flatt og sortert på linje.
+    inline: Vec<InlineHighlight>,
+    inline_start: Vec<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FileDiff {
+    sides: [SideData; 2],
+    blocks: Vec<Block>,
+    mapping: LineMapping,
+}
+
+impl FileDiff {
+    pub fn new(text1: &str, text2: &str, policy: ComparisonPolicy) -> Result<Self, DiffTooBig> {
+        let fragments = compare_for_viewer(text1, text2, policy)?;
+        let blocks = fragments
+            .into_iter()
+            .map(|f| Block {
+                // `DiffUtil.getLineDiffType`
+                diff_type: DiffType::from_sides(!f.lines1.is_empty(), !f.lines2.is_empty()),
+                lines: [f.lines1, f.lines2],
+                offsets: [f.offsets1, f.offsets2],
+                inner: f.inner,
+            })
+            .collect();
+        Ok(Self::from_blocks(text1, text2, blocks))
+    }
+
+    pub fn from_blocks(text1: &str, text2: &str, blocks: Vec<Block>) -> Self {
+        let sides = [
+            SideData::new(text1, &blocks, Side::Left),
+            SideData::new(text2, &blocks, Side::Right),
+        ];
+        let mapping = LineMapping::new(&blocks, [sides[0].line_count(), sides[1].line_count()]);
+        Self {
+            sides,
+            blocks,
+            mapping,
+        }
+    }
+
+    pub fn blocks(&self) -> &[Block] {
+        &self.blocks
+    }
+
+    pub fn mapping(&self) -> &LineMapping {
+        &self.mapping
+    }
+
+    pub fn text(&self, side: Side) -> &str {
+        &self.side(side).text
+    }
+
+    /// Minst én linje. Tekst som slutter på `'\n'` har en tom siste linje, som i IntelliJ.
+    pub fn line_count(&self, side: Side) -> usize {
+        self.side(side).line_count()
+    }
+
+    /// Uten `'\n'`.
+    pub fn line(&self, side: Side, line: usize) -> &str {
+        let s = self.side(side);
+        &s.text[s.line_offsets.line_start(line)..s.line_offsets.line_end(line)]
+    }
+
+    pub fn layout(&self, side: Side, line_height: f32) -> LineLayout {
+        LineLayout::new(self.line_count(side), line_height)
+    }
+
+    pub fn line_offsets(&self, side: Side) -> &LineOffsets {
+        &self.side(side).line_offsets
+    }
+
+    pub fn line_highlight(&self, side: Side, line: usize) -> LineHighlight<'_> {
+        let s = self.side(side);
+        let Some(&block) = s.line_block.get(line) else {
+            return LineHighlight::default();
+        };
+        let background = block.map(|b| LineBackground {
+            block: b,
+            diff_type: self.blocks[b].diff_type,
+            ignored: self.blocks[b].ignored(),
+        });
+        LineHighlight {
+            background,
+            inline: &s.inline[s.inline_start[line]..s.inline_start[line + 1]],
+        }
+    }
+
+    fn side(&self, side: Side) -> &SideData {
+        &self.sides[idx(side)]
+    }
+}
+
+impl SideData {
+    fn new(text: &str, blocks: &[Block], side: Side) -> Self {
+        let line_offsets = LineOffsets::new(text);
+        let count = line_offsets.line_count();
+        let mut line_block = vec![None; count];
+        let mut per_line: Vec<Vec<InlineHighlight>> = vec![Vec::new(); count];
+
+        for (i, block) in blocks.iter().enumerate() {
+            for line in block.lines(side) {
+                line_block[line] = Some(i);
+            }
+            let base = block.offsets[idx(side)].start;
+            for fragment in block.inner.iter().flatten() {
+                let range = side.select(&fragment.offsets1, &fragment.offsets2);
+                let diff_type = DiffType::from_sides(
+                    !fragment.offsets1.is_empty(),
+                    !fragment.offsets2.is_empty(),
+                );
+                split_into_lines(
+                    &line_offsets,
+                    base + range.start..base + range.end,
+                    diff_type,
+                    &mut per_line,
+                );
+            }
+        }
+
+        let mut inline = Vec::new();
+        let mut inline_start = Vec::with_capacity(count + 1);
+        for mut line in per_line {
+            inline_start.push(inline.len());
+            inline.append(&mut line);
+        }
+        inline_start.push(inline.len());
+
+        Self {
+            text: text.to_owned(),
+            line_offsets,
+            line_block,
+            inline,
+            inline_start,
+        }
+    }
+
+    fn line_count(&self) -> usize {
+        self.line_offsets.line_count()
+    }
+}
+
+/// EXACT_RANGE-highlighter delt på linjer. Etter linjeslutt males bakgrunnen til
+/// highlighteren som dekker linjeskiftet, men ikke en som starter på det
+/// (`IterationState.getPastLineEndBackgroundAttributes` og `atBreak`-sjekken i `setAttributes`).
+fn split_into_lines(
+    lo: &LineOffsets,
+    range: Range<usize>,
+    diff_type: DiffType,
+    out: &mut [Vec<InlineHighlight>],
+) {
+    if range.is_empty() {
+        // `offsetToLogicalPosition`: offset rett etter '\n' hører til neste linje
+        let line = line_of_offset(lo, range.start);
+        let col = range.start - lo.line_start(line);
+        out[line].push(InlineHighlight {
+            cols: col..col,
+            diff_type,
+            past_line_end: false,
+        });
+        return;
+    }
+    let first = line_of_offset(lo, range.start);
+    let last = line_of_offset(lo, range.end - 1);
+    for (line, highlights) in out.iter_mut().enumerate().take(last + 1).skip(first) {
+        let (start, end) = (lo.line_start(line), lo.line_end(line));
+        let cols = range.start.max(start) - start..range.end.min(end).max(start) - start;
+        let past_line_end = range.start < end && range.end > end;
+        if cols.is_empty() && !past_line_end {
+            continue;
+        }
+        highlights.push(InlineHighlight {
+            cols,
+            diff_type,
+            past_line_end,
+        });
+    }
+}
+
+fn line_of_offset(lo: &LineOffsets, offset: usize) -> usize {
+    let (mut low, mut high) = (0, lo.line_count() - 1);
+    while low < high {
+        let mid = (low + high).div_ceil(2);
+        if lo.line_start(mid) <= offset {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+    low
+}
+
+pub(crate) fn idx(side: Side) -> usize {
+    side.select(0, 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn diff(a: &str, b: &str) -> FileDiff {
+        FileDiff::new(a, b, ComparisonPolicy::Default).unwrap()
+    }
+
+    #[test]
+    fn type_fra_tomme_sider() {
+        let d = diff("a\nb\n", "a\nx\nb\n");
+        assert_eq!(d.blocks()[0].diff_type, DiffType::Inserted);
+        let d = diff("a\nx\nb\n", "a\nb\n");
+        assert_eq!(d.blocks()[0].diff_type, DiffType::Deleted);
+        let d = diff("a\nb\n", "a\nc\n");
+        assert_eq!(d.blocks()[0].diff_type, DiffType::Modified);
+    }
+
+    #[test]
+    fn linjer_per_side() {
+        let d = diff("a\nb", "a\nb\n");
+        assert_eq!(d.line_count(Side::Left), 2);
+        assert_eq!(d.line_count(Side::Right), 3);
+        assert_eq!(d.line(Side::Left, 1), "b");
+        assert_eq!(d.line(Side::Right, 2), "");
+    }
+
+    #[test]
+    fn linje_utenfor_blokk_har_ingen_highlight() {
+        let d = diff("a\nb\n", "a\nc\n");
+        assert_eq!(d.line_highlight(Side::Left, 0), LineHighlight::default());
+        assert_eq!(d.line_highlight(Side::Left, 99), LineHighlight::default());
+    }
+
+    #[test]
+    fn line_of_offset_ved_grenser() {
+        let lo = LineOffsets::new("ab\n\ncd");
+        assert_eq!(line_of_offset(&lo, 0), 0);
+        assert_eq!(line_of_offset(&lo, 2), 0);
+        assert_eq!(line_of_offset(&lo, 3), 1);
+        assert_eq!(line_of_offset(&lo, 4), 2);
+        assert_eq!(line_of_offset(&lo, 6), 2);
+    }
+
+    #[test]
+    fn fragment_over_linjeskift_deles() {
+        let lo = LineOffsets::new("ab\ncd\nef");
+        let mut out = vec![Vec::new(); 3];
+        split_into_lines(&lo, 1..7, DiffType::Modified, &mut out);
+        let h = |cols: Range<usize>, past_line_end| InlineHighlight {
+            cols,
+            diff_type: DiffType::Modified,
+            past_line_end,
+        };
+        assert_eq!(out[0], vec![h(1..2, true)]);
+        assert_eq!(out[1], vec![h(0..2, true)]);
+        assert_eq!(out[2], vec![h(0..1, false)]);
+    }
+
+    #[test]
+    fn fragment_som_starter_pa_linjeskiftet_forlenges_ikke() {
+        let lo = LineOffsets::new("ab\ncd");
+        let mut out = vec![Vec::new(); 2];
+        split_into_lines(&lo, 2..4, DiffType::Inserted, &mut out);
+        assert!(out[0].is_empty());
+        assert_eq!(out[1][0].cols, 0..1);
+    }
+
+    #[test]
+    fn tomt_fragment_etter_linjeskift_havner_pa_neste_linje() {
+        let lo = LineOffsets::new("ab\ncd");
+        let mut out = vec![Vec::new(); 2];
+        split_into_lines(&lo, 3..3, DiffType::Deleted, &mut out);
+        assert!(out[0].is_empty());
+        assert_eq!(out[1][0].cols, 0..0);
+    }
+}

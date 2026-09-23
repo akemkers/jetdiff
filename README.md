@@ -2,12 +2,20 @@
 
 GPU-akselerert diff-viewer med JetBrains-inspirert visning. Skrevet i Rust med GPUI. macOS først, Linux etter hvert.
 
-Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode. GUI finnes foreløpig bare som spike.
+Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode. GUI-en viser én fil om gangen.
 
 ## Krav
 
 - Rust (edition 2024, stable)
 - For golden-generatoren: JDK 25 og Gradle 9.x
+
+## Kjøre
+
+```
+cargo run --release -p smudiff -- <venstre> <høyre> [--light]
+```
+
+F7 og Shift+F7 hopper til neste og forrige endring. Cmd+Q eller Cmd+W lukker. JetBrains Mono brukes hvis den er installert eller finnes i en JetBrains-IDE under `/Applications`, ellers Menlo.
 
 ## Kjøre spiken
 
