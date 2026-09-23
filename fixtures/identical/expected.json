@@ -1,0 +1,20 @@
+{
+  "source": "intellij-community@7af191d4",
+  "policies": {
+    "DEFAULT": {
+      "lines": [],
+      "words": [],
+      "viewer": []
+    },
+    "TRIM_WHITESPACES": {
+      "lines": [],
+      "words": [],
+      "viewer": []
+    },
+    "IGNORE_WHITESPACES": {
+      "lines": [],
+      "words": [],
+      "viewer": []
+    }
+  }
+}

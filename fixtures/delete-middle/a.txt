@@ -1,0 +1,5 @@
+keep 1
+remove me
+and me too
+keep 2
+keep 3

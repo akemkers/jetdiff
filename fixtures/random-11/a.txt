@@ -1,0 +1,24 @@
+  return x;
+foo(baz);
+    return x;
+
+foo(bar);
+// comment
+}
+y;
+int  a = 1;
+		indented()
+	
+  return x;
+int a = 1;
+		indented()
+
+}
+int  a = 1;
+}
+{
+// comment
+æøå line
+
+// comment
+

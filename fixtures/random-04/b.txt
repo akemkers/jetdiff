@@ -1,0 +1,19 @@
+foo(baz);
+  
+foo(baz);
+y;
+  }
+y;
+x
+	
+  int a = 1;
+}
+{
+  }
+foo(bar);
+int  a = 1;
+y;
+
+		indented()
+
+int  a = 1;

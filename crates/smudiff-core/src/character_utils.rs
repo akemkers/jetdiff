@@ -1,0 +1,225 @@
+//! Port av `CharacterUtils.kt`. Tabellene er kopiert fra IntelliJ (Unicode 16.0).
+//!
+//! `isAlphabetic` bruker `Character.getType` i Java, som i JDK 25 er Unicode 16.0. Vi bruker
+//! `char::is_alphabetic`, som er samme egenskap, men i Rust sin Unicode-versjon. Tegn som er nye
+//! bokstaver siden Unicode 16 er listet i `NEW_ALPHABETIC_SINCE_UNICODE_16`.
+
+pub(crate) fn is_alphabetic(c: char) -> bool {
+    c.is_alphabetic() && !NEW_ALPHABETIC_SINCE_UNICODE_16.contains(&(c as u32))
+}
+
+pub(crate) fn is_ideographic(c: u32) -> bool {
+    in_ranges(c, IDEOGRAPHIC)
+}
+
+pub(crate) fn is_bmp_code_point(c: u32) -> bool {
+    c >> 16 == 0
+}
+
+pub(crate) fn is_hiragana_script(c: u32) -> bool {
+    in_ranges(c, HIRAGANA_SCRIPT)
+}
+
+pub(crate) fn is_katakana_script(c: u32) -> bool {
+    in_ranges(c, KATAKANA_SCRIPT)
+}
+
+pub(crate) fn is_thai_script(c: u32) -> bool {
+    in_ranges(c, THAI_SCRIPT)
+}
+
+pub(crate) fn is_javanese_script(c: u32) -> bool {
+    in_ranges(c, JAVANESE_SCRIPT)
+}
+
+pub(crate) fn is_decimal_digit(c: u32) -> bool {
+    in_ranges(c, DECIMAL_DIGIT)
+}
+
+fn in_ranges(c: u32, ranges: &[(u32, u32)]) -> bool {
+    match ranges.binary_search_by_key(&c, |r| r.0) {
+        Ok(_) => true,
+        Err(0) => false,
+        Err(i) => c <= ranges[i - 1].1,
+    }
+}
+
+// Alphabetic i Unicode 17 (Rust 1.97), men ikke tildelt i Unicode 16 (JDK 25). Funnet ved å
+// sammenligne hele BMP mot Java. Må sjekkes på nytt når Rust bytter Unicode-versjon.
+const NEW_ALPHABETIC_SINCE_UNICODE_16: &[u32] = &[
+    0x088f, 0x0c5c, 0x0cdc, 0xa7ce, 0xa7cf, 0xa7d2, 0xa7d4, 0xa7f1,
+];
+
+const IDEOGRAPHIC: &[(u32, u32)] = &[
+    (0x3006, 0x3006),
+    (0x3007, 0x3007),
+    (0x3021, 0x3029),
+    (0x3038, 0x303a),
+    (0x3400, 0x4dbf),
+    (0x4e00, 0x9fff),
+    (0xf900, 0xfa6d),
+    (0xfa70, 0xfad9),
+    (0x16fe4, 0x16fe4),
+    (0x17000, 0x187f7),
+    (0x18800, 0x18cd5),
+    (0x18cff, 0x18d08),
+    (0x1b170, 0x1b2fb),
+    (0x20000, 0x2a6df),
+    (0x2a700, 0x2b739),
+    (0x2b740, 0x2b81d),
+    (0x2b820, 0x2cea1),
+    (0x2ceb0, 0x2ebe0),
+    (0x2ebf0, 0x2ee5d),
+    (0x2f800, 0x2fa1d),
+    (0x30000, 0x3134a),
+    (0x31350, 0x323af),
+];
+
+const HIRAGANA_SCRIPT: &[(u32, u32)] = &[
+    (0x3041, 0x3096),
+    (0x309d, 0x309e),
+    (0x309f, 0x309f),
+    (0x1b001, 0x1b11f),
+    (0x1b132, 0x1b132),
+    (0x1b150, 0x1b152),
+    (0x1f200, 0x1f200),
+];
+
+const KATAKANA_SCRIPT: &[(u32, u32)] = &[
+    (0x30a1, 0x30fa),
+    (0x30fd, 0x30fe),
+    (0x30ff, 0x30ff),
+    (0x31f0, 0x31ff),
+    (0x32d0, 0x32fe),
+    (0x3300, 0x3357),
+    (0xff66, 0xff6f),
+    (0xff71, 0xff9d),
+    (0x1aff0, 0x1aff3),
+    (0x1aff5, 0x1affb),
+    (0x1affd, 0x1affe),
+    (0x1b000, 0x1b000),
+    (0x1b120, 0x1b122),
+    (0x1b155, 0x1b155),
+    (0x1b164, 0x1b167),
+];
+
+const THAI_SCRIPT: &[(u32, u32)] = &[
+    (0x0e01, 0x0e30),
+    (0x0e31, 0x0e31),
+    (0x0e32, 0x0e33),
+    (0x0e34, 0x0e3a),
+    (0x0e40, 0x0e45),
+    (0x0e46, 0x0e46),
+    (0x0e47, 0x0e4e),
+    (0x0e4f, 0x0e4f),
+    (0x0e50, 0x0e59),
+    (0x0e5a, 0x0e5b),
+];
+
+const JAVANESE_SCRIPT: &[(u32, u32)] = &[
+    (0xa980, 0xa982),
+    (0xa983, 0xa983),
+    (0xa984, 0xa9b2),
+    (0xa9b3, 0xa9b3),
+    (0xa9b4, 0xa9b5),
+    (0xa9b6, 0xa9b9),
+    (0xa9ba, 0xa9bb),
+    (0xa9bc, 0xa9bd),
+    (0xa9be, 0xa9c0),
+    (0xa9c1, 0xa9cd),
+    (0xa9d0, 0xa9d9),
+    (0xa9de, 0xa9df),
+];
+
+const DECIMAL_DIGIT: &[(u32, u32)] = &[
+    (0x0030, 0x0039),
+    (0x0660, 0x0669),
+    (0x06f0, 0x06f9),
+    (0x07c0, 0x07c9),
+    (0x0966, 0x096f),
+    (0x09e6, 0x09ef),
+    (0x0a66, 0x0a6f),
+    (0x0ae6, 0x0aef),
+    (0x0b66, 0x0b6f),
+    (0x0be6, 0x0bef),
+    (0x0c66, 0x0c6f),
+    (0x0ce6, 0x0cef),
+    (0x0d66, 0x0d6f),
+    (0x0de6, 0x0def),
+    (0x0e50, 0x0e59),
+    (0x0ed0, 0x0ed9),
+    (0x0f20, 0x0f29),
+    (0x1040, 0x1049),
+    (0x1090, 0x1099),
+    (0x17e0, 0x17e9),
+    (0x1810, 0x1819),
+    (0x1946, 0x194f),
+    (0x19d0, 0x19d9),
+    (0x1a80, 0x1a89),
+    (0x1a90, 0x1a99),
+    (0x1b50, 0x1b59),
+    (0x1bb0, 0x1bb9),
+    (0x1c40, 0x1c49),
+    (0x1c50, 0x1c59),
+    (0xa620, 0xa629),
+    (0xa8d0, 0xa8d9),
+    (0xa900, 0xa909),
+    (0xa9d0, 0xa9d9),
+    (0xa9f0, 0xa9f9),
+    (0xaa50, 0xaa59),
+    (0xabf0, 0xabf9),
+    (0xff10, 0xff19),
+    (0x104a0, 0x104a9),
+    (0x10d30, 0x10d39),
+    (0x10d40, 0x10d49),
+    (0x11066, 0x1106f),
+    (0x110f0, 0x110f9),
+    (0x11136, 0x1113f),
+    (0x111d0, 0x111d9),
+    (0x112f0, 0x112f9),
+    (0x11450, 0x11459),
+    (0x114d0, 0x114d9),
+    (0x11650, 0x11659),
+    (0x116c0, 0x116c9),
+    (0x116d0, 0x116e3),
+    (0x11730, 0x11739),
+    (0x118e0, 0x118e9),
+    (0x11950, 0x11959),
+    (0x11bf0, 0x11bf9),
+    (0x11c50, 0x11c59),
+    (0x11d50, 0x11d59),
+    (0x11da0, 0x11da9),
+    (0x11f50, 0x11f59),
+    (0x16130, 0x16139),
+    (0x16a60, 0x16a69),
+    (0x16ac0, 0x16ac9),
+    (0x16b50, 0x16b59),
+    (0x16d70, 0x16d79),
+    (0x1ccf0, 0x1ccf9),
+    (0x1d7ce, 0x1d7ff),
+    (0x1e140, 0x1e149),
+    (0x1e2f0, 0x1e2f9),
+    (0x1e4f0, 0x1e4f9),
+    (0x1e5f1, 0x1e5fa),
+    (0x1e950, 0x1e959),
+    (0x1fbf0, 0x1fbf9),
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn klassifisering() {
+        assert!(is_ideographic('中' as u32));
+        assert!(!is_ideographic('a' as u32));
+        assert!(is_hiragana_script('ひ' as u32));
+        assert!(is_katakana_script('カ' as u32));
+        assert!(is_thai_script('ก' as u32));
+        assert!(is_decimal_digit('٣' as u32));
+        assert!(!is_decimal_digit('a' as u32));
+        assert!(is_alphabetic('æ'));
+        assert!(!is_alphabetic('\u{a7ce}'));
+        assert!(!is_alphabetic('→'));
+    }
+}

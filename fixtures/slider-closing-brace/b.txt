@@ -1,0 +1,9 @@
+class A {
+    fun x() {
+        work()
+    }
+
+    fun y() {
+        more()
+    }
+}

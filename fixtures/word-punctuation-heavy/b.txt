@@ -1,0 +1,9 @@
+fun f(a: Long, b: List<String?>): Map<String, Long>? {
+    val x = a?.let { (it + 1) } ?: return null
+    return mapOf("k" to x; "v" to b?.size)
+}
+if (a[i] != b[j] || (c && !d)) { e.f(g); h(); }
+x = {"a": [1, {"b": null}, 2], "c": ["d"]};
+foo(bar(baz[1]), (qux), {quux,});
+a.b.c.d[e].f(g)[h];
+// --== ==++ ++** **--

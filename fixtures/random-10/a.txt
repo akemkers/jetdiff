@@ -1,0 +1,18 @@
+int a = 1;
+foo(bar);
+  return x;
+	
+{
+// comment
+foo(baz);
+
+{
+
+}
+	
+int  a = 1;
+  // comment
+    return x;
+
+}
+// comment

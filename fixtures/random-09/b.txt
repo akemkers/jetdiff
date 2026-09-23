@@ -1,0 +1,46 @@
+    return x;
+  // comment
+}
+int  a = 1;
+
+	
+	
+int  a = 1;
+}
+  
+int a = 1;
+}
+int  a = 1;
+  }
+x
+foo(bar);
+end
+  // comment
+int  a = 1;
+  
+{
+
+		indented()
+int a = 1;
+  }
+int  a = 1;
+
+    return x;
+  return x;
+  int a = 1;
+  int a = 1;
+		indented()
+  return x;
+  int a = 1;
+x
+		indented()
+    return x;
+int  a = 1;
+foo(baz);
+
+int  a = 1;
+
+
+
+		indented()
+end

@@ -1,0 +1,25 @@
+{
+// comment
+	
+
+}
+end
+  }
+foo(baz);
+æøå line
+
+		indented()
+  return x;
+
+}
+  // comment
+  // comment
+}
+int a = 1;
+}
+end
+  // comment
+
+æøå line
+  }
+int a = 1;

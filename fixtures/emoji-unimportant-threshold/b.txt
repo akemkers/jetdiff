@@ -1,0 +1,6 @@
+start line
+😀😀
+middle line
+new line
+😀😀
+end line

@@ -1,0 +1,12 @@
+fun a() {
+    if (x) {
+        doA()
+    }
+    else {
+        doElse()
+    }
+}
+
+fun b() {
+    doB()
+}

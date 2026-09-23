@@ -1,0 +1,19 @@
+
+y;
+æøå line
+    return x;
+int  a = 1;
+  int a = 1;
+
+{
+  // comment
+end
+foo(baz);
+  
+æøå line
+foo(bar);
+{
+		indented()
+  
+	
+

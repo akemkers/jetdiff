@@ -1,0 +1,9 @@
+  }
+int a = 1;
+  }
+}
+// comment
+
+    return x;
+æøå line
+int  a = 1;

@@ -1,0 +1,11 @@
+import a
+
+fun moved() {
+    body()
+}
+
+fun first() = 1
+fun second() = 2
+fun third() = 3
+
+fun last() = 9

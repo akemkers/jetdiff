@@ -1,0 +1,45 @@
+package com.example.orders;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+
+public class OrderBook {
+  private final List<Order> buys = new ArrayList<>();
+  private final List<Order> sells = new ArrayList<>();
+
+  public void add(Order order) {
+    if (order == null) {
+      throw new IllegalArgumentException("order");
+    }
+    if (order.isBuy()) {
+      buys.add(order);
+    }
+    else {
+      sells.add(order);
+    }
+  }
+
+  public Optional<Order> bestBid() {
+    return buys.stream().max(Comparator.comparingDouble(Order::getPrice));
+  }
+
+  public Order bestAsk() {
+    Order best = null;
+    for (Order o : sells) {
+      if (best == null || o.getPrice() < best.getPrice()) {
+        best = o;
+      }
+    }
+    return best;
+  }
+
+  public int size() {
+    return buys.size() + sells.size();
+  }
+
+  public boolean isEmpty() {
+    return size() == 0;
+  }
+}

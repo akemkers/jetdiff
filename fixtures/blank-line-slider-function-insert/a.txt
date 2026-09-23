@@ -1,0 +1,7 @@
+fun a() {
+    one()
+}
+
+fun c() {
+    three()
+}

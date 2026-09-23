@@ -1,0 +1,58 @@
+package no.sb1.aksjer.portefolje
+
+import java.math.BigDecimal
+import java.time.LocalDate
+import org.slf4j.LoggerFactory
+
+data class Beholdning(
+    val isin: String,
+    val antall: Int,
+    val kostpris: BigDecimal,
+)
+
+class PortefoljeService(
+    private val kursKlient: KursKlient,
+    private val repository: BeholdningRepository,
+) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    fun hentBeholdninger(kundeId: String): List<Beholdning> {
+        log.info("Henter beholdninger for kunde")
+        return repository.finnForKunde(kundeId)
+    }
+
+    fun markedsverdi(kundeId: String): BigDecimal {
+        val beholdninger = hentBeholdninger(kundeId)
+        var sum = BigDecimal.ZERO
+        for (b in beholdninger) {
+            val kurs = kursKlient.sisteKurs(b.isin)
+            sum = sum.add(kurs.multiply(BigDecimal(b.antall)))
+        }
+        return sum
+    }
+
+    fun gevinst(kundeId: String): BigDecimal {
+        val verdi = markedsverdi(kundeId)
+        val kost = hentBeholdninger(kundeId)
+            .map { it.kostpris.multiply(BigDecimal(it.antall)) }
+            .fold(BigDecimal.ZERO) { acc, x -> acc.add(x) }
+        return verdi.subtract(kost)
+    }
+
+    fun rapport(kundeId: String, dato: LocalDate): String {
+        val sb = StringBuilder()
+        sb.append("Rapport for ").append(dato).append('\n')
+        for (b in hentBeholdninger(kundeId)) {
+            sb.append(b.isin).append(": ").append(b.antall).append('\n')
+        }
+        return sb.toString()
+    }
+}
+
+interface KursKlient {
+    fun sisteKurs(isin: String): BigDecimal
+}
+
+interface BeholdningRepository {
+    fun finnForKunde(kundeId: String): List<Beholdning>
+}

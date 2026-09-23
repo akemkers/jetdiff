@@ -1,0 +1,52 @@
+	
+  }
+		indented()
+{
+  // comment
+  return x;
+  return x;
+
+int  a = 1;
+  return x;
+  int a = 1;
+		indented()
+int a = 1;
+æøå line
+foo(bar);
+int  a = 1;
+end
+
+  // comment
+{
+
+foo(baz);
+x
+æøå line
+		indented()
+  // comment
+		indented()
+{
+end
+{
+		indented()
+		indented()
+
+x
+    return x;
+  
+
+{
+    return x;
+{
+y;
+  
+  }
+end
+
+foo(bar);
+		indented()
+		indented()
+end
+y;
+  }
+end

@@ -1,0 +1,11 @@
+fun a() {
+    one()
+}
+
+fun b() {
+    two()
+}
+
+fun c() {
+    three()
+}

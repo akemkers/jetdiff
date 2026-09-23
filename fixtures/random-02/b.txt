@@ -1,0 +1,36 @@
+æøå line
+x
+}
+}
+int  a = 1;
+y;
+}
+
+  int a = 1;
+}
+æøå line
+x
+  int a = 1;
+// comment
+foo(baz);
+
+x
+foo(baz);
+    return x;
+  
+  }
+y;
+// comment
+  return x;
+  int a = 1;
+{
+int a = 1;
+// comment
+// comment
+y;
+}
+    return x;
+x
+// comment
+end
+int  a = 1;
