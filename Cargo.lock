@@ -4960,11 +4960,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "smudiff-changes"
+version = "0.1.0"
+
+[[package]]
 name = "smudiff-core"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "smudiff-git"
+version = "0.1.0"
+dependencies = [
+ "smudiff-changes",
 ]
 
 [[package]]
