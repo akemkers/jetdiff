@@ -37,17 +37,6 @@ Et lite, vim-inspirert keymap for lesing. Tastelinja nederst viser de viktigste.
 
 JetBrains Mono brukes hvis den er installert eller finnes i en JetBrains-IDE under `/Applications`, ellers Menlo.
 
-## Kjøre spiken
-
-Viser to filer side om side med trakt mellom:
-
-```
-cd spikes/gpui-trakt
-cargo run --release -- testdata/a.java testdata/b.java
-```
-
-Spiken bruker `imara-diff` og en enklere visning. Den erstattes av `smudiff-core` og en ordentlig UI senere.
-
 ## Tester
 
 ```
@@ -77,5 +66,4 @@ Ny case: lag mappa med `a.txt` og `b.txt`, kjør `gen.sh`, og kjør `cargo test`
 - `crates/smudiff-core`: diff-algoritmen, portert fra IntelliJ
 - `fixtures/`: testcaser med fasit
 - `tools/golden/`: Kotlin-generator som lager fasiten
-- `spikes/gpui-trakt/`: GPUI-prototype av side-by-side med trakt
 - `docs/`: overordnet løsning og research

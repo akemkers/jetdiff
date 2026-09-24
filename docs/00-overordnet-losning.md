@@ -74,7 +74,7 @@ Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, foldin
 5. **Commit-view.** Tre med mapper og status-farger, lazy filblokker, sticky header. Så working tree og mappe-mot-mappe.
 6. **CLI og git difftool.**
 
-## Fra spiken (`spikes/gpui-trakt`)
+## Fra spiken (`spikes/gpui-trakt`, slettet, ligger i git-historikken)
 
 Bekreftet: GPUI gir skarp tekst, anti-aliasede bezier-paths, klipping per side og smud scroll. Delt horisontal scroll fungerer.
 
