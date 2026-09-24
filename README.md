@@ -43,7 +43,7 @@ Et lite, vim-inspirert keymap for lesing. Tastelinja nederst viser de viktigste.
 | Cmd+Alt+C | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding |
 | `q`, Cmd+Q, Cmd+W | Avslutt |
 
-JetBrains Mono brukes hvis den er installert eller finnes i en JetBrains-IDE under `/Applications`, ellers Menlo.
+Fonten er JetBrains Mono, bygd inn i appen (`crates/smudiff-ui/fonts/`, SIL Open Font License).
 
 ## Tester
 

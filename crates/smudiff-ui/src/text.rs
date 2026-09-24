@@ -1,67 +1,26 @@
-//! Fontvalg og tekstmål. GPUI faller tilbake til Helvetica for ukjente familier
-//! (`TextSystem::resolve_font`), som ikke er monospace. Derfor velges familien her.
-//! Manglende glyfer (CJK, emoji) håndteres av CoreText sin font-kaskade ved shaping.
+//! Innebygd JetBrains Mono og tekstmål. Manglende glyfer (CJK, emoji) håndteres av CoreText sin font-kaskade ved shaping.
 
 use std::borrow::Cow;
-use std::path::PathBuf;
 
 use gpui::{App, Font, FontFeatures, Pixels, SharedString, Window, font, px};
 
 use smudiff_view::metrics::{LINE_NUMBER_FONT_DELTA, LineMetrics, line_metrics};
 
-pub const PREFERRED_FAMILY: &str = "JetBrains Mono";
-pub const FALLBACK_FAMILY: &str = "Menlo";
+const FAMILY: &str = "JetBrains Mono";
 
-pub fn pick_family(installed: &[String]) -> &'static str {
-    if installed.iter().any(|n| n == PREFERRED_FAMILY) {
-        PREFERRED_FAMILY
-    } else {
-        FALLBACK_FAMILY
-    }
-}
+/// Samme versjon som i JBR-en til IntelliJ, så tekstmålene blir de samme som i IDE-en.
+const FONTS: [&[u8]; 4] = [
+    include_bytes!("../fonts/JetBrainsMono-Regular.ttf"),
+    include_bytes!("../fonts/JetBrainsMono-Italic.ttf"),
+    include_bytes!("../fonts/JetBrainsMono-Bold.ttf"),
+    include_bytes!("../fonts/JetBrainsMono-BoldItalic.ttf"),
+];
 
-/// JetBrains Mono er sjelden installert i systemet, men ligger i JBR-en til alle JetBrains-IDE-er.
-/// Lastes derfra hvis den finnes, så tekstmålene blir de samme som i IDE-en.
 pub fn load_font(cx: &App) -> &'static str {
-    let ts = cx.text_system();
-    if pick_family(&ts.all_font_names()) == PREFERRED_FAMILY {
-        return PREFERRED_FAMILY;
-    }
-    for path in bundled_jetbrains_mono() {
-        // Italic og bold brukes av syntaksfargene
-        let fonts = ["Regular", "Italic", "Bold", "BoldItalic"]
-            .map(|v| path.with_file_name(format!("JetBrainsMono-{v}.ttf")))
-            .iter()
-            .filter_map(|p| std::fs::read(p).ok().map(Cow::Owned))
-            .collect();
-        if ts.add_fonts(fonts).is_ok() && pick_family(&ts.all_font_names()) == PREFERRED_FAMILY {
-            return PREFERRED_FAMILY;
-        }
-    }
-    FALLBACK_FAMILY
-}
-
-fn bundled_jetbrains_mono() -> Vec<PathBuf> {
-    let mut roots = vec![PathBuf::from("/Applications")];
-    if let Some(home) = std::env::var_os("HOME") {
-        roots.push(PathBuf::from(home).join("Applications"));
-    }
-    let mut found = Vec::new();
-    for root in roots {
-        let Ok(entries) = std::fs::read_dir(root) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry
-                .path()
-                .join("Contents/jbr/Contents/Home/lib/fonts/JetBrainsMono-Regular.ttf");
-            if path.is_file() {
-                found.push(path);
-            }
-        }
-    }
-    found.sort();
-    found
+    cx.text_system()
+        .add_fonts(FONTS.map(Cow::Borrowed).to_vec())
+        .expect("innebygd font skal kunne lastes");
+    FAMILY
 }
 
 #[derive(Debug, Clone)]
@@ -124,21 +83,5 @@ impl TextStyle {
             self.font.family.clone(),
             f32::from(self.font_size).to_bits(),
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn velger_jetbrains_mono_bare_hvis_installert() {
-        let names = |n: &[&str]| n.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(pick_family(&names(&["Menlo", "Monaco"])), FALLBACK_FAMILY);
-        assert_eq!(
-            pick_family(&names(&["Menlo", "JetBrains Mono"])),
-            PREFERRED_FAMILY
-        );
-        assert_eq!(pick_family(&[]), FALLBACK_FAMILY);
     }
 }
