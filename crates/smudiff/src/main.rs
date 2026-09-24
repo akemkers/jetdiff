@@ -7,10 +7,7 @@ use gpui::{
     actions, px, size,
 };
 use smudiff_ui::text::load_font;
-use smudiff_ui::{
-    CollapseAllFolds, CollapseFold, ExpandAllFolds, ExpandFold, FileDiffView, NextChange,
-    NextContextRange, PreviousChange, UiTheme,
-};
+use smudiff_ui::{FileDiffView, NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut};
 use smudiff_view::{ComparisonPolicy, FileDiff};
 
 actions!(smudiff, [Quit]);
@@ -45,14 +42,13 @@ fn read(path: &str) -> Result<String, String> {
 }
 
 fn bind_keys(cx: &mut App) {
+    // Resten av tastene går gjennom vim-parseren i `FileDiffView`
     cx.bind_keys([
-        KeyBinding::new("f7", NextChange, None),
-        KeyBinding::new("shift-f7", PreviousChange, None),
-        // IntelliJ macOS-keymap. GPUI gjør cmd-shift-= til cmd-+ og cmd-shift-- til cmd-_
-        KeyBinding::new("cmd-=", ExpandFold, None),
-        KeyBinding::new("cmd--", CollapseFold, None),
-        KeyBinding::new("cmd-+", ExpandAllFolds, None),
-        KeyBinding::new("cmd-_", CollapseAllFolds, None),
+        // GPUI matcher på tegnet som skrives: Cmd+Pluss er `+` på norsk og `=` på US
+        KeyBinding::new("cmd-+", ZoomIn, None),
+        KeyBinding::new("cmd-=", ZoomIn, None),
+        KeyBinding::new("cmd--", ZoomOut, None),
+        KeyBinding::new("cmd-0", ResetZoom, None),
         // IntelliJ har ingen snarvei, bare en meny i verktøylinja
         KeyBinding::new("cmd-alt-c", NextContextRange, None),
         KeyBinding::new("cmd-q", Quit, None),

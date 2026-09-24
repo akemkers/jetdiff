@@ -3,11 +3,14 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
+use smudiff_view::columns;
 use smudiff_view::folding::CONTEXT_RANGE_MODES;
 use smudiff_view::{
-    ComparisonPolicy, DiffType, FileDiff, FoldSettings, Folding, InlineHighlight, Navigation,
-    PositionKeeper, ScrollState, Side, Viewport, divider_bands, divider_separators, stripe_markers,
+    Command, ComparisonPolicy, DiffState, DiffType, FileDiff, FoldSettings, Folding, Horizontal,
+    InlineHighlight, Navigation, PositionKeeper, ScrollState, Side, Viewport, divider_bands,
+    divider_separators, stripe_markers,
 };
 
 const L: Side = Side::Left;
@@ -364,11 +367,11 @@ fn fold_operasjoner_holder_seg_innenfor() {
                     f.expand_at(side, line);
                 }
                 1 => {
-                    f.collapse_at(side, line);
+                    f.expand_all(false);
                 }
                 2 => f = f.with_settings(&d, f.settings().next_context_range()),
                 3 => {
-                    f.expand_all(step % 3 == 0);
+                    f.expand_all(true);
                 }
                 _ => {
                     if let Some(id) = f.fold_at_line(side, line) {
@@ -391,6 +394,93 @@ fn fold_operasjoner_holder_seg_innenfor() {
             }
             divider_separators(&f, state.y, VP, 24.);
             state.scroll_by(&d, &f, side, 97., VP);
+        }
+    }
+}
+
+/// Cursoren står på en gyldig linje og tegngrense, aldri skjult i en fold, og scroll er
+/// innenfor.
+fn assert_cursor_valid(name: &str, s: &DiffState, vp: Viewport, cmd: Command) {
+    let c = s.cursor;
+    let d = &s.diff;
+    assert!(
+        c.line < d.line_count(c.side),
+        "{name} {cmd:?}: linje {}",
+        c.line
+    );
+    let text = d.line(c.side, c.line);
+    assert_eq!(
+        columns::clamp_col(text, c.col),
+        c.col,
+        "{name} {cmd:?}: kolonne"
+    );
+    assert_eq!(
+        s.folding.caret_after(c.side, c.line),
+        c.line,
+        "{name} {cmd:?}: i fold"
+    );
+    let t = s.transferred_cursor();
+    assert!(t.line < d.line_count(t.side), "{name} {cmd:?}: overført");
+    assert_eq!(columns::clamp_col(d.line(t.side, t.line), t.col), t.col);
+    for side in [L, R] {
+        let layout = s.folding.layout(side, vp.line_height);
+        let y = s.scroll.y(side);
+        assert!(
+            y >= 0. && y <= layout.max_scroll(vp.height) + 0.01,
+            "{name} {cmd:?}"
+        );
+    }
+}
+
+#[test]
+fn cursor_holder_seg_gyldig() {
+    use Command::*;
+    let cmds = [
+        MoveDown,
+        MoveUp,
+        MoveLeft,
+        MoveRight,
+        LineStart,
+        LineEnd,
+        GoToTop,
+        GoToBottom,
+        HalfPageDown,
+        HalfPageUp,
+        NextChange,
+        PrevChange,
+        SwitchSide,
+        FoldOpen,
+        ToggleFolds,
+        NextContextRange,
+    ];
+    let small = Viewport {
+        height: 60.,
+        line_height: 18.,
+    };
+    let hx = Horizontal {
+        text_width: 300.,
+        char_width: 8.,
+        max_x: 2000.,
+    };
+    for (name, diff) in all() {
+        let diff = Rc::new(diff);
+        for vp in [VP, small] {
+            let folding = Rc::new(Folding::new(&diff, FoldSettings::default()));
+            let mut s = DiffState::new(diff.clone(), folding);
+            s.init(vp);
+            assert_cursor_valid(&name, &s, vp, MoveDown);
+            // Deterministisk pseudotilfeldig rekkefølge
+            let mut seed: u32 = 7;
+            for _ in 0..400 {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
+                let cmd = cmds[(seed >> 16) as usize % cmds.len()];
+                s.execute(cmd, vp, hx);
+                assert_cursor_valid(&name, &s, vp, cmd);
+                if seed.is_multiple_of(5) {
+                    s.wheel(if seed.is_multiple_of(2) { L } else { R }, 37.5, vp);
+                    assert_cursor_valid(&name, &s, vp, cmd);
+                }
+            }
         }
     }
 }

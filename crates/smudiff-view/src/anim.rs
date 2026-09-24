@@ -28,6 +28,16 @@ impl ScrollAnimation {
         }
     }
 
+    /// Animasjon mellom to scroll-tilstander, for cursor-kommandoer som `d` og `gg`.
+    pub fn between(master: Side, from: ScrollState, to: ScrollState, duration_ms: f32) -> Self {
+        Self {
+            master,
+            from,
+            to,
+            duration_ms,
+        }
+    }
+
     pub fn target(&self) -> ScrollState {
         self.to
     }

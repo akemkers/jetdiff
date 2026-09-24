@@ -1,42 +1,48 @@
-//! To editorer med divider mellom. Eier scroll, navigasjon og animasjon, og kobler
-//! GPUI-hendelser til `smudiff-view`.
+//! To editorer med divider mellom. `DiffState` eier cursor, folding og scroll-målet. Her
+//! ligger det som trenger GPUI: taster, mus, animasjon mot målet og zoom.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
-    Bounds, Context, FocusHandle, Focusable, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels,
-    Point, Render, ScrollWheelEvent, Window, actions, canvas, div, prelude::*, px,
+    Bounds, Context, FocusHandle, Focusable, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
+    MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window, actions, canvas, div,
+    prelude::*, px,
 };
 use smudiff_core::side::Side;
 use smudiff_view::divider::DIVIDER_WIDTH;
 use smudiff_view::{
-    FileDiff, FoldId, FoldSettings, Folding, NavTarget, Navigation, PositionKeeper,
-    ScrollAnimation, ScrollState, StripeMarker, Viewport, stripe_markers,
+    Command, DiffState, FileDiff, FoldId, FoldSettings, Folding, Horizontal, Key, KeyCode,
+    KeyParser, Parsed, ScrollAnimation, ScrollState, StripeMarker, Viewport, columns,
+    stripe_markers,
 };
 
 use crate::geometry::{SideGeometry, gutter_layout};
-use crate::side_editor::{SideCache, SideEditor, StripeRects};
-use crate::tabs::display_width;
+use crate::metrics::{FONT_SIZE, zoomed};
+use crate::side_editor::{Caret, SideCache, SideEditor, StripeRects};
+use crate::tabs::{ExpandedLine, display_width};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
-actions!(
-    smudiff,
-    [
-        NextChange,
-        PreviousChange,
-        ExpandAllFolds,
-        CollapseAllFolds,
-        ExpandFold,
-        CollapseFold,
-        NextContextRange,
-    ]
-);
+actions!(smudiff, [NextContextRange, ZoomIn, ZoomOut, ResetZoom]);
 
 /// Varighet på animert hopp til endring.
 pub const NAV_ANIMATION_MS: f32 = 170.;
+
+/// Høyden på tastelinja nederst.
+const HELP_HEIGHT: f32 = 24.;
+
+const HELP: [(&str, &str); 8] = [
+    ("j k", "opp/ned"),
+    ("d u", "scroll side"),
+    ("n p", "hopp til endring"),
+    ("o", "åpne fold"),
+    ("f", "toggle folds"),
+    ("Tab", "bytt side"),
+    ("gg G", "topp og bunn"),
+    ("q", "avslutt"),
+];
 
 /// Linjer utenfor viewporten som beholdes shapet per side.
 const CACHE_CAPACITY: usize = 2000;
@@ -61,15 +67,15 @@ struct Shared {
 }
 
 pub struct FileDiffView {
-    diff: Rc<FileDiff>,
-    folding: Rc<Folding>,
+    state: DiffState,
     theme: UiTheme,
     family: &'static str,
+    font_size: f32,
     style: Option<TextStyle>,
-    scroll: ScrollState,
-    master: Side,
-    nav: Navigation,
+    /// Det som vises nå. Under en animasjon ligger den etter `state.scroll`, som er målet.
+    shown: ScrollState,
     animation: Option<Animation>,
+    keys: KeyParser,
     initialized: bool,
     viewport_height: f32,
     markers: Rc<[Vec<StripeMarker>; 2]>,
@@ -77,6 +83,48 @@ pub struct FileDiffView {
     max_cols: usize,
     shared: Rc<Shared>,
     focus: FocusHandle,
+}
+
+/// GPUI-tast til vår `Key`. `key_char` har shift og alt med, så `G`, `$` og `[` på norsk
+/// tastatur kommer riktig. Med ctrl er `key_char` tom, og `key` er grunntasten.
+fn to_key(k: &Keystroke) -> Key {
+    let m = k.modifiers;
+    let single = |s: &str| {
+        let mut chars = s.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) => Some(c),
+            _ => None,
+        }
+    };
+    let code = match k.key.as_str() {
+        "escape" => KeyCode::Esc,
+        "tab" => KeyCode::Tab,
+        "up" => KeyCode::Up,
+        "down" => KeyCode::Down,
+        "left" => KeyCode::Left,
+        "right" => KeyCode::Right,
+        f if f.len() > 1 && f.starts_with('f') && f[1..].parse::<u8>().is_ok() => {
+            KeyCode::F(f[1..].parse().unwrap_or(0))
+        }
+        key => {
+            let typed = if m.control {
+                None
+            } else {
+                k.key_char.as_deref().and_then(single)
+            };
+            match typed.or_else(|| single(key)) {
+                Some(c) => KeyCode::Char(c),
+                None => KeyCode::Other,
+            }
+        }
+    };
+    Key {
+        code,
+        ctrl: m.control,
+        shift: m.shift,
+        alt: m.alt,
+        cmd: m.platform,
+    }
 }
 
 impl FileDiffView {
@@ -94,15 +142,14 @@ impl FileDiffView {
             .unwrap_or(0);
         let folding = Folding::new(&diff, FoldSettings::default());
         Self {
-            folding: Rc::new(folding),
-            diff: Rc::new(diff),
+            state: DiffState::new(Rc::new(diff), Rc::new(folding)),
             theme,
             family,
+            font_size: FONT_SIZE,
             style: None,
-            scroll: ScrollState::default(),
-            master: Side::Left,
-            nav: Navigation::default(),
+            shown: ScrollState::default(),
             animation: None,
+            keys: KeyParser::default(),
             initialized: false,
             viewport_height: 0.,
             markers: Rc::new([Vec::new(), Vec::new()]),
@@ -132,16 +179,18 @@ impl FileDiffView {
         if self
             .style
             .as_ref()
-            .is_some_and(|s| s.font.family == self.family)
+            .is_some_and(|s| s.font.family == self.family && s.font_size == px(self.font_size))
         {
             return;
         }
-        let style = TextStyle::new(self.family, window);
+        let style = TextStyle::new(self.family, self.font_size, window);
+        // Nøkkelen har fontstørrelsen, så zoom tømmer cachen
         let mut caches = self.shared.caches.borrow_mut();
         for cache in caches.iter_mut() {
             cache.set_key(style.cache_key());
         }
         drop(caches);
+        self.shared.widest.set(0.);
         self.style = Some(style);
         self.update_markers();
     }
@@ -152,76 +201,165 @@ impl FileDiffView {
             return;
         };
         let lh = style.line_height();
-        self.markers = Rc::new(SIDES.map(|s| stripe_markers(&self.diff, &self.folding, s, lh)));
+        let (diff, folding) = (&self.state.diff, &self.state.folding);
+        self.markers = Rc::new(SIDES.map(|s| stripe_markers(diff, folding, s, lh)));
         *self.shared.stripes.borrow_mut() = Default::default();
     }
 
-    /// `FoldingModelImpl.runBatchFoldingOperation`: animasjonen fullføres, og caret eller
-    /// øverste linje holdes på plass. Umiddelbart, uten animasjon.
-    fn change_folding(
-        &mut self,
-        cx: &mut Context<Self>,
-        op: impl FnOnce(&FileDiff, &mut Folding) -> bool,
-    ) {
+    fn horizontal(&self) -> Horizontal {
+        let (Some(bounds), Some(style)) = (self.shared.bounds.get(), self.style.as_ref()) else {
+            return Horizontal::default();
+        };
+        let [left, _] = side_geometry(&self.state.diff, style, bounds);
+        Horizontal {
+            text_width: left.text.end - left.text_x,
+            char_width: style.char_width,
+            max_x: self.max_scroll_x(),
+        }
+    }
+
+    /// Fullfører en animasjon der den står, før noe annet endrer scroll.
+    fn stop_animation(&mut self) {
+        if self.animation.take().is_some() {
+            self.state.scroll = self.shown;
+        }
+    }
+
+    fn execute(&mut self, cmd: Command, window: &mut Window, cx: &mut Context<Self>) {
+        let size = match cmd {
+            Command::ZoomIn => Some(zoomed(self.font_size, 1.)),
+            Command::ZoomOut => Some(zoomed(self.font_size, -1.)),
+            Command::ResetZoom => Some(FONT_SIZE),
+            Command::Quit => {
+                cx.quit();
+                return;
+            }
+            _ => None,
+        };
+        if let Some(size) = size {
+            self.zoom(size, window);
+            cx.notify();
+            return;
+        }
         let Some(vp) = self.viewport() else {
             return;
         };
-        if let Some(a) = self.animation.take() {
-            self.scroll = a.anim.target();
-        }
-        let keeper = PositionKeeper::save(&self.scroll, &self.folding, self.nav.caret_lines, vp);
-        if !op(&self.diff, Rc::make_mut(&mut self.folding)) {
+        let out = self.state.execute(cmd, vp, self.horizontal());
+        if !out.changed {
             return;
         }
-        let carets = SIDES.map(|s| self.folding.caret_after(s, self.nav.caret_lines[idx(s)]));
-        self.nav.caret_lines = carets;
-        keeper.restore(&mut self.scroll, &self.diff, &self.folding, carets, vp);
-        self.update_markers();
+        if out.folding_changed {
+            self.update_markers();
+        }
+        if out.animate {
+            self.animate();
+        } else {
+            self.animation = None;
+            self.shown = self.state.scroll;
+        }
         cx.notify();
     }
 
-    /// Side og logisk linje under musa, `None` i divideren.
-    fn line_at(&self, position: Point<Pixels>) -> Option<(Side, usize)> {
+    /// Fra det som vises til målet. Midt i en animasjon starter den nye der den gamle står.
+    fn animate(&mut self) {
+        if self.shown == self.state.scroll {
+            self.animation = None;
+            return;
+        }
+        self.animation = Some(Animation {
+            anim: ScrollAnimation::between(
+                self.state.master,
+                self.shown,
+                self.state.scroll,
+                NAV_ANIMATION_MS,
+            ),
+            start: Instant::now(),
+        });
+    }
+
+    /// `EditorFontSizeAction`: ny fontstørrelse, og cursorlinja holdes på samme sted.
+    fn zoom(&mut self, size: f32, window: &mut Window) {
+        if size == self.font_size {
+            return;
+        }
+        let Some(old) = self.style.as_ref().map(|s| (s.line_height(), s.char_width)) else {
+            self.font_size = size;
+            return;
+        };
+        self.animation = None;
+        self.font_size = size;
+        self.ensure_style(window);
+        let Some(vp) = self.viewport() else {
+            return;
+        };
+        let char_width = self.style.as_ref().map_or(old.1, |s| s.char_width);
+        self.state.rescale(old.0, vp, char_width / old.1);
+        let max_x = self.max_scroll_x();
+        self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
+        self.shown = self.state.scroll;
+    }
+
+    fn on_key_down(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        match self.keys.feed(to_key(&ev.keystroke)) {
+            Parsed::Command(cmd) => {
+                self.execute(cmd, window, cx);
+                cx.stop_propagation();
+            }
+            // macOS spiser ctrl-taster som ikke stopper propagering (`handle_key_equivalent`)
+            Parsed::Pending | Parsed::Unknown => cx.stop_propagation(),
+            Parsed::Ignored => {}
+        }
+    }
+
+    /// Side, logisk linje og x i teksten under musa, `None` i divideren.
+    fn hit(&self, position: Point<Pixels>) -> Option<(Side, usize, f32)> {
         let (vp, bounds, style) = (
             self.viewport()?,
             self.shared.bounds.get()?,
             self.style.as_ref()?,
         );
-        let geoms = side_geometry(&self.diff, style, bounds);
+        let geoms = side_geometry(&self.state.diff, style, bounds);
         let x = f32::from(position.x);
         let side = SIDES
             .into_iter()
             .find(|&s| geoms[idx(s)].bounds().contains(&x))?;
-        let layout = self.folding.layout(side, vp.line_height);
-        let y = f32::from(position.y - bounds.origin.y) + self.scroll.y(side);
-        Some((
-            side,
-            layout.y_to_logical_line(y).min(layout.line_count() - 1),
-        ))
+        let layout = self.state.folding.layout(side, vp.line_height);
+        let y = f32::from(position.y - bounds.origin.y) + self.shown.y(side);
+        let line = layout.y_to_logical_line(y).min(layout.line_count() - 1);
+        let text_x = x - geoms[idx(side)].text_x + self.shown.x;
+        Some((side, line, text_x))
     }
 
     fn fold_at(&self, position: Point<Pixels>) -> Option<FoldId> {
-        let (side, line) = self.line_at(position)?;
-        self.folding.fold_at_line(side, line)
+        let (side, line, _) = self.hit(position)?;
+        self.state.folding.fold_at_line(side, line)
+    }
+
+    /// Kolonnen under x. Shapet linje gir eksakt treff, ellers regnes det i celler.
+    fn col_at(&self, side: Side, line: usize, x: f32) -> usize {
+        let text = self.state.diff.line(side, line);
+        let x = x.max(0.);
+        let caches = self.shared.caches.borrow();
+        if let Some(shaped) = caches[idx(side)].get(line).and_then(|e| e.shaped.as_ref()) {
+            let index = shaped.closest_index_for_x(px(x));
+            return ExpandedLine::new(text).col_for_display_index(index);
+        }
+        let cw = self.style.as_ref().map_or(1., |s| s.char_width);
+        columns::col_for_cell(text, (x / cw) as usize)
     }
 
     /// `FoldingModelSupport.MyMouseListener`: hover gjelder blokken på begge sider.
     fn on_mouse_move(&mut self, ev: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
         let id = self.fold_at(ev.position);
-        if self.folding.hovered() != id {
-            Rc::make_mut(&mut self.folding).set_hovered(id);
+        if self.state.folding.hovered() != id {
+            Rc::make_mut(&mut self.state.folding).set_hovered(id);
             cx.notify();
         }
     }
 
-    fn geometry(&self, bounds: Bounds<Pixels>) -> Option<[SideGeometry; 2]> {
-        let style = self.style.as_ref()?;
-        Some(side_geometry(&self.diff, style, bounds))
-    }
-
     fn side_at(&self, x: Pixels) -> Side {
         let Some(bounds) = self.shared.bounds.get() else {
-            return self.master;
+            return self.state.master;
         };
         if x < bounds.center().x {
             Side::Left
@@ -234,11 +372,9 @@ impl FileDiffView {
         let (Some(bounds), Some(style)) = (self.shared.bounds.get(), self.style.as_ref()) else {
             return 0.;
         };
-        let Some([left, _]) = self.geometry(bounds) else {
-            return 0.;
-        };
+        let [left, _] = side_geometry(&self.state.diff, style, bounds);
         let content = (self.max_cols + 1) as f32 * style.char_width;
-        content.max(self.shared.widest.get()) - (left.text.end - left.text.start)
+        content.max(self.shared.widest.get()) - (left.text.end - left.text_x)
     }
 
     fn on_scroll(&mut self, ev: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -247,91 +383,55 @@ impl FileDiffView {
         };
         let delta = ev.delta.pixel_delta(px(vp.line_height));
         let (dx, dy) = (f32::from(delta.x), f32::from(delta.y));
-        self.animation = None;
-        let side = self.side_at(ev.position.x);
-        self.master = side;
+        self.stop_animation();
         if dy != 0. {
-            self.scroll
-                .scroll_by(&self.diff, &self.folding, side, -dy, vp);
+            self.state.wheel(self.side_at(ev.position.x), -dy, vp);
         }
         if dx != 0. {
             let max_x = self.max_scroll_x();
-            self.scroll.scroll_x_to(self.scroll.x - dx, max_x);
+            let x = self.state.scroll.x - dx;
+            self.state.scroll.scroll_x_to(x, max_x);
         }
+        self.shown = self.state.scroll;
         cx.notify();
     }
 
-    /// Klikk gir fokus og caret, som navigasjonen regner fra. Klikk på en fold åpner neste
-    /// nivå på begge sider (`DiffLineSeparatorRenderer.doAction`).
+    /// Klikk gir fokus og flytter cursoren dit. Klikk på en fold åpner neste nivå på
+    /// begge sider (`DiffLineSeparatorRenderer.doAction`).
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
-        let Some((side, line)) = self.line_at(ev.position) else {
+        self.keys.reset();
+        let Some((side, line, x)) = self.hit(ev.position) else {
             return;
         };
-        self.nav.side = side;
-        self.nav.caret_lines[idx(side)] = line;
-        if let Some(id) = self.folding.fold_at_line(side, line) {
-            self.change_folding(cx, |_, f| f.set_expanded(id, true));
+        self.stop_animation();
+        let col = self.col_at(side, line, x);
+        self.state.click(side, line, col);
+        if self.state.folding.fold_at_line(side, line).is_some() {
+            self.execute(Command::FoldOpen, window, cx);
             // Musa står fortsatt på linja, som nå kan være neste nivå
             let id = self.fold_at(ev.position);
-            Rc::make_mut(&mut self.folding).set_hovered(id);
+            Rc::make_mut(&mut self.state.folding).set_hovered(id);
         }
+        self.shown = self.state.scroll;
         cx.notify();
-    }
-
-    fn expand_all(&mut self, _: &ExpandAllFolds, _: &mut Window, cx: &mut Context<Self>) {
-        self.change_folding(cx, |_, f| f.expand_all(true));
-    }
-
-    fn collapse_all(&mut self, _: &CollapseAllFolds, _: &mut Window, cx: &mut Context<Self>) {
-        self.change_folding(cx, |_, f| f.expand_all(false));
-    }
-
-    fn expand_fold(&mut self, _: &ExpandFold, _: &mut Window, cx: &mut Context<Self>) {
-        let (side, line) = (self.nav.side, self.nav.caret_lines[idx(self.nav.side)]);
-        self.change_folding(cx, |_, f| f.expand_at(side, line));
-    }
-
-    fn collapse_fold(&mut self, _: &CollapseFold, _: &mut Window, cx: &mut Context<Self>) {
-        let (side, line) = (self.nav.side, self.nav.caret_lines[idx(self.nav.side)]);
-        self.change_folding(cx, |_, f| f.collapse_at(side, line));
     }
 
     /// `TextDiffSettings.setContextRange`: foldene bygges på nytt med tilstanden bevart.
-    fn next_context_range(&mut self, _: &NextContextRange, _: &mut Window, cx: &mut Context<Self>) {
-        self.change_folding(cx, |diff, f| {
-            *f = f.with_settings(diff, f.settings().next_context_range());
-            true
-        });
+    fn next_context_range(&mut self, _: &NextContextRange, w: &mut Window, cx: &mut Context<Self>) {
+        self.execute(Command::NextContextRange, w, cx);
     }
 
-    fn next_change(&mut self, _: &NextChange, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(vp) = self.viewport() else {
-            return;
-        };
-        if let Some(target) = self.nav.go_next(&self.diff, &self.folding, vp) {
-            self.animate_to(&target, cx);
-        }
+    fn zoom_in(&mut self, _: &ZoomIn, w: &mut Window, cx: &mut Context<Self>) {
+        self.execute(Command::ZoomIn, w, cx);
     }
 
-    fn previous_change(&mut self, _: &PreviousChange, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(vp) = self.viewport() else {
-            return;
-        };
-        if let Some(target) = self.nav.go_prev(&self.diff, &self.folding, vp) {
-            self.animate_to(&target, cx);
-        }
+    fn zoom_out(&mut self, _: &ZoomOut, w: &mut Window, cx: &mut Context<Self>) {
+        self.execute(Command::ZoomOut, w, cx);
     }
 
-    fn animate_to(&mut self, target: &NavTarget, cx: &mut Context<Self>) {
-        // Midt i en animasjon står scroll der forrige frame satte den
-        let from = self.scroll;
-        self.master = self.nav.side;
-        self.animation = Some(Animation {
-            anim: ScrollAnimation::new(self.nav.side, from, target, NAV_ANIMATION_MS),
-            start: Instant::now(),
-        });
-        cx.notify();
+    fn reset_zoom(&mut self, _: &ResetZoom, w: &mut Window, cx: &mut Context<Self>) {
+        self.execute(Command::ResetZoom, w, cx);
     }
 
     fn step(&mut self, window: &mut Window) {
@@ -341,16 +441,13 @@ impl FileDiffView {
         if !self.initialized {
             self.initialized = true;
             // `InitialScrollPositionSupport` faller tilbake til første endring
-            if !self.diff.blocks().is_empty() {
-                let t = self.nav.go_to(&self.diff, &self.folding, 0, vp);
-                self.scroll.y = t.scroll_y;
-                self.scroll.x = t.scroll_x;
-            }
+            self.state.init(vp);
+            self.shown = self.state.scroll;
         }
         if let Some(a) = &self.animation {
             let elapsed = a.start.elapsed().as_secs_f32() * 1000.;
             let (state, done) = a.anim.sample(elapsed);
-            self.scroll = state;
+            self.shown = state;
             if done {
                 self.animation = None;
             } else {
@@ -359,7 +456,7 @@ impl FileDiffView {
         }
     }
 
-    /// Ny viewport-høyde: klem master og regn slave på nytt.
+    /// Ny viewport-høyde: målet regnes for den nye høyden, og animasjonen hopper dit.
     fn resize(&mut self, height: f32) {
         if height == self.viewport_height {
             return;
@@ -368,15 +465,9 @@ impl FileDiffView {
         let Some(vp) = self.viewport() else {
             return;
         };
-        if let Some(a) = &mut self.animation {
-            // Målet er regnet for den gamle høyden. Hopp dit og la sync rette opp.
-            self.scroll = a.anim.target();
-            self.animation = None;
-        }
-        let master = self.master;
-        let layout = self.folding.layout(master, vp.line_height);
-        self.scroll.y[idx(master)] = layout.clamp_scroll(self.scroll.y(master), vp.height);
-        self.scroll.sync_from(&self.diff, &self.folding, master, vp);
+        self.animation = None;
+        self.state.resize(vp);
+        self.shown = self.state.scroll;
     }
 }
 
@@ -418,35 +509,80 @@ impl Focusable for FileDiffView {
 impl Render for FileDiffView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_style(window);
-        self.resize(f32::from(window.viewport_size().height));
+        self.resize(f32::from(window.viewport_size().height) - HELP_HEIGHT);
         self.step(window);
 
         let scale = window.scale_factor();
-        let scroll_y = self.scroll.y.map(|y| snap(y, scale));
-        let scroll_x = snap(self.scroll.x, scale);
-        let diff = self.diff.clone();
-        let folding = self.folding.clone();
+        let scroll_y = self.shown.y.map(|y| snap(y, scale));
+        let scroll_x = snap(self.shown.x, scale);
+        let diff = self.state.diff.clone();
+        let folding = self.state.folding.clone();
         let theme = self.theme;
         let style = self.style.clone();
         let markers = self.markers.clone();
         let shared = self.shared.clone();
-        let carets = self.nav.caret_lines;
+
+        // Aktiv side får fylt blokk. Den andre viser overført posisjon som omriss, så man
+        // ser hvor Tab lander. Begge får caret row.
+        let focused = self.focus.is_focused(window) && window.is_window_active();
+        let cursor = self.state.cursor;
+        let other = self.state.transferred_cursor();
+        let mut carets = [Caret {
+            line: 0,
+            col: 0,
+            solid: false,
+            row: false,
+        }; 2];
+        carets[idx(cursor.side)] = Caret {
+            line: cursor.line,
+            col: cursor.col,
+            solid: focused,
+            row: true,
+        };
+        carets[idx(other.side)] = Caret {
+            line: other.line,
+            col: other.col,
+            solid: false,
+            row: true,
+        };
+
+        let family = self.family;
+        let help = {
+            div()
+                .flex()
+                .flex_none()
+                .h(px(HELP_HEIGHT))
+                .px(px(10.))
+                .gap(px(16.))
+                .items_center()
+                .bg(theme.gutter_bg)
+                .font_family(family)
+                .text_size(px(12.))
+                .text_color(theme.line_number)
+                .children(HELP.iter().map(|(keys, what)| {
+                    div()
+                        .flex()
+                        .gap(px(6.))
+                        .child(div().text_color(theme.editor_fg).child(*keys))
+                        .child(*what)
+                }))
+        };
 
         div()
             .size_full()
+            .flex()
+            .flex_col()
             .bg(theme.editor_bg)
             .track_focus(&self.focus)
-            .on_action(cx.listener(Self::next_change))
-            .on_action(cx.listener(Self::previous_change))
-            .on_action(cx.listener(Self::expand_all))
-            .on_action(cx.listener(Self::collapse_all))
-            .on_action(cx.listener(Self::expand_fold))
-            .on_action(cx.listener(Self::collapse_fold))
+            .on_key_down(cx.listener(Self::on_key_down))
             .on_action(cx.listener(Self::next_context_range))
+            .on_action(cx.listener(Self::zoom_in))
+            .on_action(cx.listener(Self::zoom_out))
+            .on_action(cx.listener(Self::reset_zoom))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
-            .when(self.folding.hovered().is_some(), |d| d.cursor_pointer())
+            .when(folding.hovered().is_some(), |d| d.cursor_pointer())
             .child(
                 canvas(
                     |_, _, _| {},
@@ -478,7 +614,8 @@ impl Render for FileDiffView {
                                 height,
                                 scroll_y: scroll_y[i],
                                 scroll_x,
-                                caret_line: carets[i],
+                                caret_line: carets[i].line,
+                                caret: carets[i],
                                 stripe: &stripes[i],
                             };
                             widest = widest.max(editor.paint(&mut caches[i], window, cx));
@@ -499,7 +636,64 @@ impl Render for FileDiffView {
                         .paint(window);
                     },
                 )
-                .size_full(),
+                .flex_1()
+                .w_full(),
             )
+            .child(help)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::Modifiers;
+
+    fn stroke(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> Keystroke {
+        Keystroke {
+            modifiers,
+            key: key.into(),
+            key_char: key_char.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn taster_fra_gpui() {
+        let none = Modifiers::default();
+        let shift = Modifiers {
+            shift: true,
+            ..none
+        };
+        let ctrl = Modifiers {
+            control: true,
+            ..none
+        };
+        let alt = Modifiers { alt: true, ..none };
+        assert_eq!(
+            to_key(&stroke("g", Some("G"), shift)).code,
+            KeyCode::Char('G')
+        );
+        assert_eq!(to_key(&stroke("d", None, ctrl)), Key::ctrl('d'));
+        // Norsk Alt+8 gir `[`
+        assert_eq!(
+            to_key(&stroke("8", Some("["), alt)).code,
+            KeyCode::Char('[')
+        );
+        assert_eq!(to_key(&stroke("f7", None, shift)).code, KeyCode::F(7));
+        assert_eq!(to_key(&stroke("escape", None, none)).code, KeyCode::Esc);
+        assert_eq!(
+            to_key(&stroke("f", Some("f"), none)).code,
+            KeyCode::Char('f')
+        );
+        assert_eq!(to_key(&stroke("tab", None, none)).code, KeyCode::Tab);
+        assert_eq!(to_key(&stroke("home", None, none)).code, KeyCode::Other);
+        let cmd = to_key(&stroke(
+            "=",
+            None,
+            Modifiers {
+                platform: true,
+                ..none
+            },
+        ));
+        assert!(cmd.cmd);
     }
 }

@@ -15,13 +15,25 @@ Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode.
 cargo run --release -p smudiff -- <venstre> <høyre> [--light]
 ```
 
-F7 og Shift+F7 hopper til neste og forrige endring. Cmd+Q eller Cmd+W lukker.
+Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer.
 
-Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer. Snarveiene følger IntelliJ på macOS:
+### Taster
 
-- Cmd+= og Cmd+- åpner og lukker folden ved caret
-- Cmd+Shift+= og Cmd+Shift+- åpner og lukker alle
-- Cmd+Alt+C bytter kontekst: 1, 2, 4, 8 linjer eller ingen folding
+Et lite, vim-inspirert keymap for lesing. Tastelinja nederst viser de viktigste.
+
+| Tast | Gjør |
+| --- | --- |
+| `h` `j` `k` `l`, piltaster | Flytt cursoren. `j`/`k` hopper over lukkede folds |
+| `0` `$` | Linjestart og linjeslutt |
+| `gg` `G` | Første og siste linje |
+| `d` `u`, Ctrl+d Ctrl+u | Halv side ned og opp |
+| `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Neste og forrige endring |
+| Tab | Bytt side |
+| `o` | Åpne fold ved cursoren ett nivå |
+| `f` | Åpne alle folds, eller lukk alle hvis ingen er lukket |
+| Cmd+Pluss Cmd+Minus Cmd+0 | Zoom inn, ut og tilbake til 13pt |
+| Cmd+Alt+C | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding |
+| `q`, Cmd+Q, Cmd+W | Avslutt |
 
 JetBrains Mono brukes hvis den er installert eller finnes i en JetBrains-IDE under `/Applications`, ellers Menlo.
 

@@ -48,6 +48,8 @@ pub struct SideGeometry {
     pub side: Side,
     /// Hele tekstområdet. Scrollbaren ligger over den ytterste delen.
     pub text: Range<f32>,
+    /// Der teksten starter. Venstre side har scrollbaren på innsiden, så teksten flyttes forbi den.
+    pub text_x: f32,
     pub gutter: Range<f32>,
     pub scrollbar: Range<f32>,
     pub gutter_layout: GutterLayout,
@@ -67,9 +69,14 @@ impl SideGeometry {
             Side::Left => text.start..text.start + sw,
             Side::Right => text.end - sw..text.end,
         };
+        let text_x = match side {
+            Side::Left => (text.start + sw).min(text.end),
+            Side::Right => text.start,
+        };
         Self {
             side,
             text,
+            text_x,
             gutter,
             scrollbar,
             gutter_layout,

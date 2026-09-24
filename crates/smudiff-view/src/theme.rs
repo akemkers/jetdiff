@@ -42,6 +42,10 @@ pub struct Theme {
     pub divider_bg: Rgba,
     pub line_number: Rgba,
     pub line_number_caret_row: Rgba,
+    /// `CARET_COLOR`.
+    pub caret: Rgba,
+    /// `CARET_ROW_COLOR`.
+    pub caret_row: Rgba,
     pub indent_guide: Rgba,
     /// `DIFF_SEPARATOR_WAVE`, streken over foldede områder.
     pub separator_wave: Rgba,
@@ -61,6 +65,8 @@ impl Theme {
             divider_bg: bg,
             line_number: rgb(0x4B5059),
             line_number_caret_row: rgb(0xA1A3AB),
+            caret: rgb(0xCED0D6),
+            caret_row: rgb(0x1F2024),
             indent_guide: rgb(0x323438),
             separator_wave: rgb(0x555555),
             inserted: DiffColors::new(rgb(0x294436), rgb(0x447152), bg),
@@ -79,6 +85,9 @@ impl Theme {
             divider_bg: bg,
             line_number: rgb(0xAEB3C2),
             line_number_caret_row: rgb(0x767A8A),
+            // Arvet fra Default-skjemaet, som har svart caret
+            caret: rgb(0x000000),
+            caret_row: rgb(0xF5F8FE),
             indent_guide: rgb(0xEBECF0),
             separator_wave: rgb(0xD0D0D0),
             inserted: DiffColors::new(rgb(0xBEE6BE), rgb(0xAADEAA), bg),

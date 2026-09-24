@@ -224,21 +224,6 @@ impl Folding {
         found.is_some_and(|id| self.set_expanded(id, true))
     }
 
-    /// `CollapseRegionAction` på caret: folden som starter på linja, ellers den innerste
-    /// åpne som inneholder den.
-    pub fn collapse_at(&mut self, side: Side, line: usize) -> bool {
-        if let Some(id) = self.unique_start(side, line)
-            && self.block(id).expanded
-        {
-            return self.set_expanded(id, false);
-        }
-        let found = self
-            .containing(side, line)
-            .filter(|&id| self.block(id).expanded)
-            .last();
-        found.is_some_and(|id| self.set_expanded(id, false))
-    }
-
     /// `FoldingModelImpl.onFoldProcessingEnd`: caret inne i en kollapset fold flyttes til
     /// starten av den.
     pub fn caret_after(&self, side: Side, line: usize) -> usize {
@@ -638,7 +623,7 @@ mod tests {
     }
 
     #[test]
-    fn expand_og_collapse_pa_caret() {
+    fn expand_pa_caret() {
         let d = three_changes();
         let mut f = Folding::new(&d, FoldSettings::default());
         // Caret på foldens linje: ytterste kollapsede
@@ -647,12 +632,6 @@ mod tests {
         // Linje 60 ligger i alle tre nivåene, ytterste kollapsede er nivå 1
         assert!(f.expand_at(L, 60));
         assert_eq!(f.fold_at_line(L, 57), Some(FoldId { group: 2, block: 2 }));
-        // Collapse tar innerste åpne som inneholder linja
-        assert!(f.collapse_at(L, 50));
-        assert_eq!(f.fold_at_line(L, 49), Some(FoldId { group: 2, block: 1 }));
-        // Linje 45 er starten på nivå 0, som er åpent
-        assert!(f.collapse_at(R, 45));
-        assert_eq!(f.fold_at_line(R, 45), Some(FoldId { group: 2, block: 0 }));
         // Linje 0: alle nivåene starter der, så den faller tilbake til inneholdende
         assert!(f.expand_at(L, 0));
         assert_eq!(f.fold_at_line(L, 0), Some(FoldId { group: 0, block: 1 }));

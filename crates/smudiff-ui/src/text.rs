@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use gpui::{App, Font, FontFeatures, Pixels, SharedString, Window, font, px};
 
-use crate::metrics::{FONT_SIZE, LINE_NUMBER_FONT_SIZE, LINE_SPACING, LineMetrics, line_metrics};
+use crate::metrics::{LINE_NUMBER_FONT_DELTA, LINE_SPACING, LineMetrics, line_metrics};
 
 pub const PREFERRED_FAMILY: &str = "JetBrains Mono";
 pub const FALLBACK_FAMILY: &str = "Menlo";
@@ -77,7 +77,7 @@ pub struct TextStyle {
 }
 
 impl TextStyle {
-    pub fn new(family: &'static str, window: &Window) -> Self {
+    pub fn new(family: &'static str, size: f32, window: &Window) -> Self {
         let font = Font {
             // Ingen ligaturer i diff, som IntelliJ sin default
             features: FontFeatures::disable_ligatures(),
@@ -95,8 +95,8 @@ impl TextStyle {
         // Der GPUI legger baseline når en linje males med en gitt linjehøyde
         let gpui_baseline = |size, lh: f32| (lh - ascent(size) - descent(size)) / 2. + ascent(size);
 
-        let font_size = px(FONT_SIZE);
-        let number_font_size = px(LINE_NUMBER_FONT_SIZE);
+        let font_size = px(size);
+        let number_font_size = px(size - LINE_NUMBER_FONT_DELTA);
         let metrics = line_metrics(ascent(font_size), descent(font_size), 0., LINE_SPACING);
         let lh = metrics.line_height;
         Self {

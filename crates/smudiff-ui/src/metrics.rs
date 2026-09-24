@@ -6,7 +6,16 @@
 pub const FONT_SIZE: f32 = 13.;
 
 /// `editor.gutter.linenumber.font.size.delta`: linjenumrene er 1pt mindre enn teksten.
-pub const LINE_NUMBER_FONT_SIZE: f32 = FONT_SIZE - 1.;
+pub const LINE_NUMBER_FONT_DELTA: f32 = 1.;
+
+/// Zoom-grenser. IntelliJ sin `EditorFontSizeAction` har 4..72, men under 8 er uleselig.
+pub const MIN_FONT_SIZE: f32 = 8.;
+pub const MAX_FONT_SIZE: f32 = 40.;
+
+/// Cmd+Pluss og Cmd+Minus går 1pt om gangen, som `EditorIncreaseFontSize`.
+pub fn zoomed(size: f32, steps: f32) -> f32 {
+    (size + steps).clamp(MIN_FONT_SIZE, MAX_FONT_SIZE)
+}
 
 /// `FontPreferences.DEFAULT_LINE_SPACING`.
 pub const LINE_SPACING: f32 = 1.2;
@@ -40,6 +49,14 @@ pub fn line_metrics(ascent: f32, descent: f32, leading: f32, line_spacing: f32) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zoom_klemmes() {
+        assert_eq!(zoomed(FONT_SIZE, 1.), 14.);
+        assert_eq!(zoomed(FONT_SIZE, -1.), 12.);
+        assert_eq!(zoomed(MAX_FONT_SIZE, 1.), MAX_FONT_SIZE);
+        assert_eq!(zoomed(MIN_FONT_SIZE, -1.), MIN_FONT_SIZE);
+    }
 
     #[test]
     fn jetbrains_mono_13() {
