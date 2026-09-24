@@ -5,7 +5,7 @@
 use std::ops::Range;
 
 /// `editor.virtual.lines`: diff-editorene kan scrolles fem linjer forbi slutten.
-pub const ADDITIONAL_LINES: usize = 5;
+const ADDITIONAL_LINES: usize = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Viewport {

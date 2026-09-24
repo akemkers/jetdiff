@@ -6,14 +6,12 @@ use gpui::{
     px, quad, size,
 };
 use smudiff_core::side::Side;
-use smudiff_view::columns;
+use smudiff_view::columns::{self, ExpandedLine};
 use smudiff_view::separator::{stroke_width, wave};
-use smudiff_view::{FileDiff, Folding, StripeMarker, thumb_range};
+use smudiff_view::{FileDiff, Folding, SideGeometry, StripeMarker, thumb_range};
 
 use crate::cache::LineCache;
 use crate::divider::stroke_path;
-use crate::geometry::SideGeometry;
-use crate::tabs::ExpandedLine;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -80,8 +78,6 @@ pub struct SideEditor<'a> {
     pub height: f32,
     pub scroll_y: f32,
     pub scroll_x: f32,
-    /// Linja med caret-farge på linjenummeret, på begge sider.
-    pub caret_line: usize,
     pub caret: Caret,
     pub stripe: &'a StripeRects,
 }
@@ -93,8 +89,6 @@ pub struct Caret {
     pub col: usize,
     /// Fylt blokk på aktiv side med fokus, ellers bare omriss som vim i et inaktivt vindu.
     pub solid: bool,
-    /// Tegner caret row. IntelliJ har det bare på aktiv side, vi har det på begge.
-    pub row: bool,
 }
 
 fn rect(x: std::ops::Range<f32>, y1: f32, y2: f32) -> Bounds<Pixels> {
@@ -155,7 +149,7 @@ impl SideEditor<'_> {
             ));
 
             // Caret row under diff-bakgrunnene, som i editorens lagrekkefølge
-            if self.caret.row && (first..=last_line).contains(&self.caret.line) {
+            if (first..=last_line).contains(&self.caret.line) {
                 let y = screen_y(layout.line_top(self.caret.line));
                 window.paint_quad(fill(rect(g.text.clone(), y, y + lh), self.theme.caret_row));
             }
@@ -198,7 +192,7 @@ impl SideEditor<'_> {
                 for &line in &lines {
                     let y = screen_y(layout.line_top(line)) + self.style.number_dy;
                     let caret;
-                    let number = if line == self.caret_line {
+                    let number = if line == self.caret.line {
                         caret = self.shape_number(line, self.theme.line_number_caret_row, window);
                         &caret
                     } else {
@@ -375,7 +369,7 @@ impl SideEditor<'_> {
         let changed = self
             .diff
             .line_highlight(self.geom.side, line)
-            .background
+            .block
             .is_some();
         let color = if changed {
             self.theme.line_number_caret_row

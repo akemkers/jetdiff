@@ -5,7 +5,7 @@ use crate::by_line;
 use crate::by_word;
 use crate::fragments::{DiffFragment, LineFragment, LineOffsets, convert_into_line_fragments};
 use crate::lcs::DiffTooBig;
-use crate::policy::{ComparisonPolicy, is_equal_texts, is_equals};
+use crate::policy::{ComparisonPolicy, is_equal_texts};
 
 /// `DiffConfig.MAX_BAD_LINES`: etter så mange for store fragmenter gir vi opp ord-diff.
 pub const MAX_BAD_LINES: usize = 3;
@@ -18,23 +18,13 @@ pub fn compare_lines(
 ) -> Result<Vec<LineFragment>, DiffTooBig> {
     let line_offsets1 = LineOffsets::new(text1);
     let line_offsets2 = LineOffsets::new(text2);
-    compare_lines_with_offsets(text1, text2, &line_offsets1, &line_offsets2, policy)
-}
-
-pub fn compare_lines_with_offsets(
-    text1: &str,
-    text2: &str,
-    line_offsets1: &LineOffsets,
-    line_offsets2: &LineOffsets,
-    policy: ComparisonPolicy,
-) -> Result<Vec<LineFragment>, DiffTooBig> {
     let lines1 = line_offsets1.line_contents(text1);
     let lines2 = line_offsets2.line_contents(text2);
 
     let changes = by_line::compare(&lines1, &lines2, policy)?;
     Ok(convert_into_line_fragments(
-        line_offsets1,
-        line_offsets2,
+        &line_offsets1,
+        &line_offsets2,
         &changes,
     ))
 }
@@ -46,20 +36,7 @@ pub fn compare_lines_inner(
     text2: &str,
     policy: ComparisonPolicy,
 ) -> Result<Vec<LineFragment>, DiffTooBig> {
-    let line_offsets1 = LineOffsets::new(text1);
-    let line_offsets2 = LineOffsets::new(text2);
-    compare_lines_inner_with_offsets(text1, text2, &line_offsets1, &line_offsets2, policy)
-}
-
-pub fn compare_lines_inner_with_offsets(
-    text1: &str,
-    text2: &str,
-    line_offsets1: &LineOffsets,
-    line_offsets2: &LineOffsets,
-    policy: ComparisonPolicy,
-) -> Result<Vec<LineFragment>, DiffTooBig> {
-    let line_fragments =
-        compare_lines_with_offsets(text1, text2, line_offsets1, line_offsets2, policy)?;
+    let line_fragments = compare_lines(text1, text2, policy)?;
     Ok(create_inner_fragments(
         &line_fragments,
         text1,
@@ -75,7 +52,7 @@ pub fn compare_for_viewer(
     policy: ComparisonPolicy,
 ) -> Result<Vec<LineFragment>, DiffTooBig> {
     let words = compare_lines_inner(text1, text2, policy)?;
-    Ok(process_blocks(&words, text1, text2, policy, true, false))
+    Ok(process_blocks(&words))
 }
 
 fn create_inner_fragments(
@@ -175,76 +152,13 @@ fn create_inner_word_fragments(
     Ok(chunks)
 }
 
-/// Slår sammen fragmenter som ligger inntil hverandre (`squash`), og dropper whitespace-only
-/// fragmenter i kantene under IGNORE_WHITESPACES (`trim`).
-pub fn process_blocks(
-    old_fragments: &[LineFragment],
-    text1: &str,
-    text2: &str,
-    policy: ComparisonPolicy,
-    squash: bool,
-    trim: bool,
-) -> Vec<LineFragment> {
-    if (!squash && !trim) || old_fragments.is_empty() {
-        return old_fragments.to_vec();
-    }
-
-    let mut new_fragments = Vec::new();
-    let mut start_index = 0;
-    for i in 1..=old_fragments.len() {
-        if i == old_fragments.len() || !is_adjoining(&old_fragments[i - 1], &old_fragments[i]) {
-            new_fragments.extend(process_adjoining(
-                &old_fragments[start_index..i],
-                text1,
-                text2,
-                policy,
-                squash,
-                trim,
-            ));
-            start_index = i;
-        }
-    }
-    new_fragments
-}
-
-fn process_adjoining(
-    fragments: &[LineFragment],
-    text1: &str,
-    text2: &str,
-    policy: ComparisonPolicy,
-    squash: bool,
-    trim: bool,
-) -> Vec<LineFragment> {
-    let mut start = 0;
-    let mut end = fragments.len();
-
-    if trim && policy == ComparisonPolicy::IgnoreWhitespaces {
-        let is_visible = |fragment: &LineFragment| {
-            fragment
-                .inner
-                .as_ref()
-                .is_none_or(|inner| !inner.is_empty())
-                && !is_equals(
-                    &text1[fragment.offsets1.clone()],
-                    &text2[fragment.offsets2.clone()],
-                    ComparisonPolicy::IgnoreWhitespaces,
-                )
-        };
-        while start < end && !is_visible(&fragments[start]) {
-            start += 1;
-        }
-        while start < end && !is_visible(&fragments[end - 1]) {
-            end -= 1;
-        }
-    }
-
-    if start == end {
-        return Vec::new();
-    }
-    if squash {
-        return vec![do_squash(&fragments[start..end])];
-    }
-    fragments[start..end].to_vec()
+/// `processBlocks` med squash: fragmenter som ligger inntil hverandre slås sammen. `trim`
+/// hører til "ignore whitespaces and empty lines", som vi ikke har.
+fn process_blocks(old_fragments: &[LineFragment]) -> Vec<LineFragment> {
+    old_fragments
+        .chunk_by(is_adjoining)
+        .map(do_squash)
+        .collect()
 }
 
 fn do_squash(old_fragments: &[LineFragment]) -> LineFragment {

@@ -89,24 +89,6 @@ pub struct LineBlock {
     pub newlines2: usize,
 }
 
-pub fn compare(
-    text1: &str,
-    text2: &str,
-    policy: ComparisonPolicy,
-) -> Result<Vec<DiffFragment>, DiffTooBig> {
-    let words1 = get_inline_chunks(text1);
-    let words2 = get_inline_chunks(text2);
-
-    let word_changes = lcs::diff(&words1, &words2)?;
-    let word_changes = optimize_word_chunks(text1, text2, &words1, &words2, &word_changes);
-
-    let delimiters_iterable =
-        match_adjustment_delimiters(text1, text2, &words1, &words2, &word_changes, 0, 0)?;
-    let iterable = match_adjustment_whitespaces(text1, text2, &delimiters_iterable, policy);
-
-    Ok(convert_into_diff_fragments(&iterable))
-}
-
 pub fn compare_and_split(
     text1: &str,
     text2: &str,
@@ -754,10 +736,18 @@ mod tests {
         text2: &'a str,
         policy: ComparisonPolicy,
     ) -> Vec<(&'a str, &'a str)> {
-        compare(text1, text2, policy)
+        compare_and_split(text1, text2, policy)
             .unwrap()
             .into_iter()
-            .map(|f| (&text1[f.offsets1], &text2[f.offsets2]))
+            .flat_map(|block| {
+                let (s1, s2) = (block.offsets.start1, block.offsets.start2);
+                block.fragments.into_iter().map(move |f| {
+                    (
+                        &text1[s1 + f.offsets1.start..s1 + f.offsets1.end],
+                        &text2[s2 + f.offsets2.start..s2 + f.offsets2.end],
+                    )
+                })
+            })
             .collect()
     }
 

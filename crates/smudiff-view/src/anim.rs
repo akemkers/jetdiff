@@ -1,45 +1,23 @@
-//! Animert hopp til en endring. `SyncScrollSupport.doMakeVisible` animerer master og lar
+//! Animert scroll mot et mål. `SyncScrollSupport.doMakeVisible` animerer master og lar
 //! slave følge masterens progresjon via ankeret, så begge sider lander samtidig selv om
 //! avstandene er ulike. Tid er millisekunder, så modellen kan testes uten klokke.
 
-use smudiff_core::side::Side;
-
-use crate::nav::NavTarget;
 use crate::scroll::ScrollState;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScrollAnimation {
-    pub master: Side,
     from: ScrollState,
     to: ScrollState,
     duration_ms: f32,
 }
 
 impl ScrollAnimation {
-    pub fn new(master: Side, from: ScrollState, target: &NavTarget, duration_ms: f32) -> Self {
+    pub fn new(from: ScrollState, to: ScrollState, duration_ms: f32) -> Self {
         Self {
-            master,
-            from,
-            to: ScrollState {
-                y: target.scroll_y,
-                x: target.scroll_x,
-            },
-            duration_ms,
-        }
-    }
-
-    /// Animasjon mellom to scroll-tilstander, for cursor-kommandoer som `d` og `gg`.
-    pub fn between(master: Side, from: ScrollState, to: ScrollState, duration_ms: f32) -> Self {
-        Self {
-            master,
             from,
             to,
             duration_ms,
         }
-    }
-
-    pub fn target(&self) -> ScrollState {
-        self.to
     }
 
     /// Posisjon etter `elapsed_ms`, og om animasjonen er ferdig. Slave lerpes med samme
@@ -63,7 +41,7 @@ impl ScrollAnimation {
 }
 
 /// Kubisk ease-out: rask start, myk landing.
-pub fn ease_out(t: f32) -> f32 {
+fn ease_out(t: f32) -> f32 {
     let t = t.clamp(0., 1.);
     1. - (1. - t).powi(3)
 }
@@ -72,13 +50,8 @@ pub fn ease_out(t: f32) -> f32 {
 mod tests {
     use super::*;
 
-    fn target(y: [f32; 2]) -> NavTarget {
-        NavTarget {
-            block: 0,
-            caret_lines: [0, 0],
-            scroll_y: y,
-            scroll_x: 0.,
-        }
+    fn target(y: [f32; 2]) -> ScrollState {
+        ScrollState { y, x: 0. }
     }
 
     #[test]
@@ -87,7 +60,7 @@ mod tests {
             y: [100., 300.],
             x: 40.,
         };
-        let a = ScrollAnimation::new(Side::Right, from, &target([700., 1200.]), 160.);
+        let a = ScrollAnimation::new(from, target([700., 1200.]), 160.);
         assert_eq!(a.sample(0.), (from, false));
         let (end, done) = a.sample(160.);
         assert!(done);
@@ -102,7 +75,7 @@ mod tests {
             y: [0., 100.],
             x: 0.,
         };
-        let a = ScrollAnimation::new(Side::Left, from, &target([1000., 200.]), 200.);
+        let a = ScrollAnimation::new(from, target([1000., 200.]), 200.);
         let mut prev = -1.;
         for ms in (0..200).step_by(10) {
             let (s, done) = a.sample(ms as f32);
@@ -125,7 +98,7 @@ mod tests {
 
     #[test]
     fn null_varighet_er_ferdig_med_en_gang() {
-        let a = ScrollAnimation::new(Side::Left, ScrollState::default(), &target([5., 6.]), 0.);
+        let a = ScrollAnimation::new(ScrollState::default(), target([5., 6.]), 0.);
         assert_eq!(a.sample(0.).0.y, [5., 6.]);
     }
 }

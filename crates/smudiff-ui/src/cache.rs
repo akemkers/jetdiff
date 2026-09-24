@@ -21,23 +21,11 @@ impl<K: PartialEq, V> LineCache<K, V> {
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.lines.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.lines.is_empty()
-    }
-
     pub fn set_key(&mut self, key: K) {
         if self.key.as_ref() != Some(&key) {
             self.lines.clear();
             self.key = Some(key);
         }
-    }
-
-    pub fn clear(&mut self) {
-        self.lines.clear();
     }
 
     pub fn get(&self, line: usize) -> Option<&V> {
@@ -76,7 +64,7 @@ mod tests {
             });
         }
         assert_eq!(calls, 1);
-        assert_eq!(c.len(), 1);
+        assert_eq!(c.lines.len(), 1);
     }
 
     #[test]
@@ -85,9 +73,9 @@ mod tests {
         c.set_key("menlo 13");
         c.get_or_insert_with(1, || 1);
         c.set_key("menlo 13");
-        assert_eq!(c.len(), 1);
+        assert_eq!(c.lines.len(), 1);
         c.set_key("jetbrains mono 13");
-        assert!(c.is_empty());
+        assert!(c.lines.is_empty());
         assert_eq!(*c.get_or_insert_with(1, || 2), 2);
     }
 
@@ -109,6 +97,6 @@ mod tests {
             c.get_or_insert_with(line, || line);
         }
         c.trim(100..101);
-        assert_eq!(c.len(), 5);
+        assert_eq!(c.lines.len(), 5);
     }
 }

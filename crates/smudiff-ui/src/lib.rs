@@ -1,14 +1,12 @@
 //! GPUI-laget. Tegner bare det `smudiff-view` regner ut.
 
-pub mod cache;
-pub mod divider;
-pub mod file_diff;
-pub mod geometry;
-pub mod metrics;
-pub mod side_editor;
-pub mod tabs;
-pub mod text;
-pub mod theme;
+mod cache;
+mod divider;
+mod file_diff;
+mod side_editor;
+mod text;
+mod theme;
 
 pub use file_diff::{FileDiffView, NextContextRange, ResetZoom, ZoomIn, ZoomOut};
+pub use text::load_font;
 pub use theme::UiTheme;

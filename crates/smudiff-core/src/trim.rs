@@ -9,7 +9,7 @@ use crate::character_utils::{
     is_katakana_script, is_thai_script,
 };
 use crate::lcs::Range;
-use crate::policy::{ComparisonPolicy, is_equal_texts, is_ws_byte};
+use crate::policy::{equals_ignore_whitespaces, is_space_enter_or_tab, is_ws_byte};
 
 pub fn is_punctuation(b: u32) -> bool {
     if b == 95 {
@@ -23,14 +23,10 @@ pub fn is_punctuation(b: u32) -> bool {
 }
 
 pub fn is_alpha(c: char) -> bool {
-    if is_white_space_code_point(c) {
+    if is_space_enter_or_tab(c) {
         return false;
     }
     !is_punctuation(c as u32)
-}
-
-pub fn is_white_space_code_point(c: char) -> bool {
-    c == '\n' || c == '\t' || c == ' '
 }
 
 /// Skrift uten mellomrom mellom ord (CJK, thai osv.). Hvert tegn blir et eget ord.
@@ -173,18 +169,13 @@ pub fn expand_whitespaces_backward(
 }
 
 pub fn is_equals_range(text1: &str, text2: &str, range: Range) -> bool {
-    is_equal_texts(
-        &text1[range.start1..range.end1],
-        &text2[range.start2..range.end2],
-        ComparisonPolicy::Default,
-    )
+    text1[range.start1..range.end1] == text2[range.start2..range.end2]
 }
 
 pub fn is_equals_ignore_whitespaces_range(text1: &str, text2: &str, range: Range) -> bool {
-    is_equal_texts(
+    equals_ignore_whitespaces(
         &text1[range.start1..range.end1],
         &text2[range.start2..range.end2],
-        ComparisonPolicy::IgnoreWhitespaces,
     )
 }
 

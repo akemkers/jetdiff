@@ -6,80 +6,15 @@ use smudiff_core::side::Side;
 
 use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
-use crate::model::{FileDiff, idx};
+use crate::model::FileDiff;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NavTarget {
-    pub block: usize,
     /// Caret flyttes til starten av blokken på begge sider.
     pub caret_lines: [usize; 2],
     pub scroll_y: [f32; 2],
     /// `doMakeVisible` scroller master til x = 0, og x deles.
     pub scroll_x: f32,
-}
-
-/// Caret per side og hvilken side som har fokus. Navigasjon regnes fra caret på den siden.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Navigation {
-    pub side: Side,
-    pub caret_lines: [usize; 2],
-}
-
-impl Default for Navigation {
-    fn default() -> Self {
-        Self {
-            // `getCurrentSide` er RIGHT som default i SimpleDiffViewer
-            side: Side::Right,
-            caret_lines: [0, 0],
-        }
-    }
-}
-
-impl Navigation {
-    fn caret(&self) -> usize {
-        self.caret_lines[idx(self.side)]
-    }
-
-    pub fn can_go_next(&self, diff: &FileDiff) -> bool {
-        next_block(diff, self.side, self.caret()).is_some()
-    }
-
-    pub fn can_go_prev(&self, diff: &FileDiff) -> bool {
-        prev_block(diff, self.side, self.caret()).is_some()
-    }
-
-    pub fn go_next(
-        &mut self,
-        diff: &FileDiff,
-        folding: &Folding,
-        viewport: Viewport,
-    ) -> Option<NavTarget> {
-        let block = next_block(diff, self.side, self.caret())?;
-        Some(self.go_to(diff, folding, block, viewport))
-    }
-
-    pub fn go_prev(
-        &mut self,
-        diff: &FileDiff,
-        folding: &Folding,
-        viewport: Viewport,
-    ) -> Option<NavTarget> {
-        let block = prev_block(diff, self.side, self.caret())?;
-        Some(self.go_to(diff, folding, block, viewport))
-    }
-
-    /// Også for startposisjon: `InitialScrollPositionSupport` faller tilbake til første endring.
-    pub fn go_to(
-        &mut self,
-        diff: &FileDiff,
-        folding: &Folding,
-        block: usize,
-        viewport: Viewport,
-    ) -> NavTarget {
-        let target = target_for_block(diff, folding, block, viewport);
-        self.caret_lines = target.caret_lines;
-        target
-    }
 }
 
 /// `canGoNext` og `goNext`: første blokk som starter under caret.
@@ -122,7 +57,6 @@ pub fn target_for_block(
     let starts = [b.lines[0].start, b.lines[1].start];
     let ends = [b.lines[0].end, b.lines[1].end];
     NavTarget {
-        block,
         caret_lines: starts,
         scroll_y: target_offsets(&layouts, starts, ends, viewport.height),
         scroll_x: 0.,
@@ -131,7 +65,7 @@ pub fn target_for_block(
 
 /// `SyncScrollSupport.getTargetOffsets` med `preferredTopShift = -1`. Små endringer havner
 /// 1/3 ned, samme punkt som sync-ankeret, så sync flytter ingenting etter hoppet.
-pub fn target_offsets(
+fn target_offsets(
     layouts: &[LineLayout; 2],
     start_lines: [usize; 2],
     end_lines: [usize; 2],
@@ -208,12 +142,11 @@ mod tests {
     fn navigasjon_over_folds() {
         let d = three_changes();
         let f = Folding::new(&d, crate::folding::FoldSettings::default());
-        let mut nav = Navigation::default();
-        let mut seen = vec![];
-        let mut t = nav.go_to(&d, &f, 0, VP);
+        let mut seen = vec![0];
+        let mut t = target_for_block(&d, &f, 0, VP);
         loop {
-            seen.push(t.block);
-            let start = d.blocks()[t.block].lines[0].start;
+            let b = *seen.last().unwrap();
+            let start = d.blocks()[b].lines[0].start;
             for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
                 let layout = f.layout(side, 20.);
                 // Endringen er synlig, og foldene over tar én linje hver
@@ -223,16 +156,17 @@ mod tests {
                     layout.line_top(start) < Folding::none(&d).layout(side, 20.).line_top(start)
                 );
             }
-            match nav.go_next(&d, &f, VP) {
-                Some(next) => t = next,
-                None => break,
-            }
+            let Some(next) = next_block(&d, Side::Right, t.caret_lines[1]) else {
+                break;
+            };
+            seen.push(next);
+            t = target_for_block(&d, &f, next, VP);
         }
         assert_eq!(seen, [0, 1, 2]);
         // Blokk 2 på linje 90 er visuell linje 25 med tre folds over
-        assert_eq!(nav.caret_lines, [90, 90]);
+        assert_eq!(t.caret_lines, [90, 90]);
         assert_eq!(t.scroll_y, [400., 400.]);
-        assert_eq!(nav.go_prev(&d, &f, VP).map(|t| t.block), Some(1));
+        assert_eq!(prev_block(&d, Side::Right, t.caret_lines[1]), Some(1));
     }
 
     #[test]
@@ -347,28 +281,5 @@ mod tests {
                 .line_top(d.blocks()[0].lines(s).start);
             assert!(top >= t.scroll_y[i] && top < t.scroll_y[i] + 300.);
         }
-    }
-
-    #[test]
-    fn navigation_flytter_caret() {
-        let d = three_changes();
-        let mut nav = Navigation::default();
-        assert!(!nav.can_go_prev(&d));
-        assert_eq!(
-            nav.go_next(&d, &Folding::none(&d), VP).map(|t| t.block),
-            Some(0)
-        );
-        assert_eq!(
-            nav.go_next(&d, &Folding::none(&d), VP).map(|t| t.block),
-            Some(1)
-        );
-        assert_eq!(nav.caret_lines, [40, 40]);
-        assert_eq!(
-            nav.go_prev(&d, &Folding::none(&d), VP).map(|t| t.block),
-            Some(0)
-        );
-        assert!(!nav.can_go_prev(&d));
-        nav.go_to(&d, &Folding::none(&d), 2, VP);
-        assert!(!nav.can_go_next(&d));
     }
 }

@@ -21,7 +21,6 @@ pub struct Key {
     pub code: KeyCode,
     pub ctrl: bool,
     pub shift: bool,
-    pub alt: bool,
     pub cmd: bool,
 }
 
@@ -31,7 +30,6 @@ impl Key {
             code,
             ctrl: false,
             shift: false,
-            alt: false,
             cmd: false,
         }
     }
@@ -58,10 +56,8 @@ impl Key {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Parsed {
     Command(Command),
-    /// Første `g` i `gg`. Tasten er brukt.
+    /// Tasten er brukt uten kommando: første `g` i `gg`, eller `g` fulgt av noe annet.
     Pending,
-    /// `g` fulgt av noe annet. Tasten er brukt og `g` glemt.
-    Unknown,
     /// Ikke vår tast, f.eks. Cmd-snarveier. La GPUI-actions ta den.
     Ignored,
 }
@@ -73,10 +69,6 @@ pub struct KeyParser {
 }
 
 impl KeyParser {
-    pub fn is_pending(&self) -> bool {
-        self.g
-    }
-
     pub fn reset(&mut self) {
         self.g = false;
     }
@@ -88,8 +80,7 @@ impl KeyParser {
         if std::mem::take(&mut self.g) {
             return match key.code {
                 KeyCode::Char('g') if !key.ctrl => Parsed::Command(Command::GoToTop),
-                KeyCode::Esc => Parsed::Pending,
-                _ => Parsed::Unknown,
+                _ => Parsed::Pending,
             };
         }
         if key.code == KeyCode::Char('g') && !key.ctrl {
@@ -196,7 +187,7 @@ mod tests {
         );
         assert_eq!(
             run(&chars("gxj")),
-            [Parsed::Pending, Parsed::Unknown, c(MoveDown)]
+            [Parsed::Pending, Parsed::Pending, c(MoveDown)]
         );
         assert_eq!(run(&[Key::new(KeyCode::Esc)]), [Parsed::Ignored]);
         assert_eq!(run(&chars("5")), [Parsed::Ignored]);

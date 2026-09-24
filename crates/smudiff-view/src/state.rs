@@ -14,8 +14,8 @@ use crate::model::{FileDiff, idx};
 use crate::nav::{next_block, prev_block, target_for_block};
 use crate::scroll::{PositionKeeper, ScrollState};
 
-/// Vim sin `scrolloff`. IntelliJ har 0, men vi er vim-first.
-pub const SCROLLOFF: usize = 5;
+/// Vim sin `scrolloff`, så det alltid er kontekst rundt cursoren. IntelliJ har 0.
+const SCROLLOFF: usize = 5;
 
 /// Liten margin mot flyttallsfeil når scroll står på en linjegrense.
 const EPS: f32 = 1e-3;
@@ -46,9 +46,8 @@ impl Outcome {
 
     fn animated() -> Self {
         Self {
-            changed: true,
             animate: true,
-            folding_changed: false,
+            ..Self::instant()
         }
     }
 }
@@ -69,7 +68,7 @@ fn screen_lines(vp: Viewport) -> usize {
 }
 
 /// Vim klemmer scrolloff til halve vinduet, så cursoren alltid har et sted å stå.
-pub fn scrolloff(vp: Viewport) -> usize {
+fn scrolloff(vp: Viewport) -> usize {
     SCROLLOFF.min(screen_lines(vp).saturating_sub(1) / 2)
 }
 
@@ -205,7 +204,7 @@ impl DiffState {
     }
 
     /// x for cursoren i celler. På en kollapset fold står den ved tekststart.
-    pub fn cursor_cells(&self) -> std::ops::Range<usize> {
+    fn cursor_cells(&self) -> std::ops::Range<usize> {
         let c = self.cursor;
         if self.folding.fold_at_line(c.side, c.line).is_some() {
             return 0..1;
@@ -353,7 +352,7 @@ impl DiffState {
     }
 
     /// Linja på den andre siden, via `BaseSyncScrollable.transfer`.
-    pub fn transferred_line(&self) -> usize {
+    fn transferred_line(&self) -> usize {
         let c = self.cursor;
         let other = c.side.other();
         let line = self.diff.mapping().transfer(c.side, c.line);
@@ -397,9 +396,8 @@ impl DiffState {
         self.set_line(after[idx(side)]);
         keeper.restore(&mut self.scroll, &self.diff, &self.folding, after, vp);
         Outcome {
-            changed: true,
-            animate: false,
             folding_changed: true,
+            ..Outcome::instant()
         }
     }
 

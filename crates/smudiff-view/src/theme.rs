@@ -3,8 +3,6 @@
 //! `IslandSchemeDark.xml` med Darcula som forelder. Light bruker `expUI_lightScheme.xml` med
 //! Default som forelder.
 
-use crate::model::DiffType;
-
 /// RGBA, alfa 255 er ugjennomsiktig.
 pub type Rgba = [u8; 4];
 
@@ -49,6 +47,8 @@ pub struct Theme {
     pub indent_guide: Rgba,
     /// `DIFF_SEPARATOR_WAVE`, streken over foldede områder.
     pub separator_wave: Rgba,
+    /// Grå tommel med alfa, som macOS-scrollbaren i IntelliJ.
+    pub scrollbar_thumb: Rgba,
     pub inserted: DiffColors,
     pub deleted: DiffColors,
     pub modified: DiffColors,
@@ -69,6 +69,7 @@ impl Theme {
             caret_row: rgb(0x1F2024),
             indent_guide: rgb(0x323438),
             separator_wave: rgb(0x555555),
+            scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             inserted: DiffColors::new(rgb(0x294436), rgb(0x447152), bg),
             deleted: DiffColors::new(rgb(0x484A4A), rgb(0x656E76), bg),
             modified: DiffColors::new(rgb(0x385570), rgb(0x43698D), bg),
@@ -90,17 +91,10 @@ impl Theme {
             caret_row: rgb(0xF5F8FE),
             indent_guide: rgb(0xEBECF0),
             separator_wave: rgb(0xD0D0D0),
+            scrollbar_thumb: [0x00, 0x00, 0x00, 0x33],
             inserted: DiffColors::new(rgb(0xBEE6BE), rgb(0xAADEAA), bg),
             deleted: DiffColors::new(rgb(0xD6D6D6), rgb(0xC8C8C8), bg),
             modified: DiffColors::new(rgb(0xC2D8F2), rgb(0xB6D2F2), bg),
-        }
-    }
-
-    pub fn diff(&self, diff_type: DiffType) -> &DiffColors {
-        match diff_type {
-            DiffType::Inserted => &self.inserted,
-            DiffType::Deleted => &self.deleted,
-            DiffType::Modified => &self.modified,
         }
     }
 }
@@ -112,7 +106,7 @@ fn ignored_color(background: Rgba, editor_bg: Rgba) -> Rgba {
 }
 
 /// `MixedColorProducer`: `c0 + (int) Math.round(ratio * (c1 - c0))` per kanal.
-pub fn mix(c0: Rgba, c1: Rgba, ratio: f64) -> Rgba {
+fn mix(c0: Rgba, c1: Rgba, ratio: f64) -> Rgba {
     let mut out = [0; 4];
     for i in 0..4 {
         let (a, b) = (c0[i] as f64, c1[i] as f64);

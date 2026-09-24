@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use gpui::{App, Font, FontFeatures, Pixels, SharedString, Window, font, px};
 
-use crate::metrics::{LINE_NUMBER_FONT_DELTA, LINE_SPACING, LineMetrics, line_metrics};
+use smudiff_view::metrics::{LINE_NUMBER_FONT_DELTA, LineMetrics, line_metrics};
 
 pub const PREFERRED_FAMILY: &str = "JetBrains Mono";
 pub const FALLBACK_FAMILY: &str = "Menlo";
@@ -97,7 +97,7 @@ impl TextStyle {
 
         let font_size = px(size);
         let number_font_size = px(size - LINE_NUMBER_FONT_DELTA);
-        let metrics = line_metrics(ascent(font_size), descent(font_size), 0., LINE_SPACING);
+        let metrics = line_metrics(ascent(font_size), descent(font_size));
         let lh = metrics.line_height;
         Self {
             text_dy: metrics.baseline - gpui_baseline(font_size, lh),

@@ -7,9 +7,10 @@ use std::rc::Rc;
 
 use smudiff_view::columns;
 use smudiff_view::folding::CONTEXT_RANGE_MODES;
+use smudiff_view::nav::{next_block, prev_block, target_for_block};
 use smudiff_view::{
     Command, ComparisonPolicy, DiffState, DiffType, FileDiff, FoldSettings, Folding, Horizontal,
-    InlineHighlight, Navigation, PositionKeeper, ScrollState, Side, Viewport, divider_bands,
+    InlineHighlight, PositionKeeper, ScrollState, Side, Viewport, divider_bands,
     divider_separators, stripe_markers,
 };
 
@@ -55,9 +56,9 @@ fn h(cols: std::ops::Range<usize>, diff_type: DiffType) -> InlineHighlight {
 fn norsk_tekst_gir_byte_kolonner() {
     let d = load("unicode-norwegian");
     let left0 = d.line_highlight(L, 0);
-    let bg = left0.background.unwrap();
-    assert_eq!(bg.diff_type, DiffType::Modified);
-    assert!(bg.ignored);
+    let block = &d.blocks()[left0.block.unwrap()];
+    assert_eq!(block.diff_type, DiffType::Modified);
+    assert!(block.ignored());
     assert_eq!(left0.inline, [h(22..32, DiffType::Modified)]);
     assert_eq!(&d.line(L, 0)[22..32], "brødskiva");
     let left1 = d.line_highlight(L, 1);
@@ -84,7 +85,7 @@ fn emoji_med_tomme_markorer() {
         [h(8..12, DiffType::Inserted), h(15..20, DiffType::Inserted)]
     );
     assert_eq!(&d.line(R, 1)[15..20], " done");
-    assert_eq!(d.line_highlight(L, 2).background, None);
+    assert_eq!(d.line_highlight(L, 2).block, None);
 }
 
 #[test]
@@ -98,7 +99,7 @@ fn manglende_linjeskift_til_venstre() {
     // `Some(vec![])`: ignored-farge, ingen ord
     assert_eq!(b.inner, Some(vec![]));
     let right = d.line_highlight(R, 3);
-    assert!(right.background.unwrap().ignored);
+    assert!(d.blocks()[right.block.unwrap()].ignored());
     assert!(right.inline.is_empty());
     // Blokken ligger etter siste venstre linje, så 2px-båndet går under linje 2
     let none = Folding::none(&d);
@@ -138,8 +139,8 @@ fn highlights_ligger_pa_tegngrenser() {
                 let text = d.line(side, line);
                 let hl = d.line_highlight(side, line);
                 let in_block = blocks_lines.iter().any(|r| r.contains(&line));
-                assert_eq!(hl.background.is_some(), in_block, "{name} {side:?} {line}");
-                if hl.background.is_some_and(|b| !b.ignored) {
+                assert_eq!(hl.block.is_some(), in_block, "{name} {side:?} {line}");
+                if hl.block.is_some_and(|b| !d.blocks()[b].ignored()) {
                     assert!(hl.inline.is_empty(), "{name}: hel-linje har ikke ord");
                 }
                 for i in hl.inline {
@@ -185,11 +186,14 @@ fn navigasjon_besoker_alle_blokker() {
         if d.blocks().is_empty() {
             continue;
         }
+        let f = Folding::none(&d);
         // Startposisjon er første endring, som i `InitialScrollPositionSupport`
-        let mut nav = Navigation::default();
-        let mut seen = vec![nav.go_to(&d, &Folding::none(&d), 0, VP).block];
-        while let Some(t) = nav.go_next(&d, &Folding::none(&d), VP) {
-            seen.push(t.block);
+        let mut seen = vec![0];
+        let mut caret = target_for_block(&d, &f, 0, VP).caret_lines[1];
+        while let Some(block) = next_block(&d, R, caret) {
+            seen.push(block);
+            let t = target_for_block(&d, &f, block, VP);
+            caret = t.caret_lines[1];
             for (i, side) in [L, R].into_iter().enumerate() {
                 assert!(t.scroll_y[i] >= 0., "{name}");
                 assert!(
@@ -202,8 +206,9 @@ fn navigasjon_besoker_alle_blokker() {
         assert_eq!(seen, expected, "{name}");
         // Og tilbake igjen
         let mut back = vec![];
-        while let Some(t) = nav.go_prev(&d, &Folding::none(&d), VP) {
-            back.push(t.block);
+        while let Some(block) = prev_block(&d, R, caret) {
+            back.push(block);
+            caret = target_for_block(&d, &f, block, VP).caret_lines[1];
         }
         back.reverse();
         assert_eq!(back, expected[..expected.len() - 1], "{name}");
@@ -217,18 +222,16 @@ fn stripe_per_side() {
     let right = stripe_markers(&d, &Folding::none(&d), R, 18.);
     assert_eq!(left.len(), d.blocks().len());
     assert_eq!(left[0].diff_type, DiffType::Inserted);
-    assert!(left[0].start == left[0].end);
-    assert!(right[0].start <= right[0].end);
-    assert!(right[0].end < 1.);
+    assert!(left[0].start_y == left[0].end_y);
+    assert!(right[0].start_y <= right[0].end_y);
+    let content = Folding::none(&d).layout(R, 18.).content_height();
+    assert!(right[0].end_y < content);
 }
 
 fn settings() -> Vec<FoldSettings> {
     CONTEXT_RANGE_MODES
         .iter()
-        .map(|&context_range| FoldSettings {
-            context_range,
-            expand_by_default: false,
-        })
+        .map(|&context_range| FoldSettings { context_range })
         .collect()
 }
 
@@ -289,7 +292,6 @@ fn kotlin_folds_per_niva() {
             &d,
             FoldSettings {
                 context_range: Some(range),
-                expand_by_default: false,
             },
         );
         let v: Vec<_> = f.visible(L).map(|(_, v)| v.lines.clone()).collect();
@@ -327,24 +329,25 @@ fn scroll_og_navigasjon_med_folds() {
             if d.blocks().is_empty() {
                 continue;
             }
-            let mut nav = Navigation::default();
-            let mut t = nav.go_to(&d, &f, 0, VP);
+            let mut block = 0;
+            let mut t = target_for_block(&d, &f, block, VP);
             loop {
                 for (i, side) in [L, R].into_iter().enumerate() {
                     let layout = &layouts[i];
-                    let line = d.blocks()[t.block].lines(side).start;
+                    let line = d.blocks()[block].lines(side).start;
                     // Endringer ligger aldri i en fold
                     assert_eq!(f.caret_after(side, line), line, "{name}");
                     assert!(t.scroll_y[i] <= layout.max_scroll(VP.height), "{name}");
                     let top = layout.line_top(line) - t.scroll_y[i];
                     assert!((0. ..VP.height).contains(&top), "{name} {s:?} {t:?}");
                 }
-                match nav.go_next(&d, &f, VP) {
-                    Some(next) => t = next,
-                    None => break,
-                }
+                let Some(next) = next_block(&d, R, t.caret_lines[1]) else {
+                    break;
+                };
+                block = next;
+                t = target_for_block(&d, &f, block, VP);
             }
-            assert_eq!(t.block, d.blocks().len() - 1, "{name}");
+            assert_eq!(block, d.blocks().len() - 1, "{name}");
         }
     }
 }

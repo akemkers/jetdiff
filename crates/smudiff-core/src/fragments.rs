@@ -72,7 +72,6 @@ fn drop_whole_changed_fragments(
 #[derive(Debug, Clone)]
 pub struct LineOffsets {
     line_ends: Vec<usize>,
-    text_len: usize,
 }
 
 impl LineOffsets {
@@ -84,18 +83,11 @@ impl LineOffsets {
             .map(|(i, _)| i)
             .collect();
         line_ends.push(text.len());
-        Self {
-            line_ends,
-            text_len: text.len(),
-        }
+        Self { line_ends }
     }
 
     pub fn line_count(&self) -> usize {
         self.line_ends.len()
-    }
-
-    pub fn text_len(&self) -> usize {
-        self.text_len
     }
 
     pub fn line_start(&self, line: usize) -> usize {
@@ -112,9 +104,10 @@ impl LineOffsets {
         self.line_ends[line]
     }
 
-    pub fn line_end_with_newline(&self, line: usize, include_newline: bool) -> usize {
+    /// Med `'\n'`, som mangler på siste linje.
+    pub fn line_end_with_newline(&self, line: usize) -> usize {
         let last = line == self.line_count() - 1;
-        self.line_ends[line] + usize::from(include_newline && !last)
+        self.line_ends[line] + usize::from(!last)
     }
 
     /// Linjeinnhold uten `'\n'`. `ComparisonManagerImpl.getLineContents`.
@@ -166,11 +159,11 @@ fn offsets(line_offsets: &LineOffsets, start: usize, end: usize) -> Range<usize>
         let offset = if start < line_offsets.line_count() {
             line_offsets.line_start(start)
         } else {
-            line_offsets.line_end_with_newline(line_offsets.line_count() - 1, true)
+            line_offsets.line_end_with_newline(line_offsets.line_count() - 1)
         };
         offset..offset
     } else {
-        line_offsets.line_start(start)..line_offsets.line_end_with_newline(end - 1, true)
+        line_offsets.line_start(start)..line_offsets.line_end_with_newline(end - 1)
     }
 }
 
@@ -184,8 +177,8 @@ mod tests {
         assert_eq!(lo.line_count(), 3);
         assert_eq!(lo.line_contents("a\nbc\n"), vec!["a", "bc", ""]);
         assert_eq!((lo.line_start(1), lo.line_end(1)), (2, 4));
-        assert_eq!(lo.line_end_with_newline(1, true), 5);
-        assert_eq!(lo.line_end_with_newline(2, true), 5);
+        assert_eq!(lo.line_end_with_newline(1), 5);
+        assert_eq!(lo.line_end_with_newline(2), 5);
 
         let lo = LineOffsets::new("");
         assert_eq!(lo.line_count(), 1);

@@ -6,8 +6,7 @@ use gpui::{
     App, AppContext, Application, Bounds, Focusable, KeyBinding, WindowBounds, WindowOptions,
     actions, px, size,
 };
-use smudiff_ui::text::load_font;
-use smudiff_ui::{FileDiffView, NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut};
+use smudiff_ui::{FileDiffView, NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut, load_font};
 use smudiff_view::{ComparisonPolicy, FileDiff};
 
 actions!(smudiff, [Quit]);
@@ -24,7 +23,6 @@ fn parse_args() -> Result<Args, String> {
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--light" => light = true,
-            "--dark" => light = false,
             s if s.starts_with("--") => return Err(format!("ukjent flagg: {s}")),
             _ => paths.push(arg),
         }
@@ -90,25 +88,23 @@ fn main() -> ExitCode {
         bind_keys(cx);
         let family = load_font(cx);
         let bounds = Bounds::centered(None, size(px(1400.), px(900.)), cx);
-        let window = cx
-            .open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    titlebar: Some(gpui::TitlebarOptions {
-                        title: Some(title.into()),
-                        ..Default::default()
-                    }),
-                    focus: true,
+        cx.open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                titlebar: Some(gpui::TitlebarOptions {
+                    title: Some(title.into()),
                     ..Default::default()
-                },
-                |window, cx| {
-                    let view = cx.new(|cx| FileDiffView::new(diff, theme, family, cx));
-                    window.focus(&view.focus_handle(cx));
-                    view
-                },
-            )
-            .expect("kunne ikke åpne vindu");
-        let _ = window;
+                }),
+                focus: true,
+                ..Default::default()
+            },
+            |window, cx| {
+                let view = cx.new(|cx| FileDiffView::new(diff, theme, family, cx));
+                window.focus(&view.focus_handle(cx));
+                view
+            },
+        )
+        .expect("kunne ikke åpne vindu");
         cx.on_window_closed(|cx| cx.quit()).detach();
         cx.activate(true);
     });

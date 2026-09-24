@@ -9,21 +9,14 @@ use crate::layout::LineLayout;
 use crate::model::{DiffType, FileDiff};
 
 /// `DaemonCodeAnalyzerSettings.myErrorStripeMarkMinHeight`.
-pub const MIN_MARK_HEIGHT: f32 = 2.;
-
-/// `EditorMarkupModelImpl.SCROLLBAR_WIDTH`.
-pub const SCROLLBAR_WIDTH: f32 = 14.;
+const MIN_MARK_HEIGHT: f32 = 2.;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StripeMarker {
-    pub block: usize,
     pub diff_type: DiffType,
     /// Y i editoren, piksler fra toppen av dokumentet.
     pub start_y: f32,
     pub end_y: f32,
-    /// Andel av innholdshøyden, 0..1.
-    pub start: f32,
-    pub end: f32,
 }
 
 impl StripeMarker {
@@ -69,19 +62,14 @@ pub fn stripe_markers(
     line_height: f32,
 ) -> Vec<StripeMarker> {
     let layout = folding.layout(side, line_height);
-    let height = layout.content_height();
     diff.blocks()
         .iter()
-        .enumerate()
-        .map(|(i, block)| {
+        .map(|block| {
             let (start_y, end_y) = marker_y(&layout, block.lines(side));
             StripeMarker {
-                block: i,
                 diff_type: block.diff_type,
                 start_y,
                 end_y,
-                start: start_y / height,
-                end: end_y / height,
             }
         })
         .collect()
@@ -126,8 +114,6 @@ mod tests {
         // 0..46 foldes til én linje, så linje 50 er visuell linje 5
         assert_eq!(f.layout(Side::Left, 10.).logical_to_visual(50), 5);
         assert_eq!(m[0].start_y, 50.);
-        // 11 visuelle linjer pluss fem ekstra
-        assert_eq!(m[0].start, 50. / 160.);
         assert_eq!(m.len(), 1);
     }
 
@@ -143,8 +129,6 @@ mod tests {
         assert_eq!(d.blocks()[1].lines, [3..5, 2..5]);
         // Høyre 2..5: topp av linje 2 til topp av linje 4
         assert_eq!((right[1].start_y, right[1].end_y), (20., 40.));
-        // 6 linjer + 5 ekstra
-        assert_eq!(right[1].start, 20. / 110.);
         assert_eq!(right[1].diff_type, DiffType::Modified);
     }
 
@@ -167,12 +151,9 @@ mod tests {
     #[test]
     fn sporet_skalerer_og_har_minstehoyde() {
         let m = StripeMarker {
-            block: 0,
             diff_type: DiffType::Inserted,
             start_y: 150.,
             end_y: 150.,
-            start: 0.,
-            end: 0.,
         };
         assert_eq!(m.track_range(300., 600.), (150., 152.));
         assert_eq!(m.track_range(1000., 333.), (49., 51.));

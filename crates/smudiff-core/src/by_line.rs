@@ -3,7 +3,7 @@
 
 use std::hash::{Hash, Hasher};
 
-use crate::change_corrector::{ChangeCorrector, SmartLineChangeCorrector};
+use crate::change_corrector::SmartLineChangeCorrector;
 use crate::chunk_optimizer::optimize_line_chunks;
 use crate::iterable::{ChangeBuilder, expand_change_builder};
 use crate::lcs::{self, Changes, DiffTooBig, Range};

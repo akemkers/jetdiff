@@ -18,7 +18,7 @@ pub enum DiffType {
 
 impl DiffType {
     /// `DiffUtil.getDiffType(hasDeleted, hasInserted)`.
-    pub fn from_sides(has_deleted: bool, has_inserted: bool) -> Self {
+    fn from_sides(has_deleted: bool, has_inserted: bool) -> Self {
         match (has_deleted, has_inserted) {
             (true, false) => DiffType::Deleted,
             (false, true) => DiffType::Inserted,
@@ -43,23 +43,10 @@ impl Block {
         self.lines[idx(side)].clone()
     }
 
-    pub fn is_empty(&self, side: Side) -> bool {
-        self.lines[idx(side)].is_empty()
-    }
-
     /// `SimpleDiffChangeUi.createHighlighter`: `ignored = innerFragments != null`.
     pub fn ignored(&self) -> bool {
         self.inner.is_some()
     }
-}
-
-/// Bakgrunn for en linje som ligger i en blokk.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LineBackground {
-    pub block: usize,
-    pub diff_type: DiffType,
-    /// Tekstområdet og ytterste 3px av gutteren får ignored-farge, linjenummer-området full farge.
-    pub ignored: bool,
 }
 
 /// Ord-highlight i full farge for sin egen type.
@@ -75,7 +62,8 @@ pub struct InlineHighlight {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LineHighlight<'a> {
-    pub background: Option<LineBackground>,
+    /// Blokken linja ligger i.
+    pub block: Option<usize>,
     pub inline: &'a [InlineHighlight],
 }
 
@@ -109,21 +97,17 @@ impl FileDiff {
                 offsets: [f.offsets1, f.offsets2],
                 inner: f.inner,
             })
-            .collect();
-        Ok(Self::from_blocks(text1, text2, blocks))
-    }
-
-    pub fn from_blocks(text1: &str, text2: &str, blocks: Vec<Block>) -> Self {
+            .collect::<Vec<_>>();
         let sides = [
             SideData::new(text1, &blocks, Side::Left),
             SideData::new(text2, &blocks, Side::Right),
         ];
         let mapping = LineMapping::new(&blocks, [sides[0].line_count(), sides[1].line_count()]);
-        Self {
+        Ok(Self {
             sides,
             blocks,
             mapping,
-        }
+        })
     }
 
     pub fn blocks(&self) -> &[Block] {
@@ -149,22 +133,13 @@ impl FileDiff {
         &s.text[s.line_offsets.line_start(line)..s.line_offsets.line_end(line)]
     }
 
-    pub fn line_offsets(&self, side: Side) -> &LineOffsets {
-        &self.side(side).line_offsets
-    }
-
     pub fn line_highlight(&self, side: Side, line: usize) -> LineHighlight<'_> {
         let s = self.side(side);
         let Some(&block) = s.line_block.get(line) else {
             return LineHighlight::default();
         };
-        let background = block.map(|b| LineBackground {
-            block: b,
-            diff_type: self.blocks[b].diff_type,
-            ignored: self.blocks[b].ignored(),
-        });
         LineHighlight {
-            background,
+            block,
             inline: &s.inline[s.inline_start[line]..s.inline_start[line + 1]],
         }
     }

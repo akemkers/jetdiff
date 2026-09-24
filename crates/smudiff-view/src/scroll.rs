@@ -10,11 +10,11 @@ use crate::model::{Block, FileDiff, idx};
 
 /// `Range` fra IntelliJ sett fra master: 1 er master, 2 er slave.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SyncRange {
-    pub start1: usize,
-    pub end1: usize,
-    pub start2: usize,
-    pub end2: usize,
+struct SyncRange {
+    start1: usize,
+    end1: usize,
+    start2: usize,
+    end2: usize,
 }
 
 /// Grensepunktene `(0,0)`, start og slutt for hver blokk, og `(lineCount1, lineCount2)`.
@@ -39,7 +39,7 @@ impl LineMapping {
     }
 
     /// `BaseSyncScrollable.getRange` med `ScrollHelper.process`: nabogrensene som omslutter linja.
-    pub fn range(&self, master: Side, line: usize) -> SyncRange {
+    fn range(&self, master: Side, line: usize) -> SyncRange {
         if !self.has_changes {
             return id_range(line);
         }
@@ -67,7 +67,7 @@ impl LineMapping {
 
 /// `BaseSyncScrollable.transferLine`. Inne i en blokk går slave linje for linje fra toppen
 /// og står stille når den korte siden er brukt opp.
-pub fn transfer_line(line: usize, r: SyncRange) -> usize {
+fn transfer_line(line: usize, r: SyncRange) -> usize {
     if r.start1 == line {
         return r.start2;
     }
@@ -91,7 +91,7 @@ fn id_range(line: usize) -> SyncRange {
 
 /// `ScrollHelper.transferVisualLine`: grensene konverteres til visuelle linjer i hver
 /// editor, så foldede områder blir riktige uten spesialkode.
-pub fn transfer_visual_line(
+fn transfer_visual_line(
     mapping: &LineMapping,
     master: Side,
     master_layout: &LineLayout,
@@ -126,7 +126,7 @@ pub fn transfer_visual_line(
 /// Ankeret ligger 1/3 ned i viewporten. Når slave står i en tom blokk flyttes den bare
 /// ved hele linjer, så den ikke vibrerer mens master scroller gjennom en ren insert.
 #[allow(clippy::too_many_arguments)]
-pub fn sync_vertical_scroll(
+fn sync_vertical_scroll(
     mapping: &LineMapping,
     master: Side,
     master_layout: &LineLayout,

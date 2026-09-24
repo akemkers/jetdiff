@@ -6,7 +6,7 @@ use std::ops::Range;
 pub const TAB_SIZE: usize = 4;
 
 /// Tegn som hører til forrige tegn. Vim flytter over dem sammen med basistegnet.
-pub fn is_combining(ch: char) -> bool {
+fn is_combining(ch: char) -> bool {
     matches!(
         ch as u32,
         0x0300..=0x036F | 0x200D | 0x20D0..=0x20FF | 0xFE00..=0xFE0F | 0x1F3FB..=0x1F3FF
@@ -14,7 +14,7 @@ pub fn is_combining(ch: char) -> bool {
 }
 
 /// Grov East Asian Width uten tabell-crate. Brede tegn tar to celler, som i vim.
-pub fn char_cells(ch: char) -> usize {
+fn char_cells(ch: char) -> usize {
     if is_combining(ch) {
         return 0;
     }
@@ -40,12 +40,12 @@ pub fn char_cells(ch: char) -> usize {
 
 /// Et sted cursoren kan stå: et basistegn med påfølgende kombinerende tegn.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Stop {
-    pub byte: usize,
-    pub cells: Range<usize>,
+struct Stop {
+    byte: usize,
+    cells: Range<usize>,
 }
 
-pub fn stops(line: &str) -> Vec<Stop> {
+fn stops(line: &str) -> Vec<Stop> {
     let mut out: Vec<Stop> = Vec::new();
     let mut cell = 0;
     for (i, ch) in line.char_indices() {

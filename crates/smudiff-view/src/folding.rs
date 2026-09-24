@@ -13,21 +13,17 @@ use crate::model::{FileDiff, idx};
 pub const CONTEXT_RANGE_MODES: [Option<usize>; 5] = [Some(1), Some(2), Some(4), Some(8), None];
 
 /// `TextDiffSettings.contextRange`.
-pub const DEFAULT_CONTEXT_RANGE: usize = 4;
+const DEFAULT_CONTEXT_RANGE: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FoldSettings {
     pub context_range: Option<usize>,
-    /// `EXPAND_BY_DEFAULT`.
-    pub expand_by_default: bool,
 }
 
 impl Default for FoldSettings {
     fn default() -> Self {
         Self {
             context_range: Some(DEFAULT_CONTEXT_RANGE),
-            // Kollapset, som commit-dialogen og VCS-loggen i `TextDiffSettingsHolder`
-            expand_by_default: false,
         }
     }
 }
@@ -41,7 +37,6 @@ impl FoldSettings {
             .map_or(0, |i| i + 1);
         Self {
             context_range: CONTEXT_RANGE_MODES[i % CONTEXT_RANGE_MODES.len()],
-            ..self
         }
     }
 }
@@ -100,7 +95,6 @@ impl Folding {
             diff,
             FoldSettings {
                 context_range: None,
-                ..FoldSettings::default()
             },
         )
     }
@@ -116,7 +110,7 @@ impl Folding {
             None => Vec::new(),
             Some(range) => {
                 let changes = diff.blocks().iter().map(|b| b.lines.clone());
-                let mut suggester = ExpandSuggester::new(cache, settings.expand_by_default);
+                let mut suggester = ExpandSuggester::new(cache);
                 build_groups(changes, line_counts, range)
                     .into_iter()
                     .map(|group| {
@@ -151,7 +145,7 @@ impl Folding {
         &self.groups
     }
 
-    pub fn block(&self, id: FoldId) -> &FoldBlock {
+    fn block(&self, id: FoldId) -> &FoldBlock {
         &self.groups[id.group][id.block]
     }
 
@@ -343,7 +337,6 @@ impl Folding {
         });
         FoldingCache {
             ranges,
-            expand_by_default: self.settings.expand_by_default,
             // `updateContext` skriver ikke over cachen med en tom tilstand
             empty: self.groups.is_empty(),
         }
@@ -352,7 +345,7 @@ impl Folding {
 
 /// `FoldingBuilderBase.build` og `addGroup`: ett gap mellom hver blokk, pluss før første
 /// og etter siste. Nivåene har `range`, `2 * range` og `4 * range` linjer kontekst.
-pub fn build_groups(
+fn build_groups(
     changes: impl IntoIterator<Item = [Range<usize>; 2]>,
     line_counts: [usize; 2],
     range: usize,
@@ -402,7 +395,6 @@ impl GroupState {
 #[derive(Debug, Clone)]
 struct FoldingCache {
     ranges: [Vec<GroupState>; 2],
-    expand_by_default: bool,
     empty: bool,
 }
 
@@ -410,26 +402,24 @@ fn contains(outer: &Range<usize>, inner: &Range<usize>) -> bool {
     outer.start <= inner.start && inner.end <= outer.end
 }
 
-/// `ExpandSuggester`. Blokkene spørres i rekkefølge, så en markør per side holder.
+/// `ExpandSuggester`. Blokkene spørres i rekkefølge, så en markør per side holder. Uten
+/// treff i cachen er folden kollapset, som commit-dialogen i `TextDiffSettingsHolder`.
 struct ExpandSuggester {
     cache: Option<FoldingCache>,
     index: [usize; 2],
-    default: bool,
 }
 
 impl ExpandSuggester {
-    fn new(cache: Option<FoldingCache>, default: bool) -> Self {
+    fn new(cache: Option<FoldingCache>) -> Self {
         Self {
             cache: cache.filter(|c| !c.empty),
             index: [0, 0],
-            default,
         }
     }
 
     fn is_expanded(&mut self, regions: &Regions) -> bool {
-        match &self.cache {
-            Some(c) if c.expand_by_default == self.default => {}
-            _ => return self.default,
+        if self.cache.is_none() {
+            return false;
         }
         let mut state = None;
         for (i, range) in regions.iter().enumerate() {
@@ -441,11 +431,11 @@ impl ExpandSuggester {
             };
             match state {
                 None => state = Some(side_state),
-                Some(s) if s != side_state => return self.default,
+                Some(s) if s != side_state => return false,
                 Some(_) => {}
             }
         }
-        state.unwrap_or(self.default)
+        state.unwrap_or(false)
     }
 
     fn cached_expanded(&mut self, range: &Range<usize>, i: usize) -> Option<bool> {
@@ -545,8 +535,8 @@ mod tests {
     fn like_filer_foldes_helt() {
         let d = diff(&lines("a", 30), &lines("a", 30));
         let f = Folding::new(&d, FoldSettings::default());
-        assert_eq!(f.groups().len(), 1);
-        assert_eq!(f.groups()[0][0].lines, both(0..31));
+        assert_eq!(f.groups.len(), 1);
+        assert_eq!(f.groups[0][0].lines, both(0..31));
         assert_eq!(f.layout(L, 10.).visual_line_count(), 1);
     }
 
@@ -554,7 +544,7 @@ mod tests {
     fn kontekst_av_gir_ingen_folds() {
         let d = three_changes();
         let f = Folding::none(&d);
-        assert!(f.groups().is_empty());
+        assert!(f.groups.is_empty());
         assert_eq!(f.layout(L, 10.).visual_line_count(), 101);
         assert_eq!(f.connectors().count(), 0);
     }
@@ -611,15 +601,6 @@ mod tests {
         assert!(!f.expand_all(true));
         f.expand_all(false);
         assert_eq!(f.visible(L).count(), 4);
-        // Utvidet som standard
-        let f = Folding::new(
-            &d,
-            FoldSettings {
-                expand_by_default: true,
-                ..FoldSettings::default()
-            },
-        );
-        assert_eq!(f.visible(L).count(), 0);
     }
 
     #[test]
@@ -706,14 +687,5 @@ mod tests {
         let visible: Vec<_> = f8.visible(L).map(|(_, v)| v.lines.clone()).collect();
         // Gruppen 49..82 er åpen, de andre kollapset med 8 linjer kontekst
         assert_eq!(visible, [0..2, 19..32, 99..101]);
-        // Byttes standarden brukes den
-        let open = f.with_settings(
-            &d,
-            FoldSettings {
-                expand_by_default: true,
-                ..f.settings()
-            },
-        );
-        assert_eq!(open.visible(L).count(), 0);
     }
 }

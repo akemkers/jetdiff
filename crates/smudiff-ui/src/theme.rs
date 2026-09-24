@@ -33,7 +33,6 @@ impl From<&DiffColors> for UiDiffColors {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiTheme {
-    pub dark: bool,
     pub editor_bg: Hsla,
     pub editor_fg: Hsla,
     pub gutter_bg: Hsla,
@@ -52,9 +51,8 @@ pub struct UiTheme {
 }
 
 impl UiTheme {
-    pub fn new(theme: &Theme, dark: bool) -> Self {
+    fn new(theme: &Theme) -> Self {
         Self {
-            dark,
             editor_bg: hsla(theme.editor_bg),
             editor_fg: hsla(theme.editor_fg),
             gutter_bg: hsla(theme.gutter_bg),
@@ -65,12 +63,7 @@ impl UiTheme {
             caret_row: hsla(theme.caret_row),
             indent_guide: hsla(theme.indent_guide),
             separator_wave: hsla(theme.separator_wave),
-            // Grå tommel med alfa, som macOS-scrollbaren i IntelliJ
-            scrollbar_thumb: if dark {
-                hsla([0x80, 0x80, 0x80, 0x59])
-            } else {
-                hsla([0x00, 0x00, 0x00, 0x33])
-            },
+            scrollbar_thumb: hsla(theme.scrollbar_thumb),
             inserted: (&theme.inserted).into(),
             deleted: (&theme.deleted).into(),
             modified: (&theme.modified).into(),
@@ -78,11 +71,11 @@ impl UiTheme {
     }
 
     pub fn dark() -> Self {
-        Self::new(&Theme::dark(), true)
+        Self::new(&Theme::dark())
     }
 
     pub fn light() -> Self {
-        Self::new(&Theme::light(), false)
+        Self::new(&Theme::light())
     }
 
     pub fn diff(&self, diff_type: DiffType) -> &UiDiffColors {

@@ -6,7 +6,7 @@ use smudiff_core::side::Side;
 use crate::columns;
 
 /// `$` husker at cursoren skal til slutten av hver linje, som vim sin `MAXCOL`.
-pub const WANT_END: usize = usize::MAX;
+const WANT_END: usize = usize::MAX;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cursor {

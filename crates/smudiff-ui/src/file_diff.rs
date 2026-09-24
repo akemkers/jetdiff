@@ -11,24 +11,22 @@ use gpui::{
     prelude::*, px,
 };
 use smudiff_core::side::Side;
-use smudiff_view::divider::DIVIDER_WIDTH;
+use smudiff_view::columns::{ExpandedLine, display_width};
+use smudiff_view::metrics::{FONT_SIZE, zoomed};
 use smudiff_view::{
     Command, DiffState, FileDiff, FoldId, FoldSettings, Folding, Horizontal, Key, KeyCode,
-    KeyParser, Parsed, ScrollAnimation, ScrollState, StripeMarker, Viewport, columns,
+    KeyParser, Parsed, ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport, columns,
     stripe_markers,
 };
 
-use crate::geometry::{SideGeometry, gutter_layout};
-use crate::metrics::{FONT_SIZE, zoomed};
 use crate::side_editor::{Caret, SideCache, SideEditor, StripeRects};
-use crate::tabs::{ExpandedLine, display_width};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
 actions!(smudiff, [NextContextRange, ZoomIn, ZoomOut, ResetZoom]);
 
 /// Varighet på animert hopp til endring.
-pub const NAV_ANIMATION_MS: f32 = 170.;
+const NAV_ANIMATION_MS: f32 = 170.;
 
 /// Høyden på tastelinja nederst.
 const HELP_HEIGHT: f32 = 24.;
@@ -103,9 +101,7 @@ fn to_key(k: &Keystroke) -> Key {
         "down" => KeyCode::Down,
         "left" => KeyCode::Left,
         "right" => KeyCode::Right,
-        f if f.len() > 1 && f.starts_with('f') && f[1..].parse::<u8>().is_ok() => {
-            KeyCode::F(f[1..].parse().unwrap_or(0))
-        }
+        f if let Some(n) = f.strip_prefix('f').and_then(|n| n.parse().ok()) => KeyCode::F(n),
         key => {
             let typed = if m.control {
                 None
@@ -122,7 +118,6 @@ fn to_key(k: &Keystroke) -> Key {
         code,
         ctrl: m.control,
         shift: m.shift,
-        alt: m.alt,
         cmd: m.platform,
     }
 }
@@ -267,12 +262,7 @@ impl FileDiffView {
             return;
         }
         self.animation = Some(Animation {
-            anim: ScrollAnimation::between(
-                self.state.master,
-                self.shown,
-                self.state.scroll,
-                NAV_ANIMATION_MS,
-            ),
+            anim: ScrollAnimation::new(self.shown, self.state.scroll, NAV_ANIMATION_MS),
             start: Instant::now(),
         });
     }
@@ -306,7 +296,7 @@ impl FileDiffView {
                 cx.stop_propagation();
             }
             // macOS spiser ctrl-taster som ikke stopper propagering (`handle_key_equivalent`)
-            Parsed::Pending | Parsed::Unknown => cx.stop_propagation(),
+            Parsed::Pending => cx.stop_propagation(),
             Parsed::Ignored => {}
         }
     }
@@ -471,28 +461,9 @@ impl FileDiffView {
     }
 }
 
-pub fn side_geometry(
-    diff: &FileDiff,
-    style: &TextStyle,
-    bounds: Bounds<Pixels>,
-) -> [SideGeometry; 2] {
-    let x0 = f32::from(bounds.origin.x);
-    let width = f32::from(bounds.size.width);
-    let side_width = ((width - DIVIDER_WIDTH) / 2.).floor().max(0.);
-    SIDES.map(|side| {
-        // Siste linjenummer bestemmer bredden, som `getMaxLineNumberString`
-        let digits = diff.line_count(side).to_string().len();
-        let gutter = gutter_layout(digits as f32 * style.number_char_width);
-        let x = match side {
-            Side::Left => x0,
-            Side::Right => x0 + side_width + DIVIDER_WIDTH,
-        };
-        let w = match side {
-            Side::Left => side_width,
-            Side::Right => width - side_width - DIVIDER_WIDTH,
-        };
-        SideGeometry::new(side, x, w, gutter)
-    })
+fn side_geometry(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> [SideGeometry; 2] {
+    let (x, width) = (f32::from(bounds.origin.x), f32::from(bounds.size.width));
+    smudiff_view::side_geometry(diff, style.number_char_width, x, width)
 }
 
 /// Snapper til hele device-piksler så kanter og tekst ikke blir uskarpe midt i en scroll.
@@ -523,50 +494,37 @@ impl Render for FileDiffView {
         let shared = self.shared.clone();
 
         // Aktiv side får fylt blokk. Den andre viser overført posisjon som omriss, så man
-        // ser hvor Tab lander. Begge får caret row.
+        // ser hvor Tab lander. Begge får caret row, IntelliJ har det bare på aktiv side.
         let focused = self.focus.is_focused(window) && window.is_window_active();
         let cursor = self.state.cursor;
         let other = self.state.transferred_cursor();
-        let mut carets = [Caret {
-            line: 0,
-            col: 0,
-            solid: false,
-            row: false,
-        }; 2];
-        carets[idx(cursor.side)] = Caret {
-            line: cursor.line,
-            col: cursor.col,
-            solid: focused,
-            row: true,
-        };
-        carets[idx(other.side)] = Caret {
-            line: other.line,
-            col: other.col,
-            solid: false,
-            row: true,
-        };
+        let carets = SIDES.map(|s| {
+            let c = if s == cursor.side { cursor } else { other };
+            Caret {
+                line: c.line,
+                col: c.col,
+                solid: focused && s == cursor.side,
+            }
+        });
 
-        let family = self.family;
-        let help = {
-            div()
-                .flex()
-                .flex_none()
-                .h(px(HELP_HEIGHT))
-                .px(px(10.))
-                .gap(px(16.))
-                .items_center()
-                .bg(theme.gutter_bg)
-                .font_family(family)
-                .text_size(px(12.))
-                .text_color(theme.line_number)
-                .children(HELP.iter().map(|(keys, what)| {
-                    div()
-                        .flex()
-                        .gap(px(6.))
-                        .child(div().text_color(theme.editor_fg).child(*keys))
-                        .child(*what)
-                }))
-        };
+        let help = div()
+            .flex()
+            .flex_none()
+            .h(px(HELP_HEIGHT))
+            .px(px(10.))
+            .gap(px(16.))
+            .items_center()
+            .bg(theme.gutter_bg)
+            .font_family(self.family)
+            .text_size(px(12.))
+            .text_color(theme.line_number)
+            .children(HELP.iter().map(|(keys, what)| {
+                div()
+                    .flex()
+                    .gap(px(6.))
+                    .child(div().text_color(theme.editor_fg).child(*keys))
+                    .child(*what)
+            }));
 
         div()
             .size_full()
@@ -614,7 +572,6 @@ impl Render for FileDiffView {
                                 height,
                                 scroll_y: scroll_y[i],
                                 scroll_x,
-                                caret_line: carets[i].line,
                                 caret: carets[i],
                                 stripe: &stripes[i],
                             };

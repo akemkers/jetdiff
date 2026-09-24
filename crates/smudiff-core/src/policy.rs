@@ -110,15 +110,15 @@ fn trim_whitespace(text: &str) -> &str {
 
 /// `String.hashCode` over UTF-16-enheter.
 pub fn string_hash_code(text: &str) -> i32 {
-    hash_chars(0, text.chars())
+    hash_chars(text.chars())
 }
 
 pub fn string_hash_code_ignore_whitespaces(text: &str) -> i32 {
-    hash_chars(0, text.chars().filter(|&c| !is_space_enter_or_tab(c)))
+    hash_chars(text.chars().filter(|&c| !is_space_enter_or_tab(c)))
 }
 
-pub(crate) fn hash_chars(prefix: i32, chars: impl Iterator<Item = char>) -> i32 {
-    let mut h = prefix;
+fn hash_chars(chars: impl Iterator<Item = char>) -> i32 {
+    let mut h = 0i32;
     let mut buf = [0u16; 2];
     for c in chars {
         for &unit in c.encode_utf16(&mut buf).iter() {

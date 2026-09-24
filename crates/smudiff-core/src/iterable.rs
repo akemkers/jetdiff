@@ -119,24 +119,6 @@ impl Changes {
         Self { len1, len2, ranges }
     }
 
-    /// `ExpandedDiffIterable`: flytter endringene inn i en lengre sekvens.
-    pub fn expanded(&self, offset1: usize, offset2: usize, len1: usize, len2: usize) -> Self {
-        assert!(offset1 + self.len1 <= len1 && offset2 + self.len2 <= len2);
-        let ranges = self
-            .ranges
-            .iter()
-            .map(|r| {
-                Range::new(
-                    r.start1 + offset1,
-                    r.end1 + offset1,
-                    r.start2 + offset2,
-                    r.end2 + offset2,
-                )
-            })
-            .collect();
-        Self { len1, len2, ranges }
-    }
-
     /// `SubiterableDiffIterable`: endringene klippet til et vindu, relativt til vinduets start.
     /// `first_index` er første endring som kan treffe vinduet, så vi slipper å lete fra start hver gang.
     pub fn subiterable(
@@ -170,25 +152,6 @@ impl Changes {
             len2: end2 - start2,
             ranges,
         }
-    }
-
-    /// `DiffIterableUtil.iterateAll`: alle områder i rekkefølge, `true` for uendret.
-    pub fn iter_all(&self) -> impl Iterator<Item = (Range, bool)> + '_ {
-        let mut last = (0, 0);
-        self.ranges
-            .iter()
-            .map(Some)
-            .chain(iter::once(None))
-            .flat_map(move |change| {
-                let (next1, next2) =
-                    change.map_or((self.len1, self.len2), |c| (c.start1, c.start2));
-                let gap = Range::new(last.0, next1, last.1, next2);
-                if let Some(c) = change {
-                    last = (c.end1, c.end2);
-                }
-                let gap = (!gap.is_empty()).then_some((gap, true));
-                gap.into_iter().chain(change.map(|c| (*c, false)))
-            })
     }
 }
 
@@ -228,22 +191,11 @@ mod tests {
     }
 
     #[test]
-    fn from_unchanged_og_iter_all() {
+    fn from_unchanged_gir_hullene() {
         let unchanged = [Range::new(0, 2, 0, 2), Range::new(3, 4, 5, 6)];
         let changes = Changes::from_unchanged(&unchanged, 6, 6);
         assert_eq!(tuples(&changes), vec![(2, 3, 2, 5), (4, 6, 6, 6)]);
         assert_eq!(changes.unchanged().collect::<Vec<_>>(), unchanged);
-
-        let all: Vec<_> = changes.iter_all().collect();
-        assert_eq!(
-            all,
-            vec![
-                (Range::new(0, 2, 0, 2), true),
-                (Range::new(2, 3, 2, 5), false),
-                (Range::new(3, 4, 5, 6), true),
-                (Range::new(4, 6, 6, 6), false),
-            ]
-        );
     }
 
     #[test]

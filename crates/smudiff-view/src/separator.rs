@@ -6,9 +6,9 @@ use std::ops::Range;
 use crate::divider::{DIVIDER_WIDTH, Point};
 
 /// `getStepSize`: kvart periode. Divideren trenger 6 steg for å se pen ut.
-pub const STEP: f32 = DIVIDER_WIDTH / 6.;
+const STEP: f32 = DIVIDER_WIDTH / 6.;
 /// `getHeight`: halv høyde på bølgen.
-pub const HEIGHT: f32 = 3.;
+const HEIGHT: f32 = 3.;
 /// `getAAGap`.
 const AA_GAP: f32 = 1.;
 
@@ -25,7 +25,7 @@ pub fn stroke_width(hovered: bool) -> f32 {
 }
 
 /// `getVerticalOffset`, i heltall som i Java.
-pub fn vertical_offset(line_height: f32) -> f32 {
+fn vertical_offset(line_height: f32) -> f32 {
     ((line_height - 2. * HEIGHT - 2. * AA_GAP) / 2.).floor()
 }
 

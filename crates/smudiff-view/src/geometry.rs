@@ -7,6 +7,9 @@ use std::ops::Range;
 
 use smudiff_core::side::Side;
 
+use crate::divider::DIVIDER_WIDTH;
+use crate::model::FileDiff;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GutterLayout {
     pub width: f32,
@@ -131,6 +134,30 @@ impl SideGeometry {
             Side::Right => self.gutter_x(start..end).end - text_width,
         }
     }
+}
+
+/// Begge sidene for et vindu som starter på `x` og er `width` bredt.
+pub fn side_geometry(
+    diff: &FileDiff,
+    number_char_width: f32,
+    x: f32,
+    width: f32,
+) -> [SideGeometry; 2] {
+    let side_width = ((width - DIVIDER_WIDTH) / 2.).floor().max(0.);
+    [Side::Left, Side::Right].map(|side| {
+        // Siste linjenummer bestemmer bredden, som `getMaxLineNumberString`
+        let digits = diff.line_count(side).to_string().len();
+        let gutter = gutter_layout(digits as f32 * number_char_width);
+        match side {
+            Side::Left => SideGeometry::new(side, x, side_width, gutter),
+            Side::Right => SideGeometry::new(
+                side,
+                x + side_width + DIVIDER_WIDTH,
+                width - side_width - DIVIDER_WIDTH,
+                gutter,
+            ),
+        }
+    })
 }
 
 #[cfg(test)]
