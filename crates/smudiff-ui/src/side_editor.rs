@@ -98,15 +98,15 @@ fn rect(x: std::ops::Range<f32>, y1: f32, y2: f32) -> Bounds<Pixels> {
     )
 }
 
-fn run(len: usize, style: &TextStyle, color: Hsla) -> [TextRun; 1] {
-    [TextRun {
+fn run(len: usize, style: &TextStyle, color: Hsla) -> TextRun {
+    TextRun {
         len,
         font: style.font.clone(),
         color,
         background_color: None,
         underline: None,
         strikethrough: None,
-    }]
+    }
 }
 
 fn mask(bounds: Bounds<Pixels>) -> Option<ContentMask<Pixels>> {
@@ -252,7 +252,7 @@ impl SideEditor<'_> {
         // Tegnet under males på nytt i bakgrunnsfargen, som en blokk-caret i vim
         if let Some(glyph) = glyph {
             let text = SharedString::from(glyph);
-            let runs = run(text.len(), self.style, self.theme.editor_bg);
+            let runs = [run(text.len(), self.style, self.theme.editor_bg)];
             let shaped = window
                 .text_system()
                 .shape_line(text, self.style.font_size, &runs, None);
@@ -360,7 +360,7 @@ impl SideEditor<'_> {
         let expanded = ExpandedLine::new(self.diff.line(self.geom.side, line));
         let shaped = (!expanded.text.is_empty()).then(|| {
             let text = SharedString::from(expanded.text.clone());
-            let runs = run(text.len(), self.style, self.theme.editor_fg);
+            let runs = self.syntax_runs(line, &expanded);
             window
                 .text_system()
                 .shape_line(text, self.style.font_size, &runs, None)
@@ -383,9 +383,34 @@ impl SideEditor<'_> {
         }
     }
 
+    /// Runs for teksten med tabs ekspandert. Hull mellom tokens får standardfargen.
+    fn syntax_runs(&self, line: usize, expanded: &ExpandedLine) -> Vec<TextRun> {
+        let plain = |len| run(len, self.style, self.theme.editor_fg);
+        let mut runs = Vec::new();
+        let mut at = 0;
+        for span in self.diff.line_syntax(self.geom.side, line) {
+            let start = expanded.display_index(span.cols.start);
+            let end = expanded.display_index(span.cols.end);
+            if start > at {
+                runs.push(plain(start - at));
+            }
+            let s = self.theme.syntax(span.token);
+            runs.push(TextRun {
+                font: s.font(&self.style.font),
+                color: s.color,
+                ..plain(end - start)
+            });
+            at = end;
+        }
+        if expanded.text.len() > at {
+            runs.push(plain(expanded.text.len() - at));
+        }
+        runs
+    }
+
     fn shape_number(&self, line: usize, color: Hsla, window: &mut Window) -> ShapedLine {
         let text = SharedString::from((line + 1).to_string());
-        let runs = run(text.len(), self.style, color);
+        let runs = [run(text.len(), self.style, color)];
         window
             .text_system()
             .shape_line(text, self.style.number_font_size, &runs, None)

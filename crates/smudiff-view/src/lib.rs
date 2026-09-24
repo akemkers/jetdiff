@@ -32,6 +32,7 @@ pub use scroll::{PositionKeeper, ScrollState};
 pub use separator::PathSeg;
 pub use smudiff_core::ComparisonPolicy;
 pub use smudiff_core::side::Side;
+pub use smudiff_syntax::{Language, Token};
 pub use state::{DiffState, Horizontal, Outcome};
 pub use stripe::{StripeMarker, stripe_markers, thumb_range};
-pub use theme::{Rgba, Theme};
+pub use theme::{Rgba, SyntaxStyle, Theme};

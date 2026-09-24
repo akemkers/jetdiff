@@ -7,7 +7,7 @@ use gpui::{
     actions, px, size,
 };
 use smudiff_ui::{FileDiffView, NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut, load_font};
-use smudiff_view::{ComparisonPolicy, FileDiff};
+use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 
 actions!(smudiff, [Quit]);
 
@@ -70,13 +70,18 @@ fn main() -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let diff = match FileDiff::new(&left, &right, ComparisonPolicy::Default) {
+    let mut diff = match FileDiff::new(&left, &right, ComparisonPolicy::Default) {
         Ok(d) => d,
         Err(_) => {
             eprintln!("filene er for store til å diffes");
             return ExitCode::from(1);
         }
     };
+    // Høyre side først, venstre kan være en midlertidig fil fra git difftool
+    if let Some(lang) = Language::from_path(&args.right).or_else(|| Language::from_path(&args.left))
+    {
+        diff.highlight_syntax(lang);
+    }
     let theme = if args.light {
         UiTheme::light()
     } else {

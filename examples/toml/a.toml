@@ -1,0 +1,12 @@
+[package]
+name = "kurs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tokio = "1.38"
+
+# Bare for tester
+[dev-dependencies]
+insta = "1"

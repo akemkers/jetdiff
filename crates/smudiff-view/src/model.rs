@@ -5,6 +5,7 @@ use std::ops::Range;
 
 use smudiff_core::side::Side;
 use smudiff_core::{ComparisonPolicy, DiffFragment, DiffTooBig, LineOffsets, compare_for_viewer};
+use smudiff_syntax::{Language, Token};
 
 use crate::scroll::LineMapping;
 
@@ -60,6 +61,13 @@ pub struct InlineHighlight {
     pub past_line_end: bool,
 }
 
+/// Syntaks-token innen én linje.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyntaxSpan {
+    pub cols: Range<usize>,
+    pub token: Token,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LineHighlight<'a> {
     /// Blokken linja ligger i.
@@ -76,6 +84,9 @@ struct SideData {
     /// Ord-highlights per linje, flatt og sortert på linje.
     inline: Vec<InlineHighlight>,
     inline_start: Vec<usize>,
+    /// Tomt uten språk. Samme oppslag som `inline`.
+    syntax: Vec<SyntaxSpan>,
+    syntax_start: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -144,6 +155,21 @@ impl FileDiff {
         }
     }
 
+    /// Parser hele teksten på hver side, så også slettede linjer får riktig syntaks.
+    pub fn highlight_syntax(&mut self, lang: Language) {
+        for s in &mut self.sides {
+            s.highlight_syntax(lang);
+        }
+    }
+
+    pub fn line_syntax(&self, side: Side, line: usize) -> &[SyntaxSpan] {
+        let s = self.side(side);
+        match (s.syntax_start.get(line), s.syntax_start.get(line + 1)) {
+            (Some(&a), Some(&b)) => &s.syntax[a..b],
+            _ => &[],
+        }
+    }
+
     fn side(&self, side: Side) -> &SideData {
         &self.sides[idx(side)]
     }
@@ -190,7 +216,45 @@ impl SideData {
             line_block,
             inline,
             inline_start,
+            syntax: Vec::new(),
+            syntax_start: Vec::new(),
         }
+    }
+
+    fn highlight_syntax(&mut self, lang: Language) {
+        let lo = &self.line_offsets;
+        let count = lo.line_count();
+        let mut syntax = Vec::new();
+        let mut syntax_start = Vec::with_capacity(count + 1);
+        let mut spans = smudiff_syntax::highlight(lang, &self.text)
+            .into_iter()
+            .peekable();
+        for line in 0..count {
+            syntax_start.push(syntax.len());
+            let (start, end) = (lo.line_start(line), lo.line_end(line));
+            let last = line + 1 == count;
+            // Spenn over flere linjer (blokkommentarer) blir liggende til siste linje
+            while let Some(span) = spans.peek() {
+                if span.range.start >= end && !last {
+                    break;
+                }
+                let cols =
+                    span.range.start.max(start) - start..span.range.end.min(end).max(start) - start;
+                if !cols.is_empty() {
+                    syntax.push(SyntaxSpan {
+                        cols,
+                        token: span.token,
+                    });
+                }
+                if span.range.end > end && !last {
+                    break;
+                }
+                spans.next();
+            }
+        }
+        syntax_start.push(syntax.len());
+        self.syntax = syntax;
+        self.syntax_start = syntax_start;
     }
 
     fn line_count(&self) -> usize {
@@ -284,6 +348,26 @@ mod tests {
         let d = diff("a\nb\n", "a\nc\n");
         assert_eq!(d.line_highlight(Side::Left, 0), LineHighlight::default());
         assert_eq!(d.line_highlight(Side::Left, 99), LineHighlight::default());
+    }
+
+    #[test]
+    fn syntaks_per_linje() {
+        let mut d = diff("fn a() {}\n", "/* x\ny */ fn b() {}\n");
+        d.highlight_syntax(Language::Rust);
+        let tokens = |side, line| -> Vec<_> {
+            d.line_syntax(side, line)
+                .iter()
+                .map(|s| (s.cols.clone(), s.token))
+                .collect()
+        };
+        assert_eq!(tokens(Side::Left, 0)[0], (0..2, Token::Keyword));
+        assert_eq!(tokens(Side::Right, 0), vec![(0..4, Token::Comment)]);
+        assert_eq!(
+            tokens(Side::Right, 1)[..2],
+            [(0..4, Token::Comment), (5..7, Token::Keyword)]
+        );
+        assert!(tokens(Side::Right, 2).is_empty());
+        assert!(d.line_syntax(Side::Right, 99).is_empty());
     }
 
     #[test]

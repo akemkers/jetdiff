@@ -1,8 +1,8 @@
 //! `smudiff_view::Theme` oversatt til GPUI-farger én gang, så paint slipper konvertering.
 
-use gpui::Hsla;
+use gpui::{Font, FontStyle, FontWeight, Hsla};
 use smudiff_view::theme::DiffColors;
-use smudiff_view::{DiffType, Rgba, Theme};
+use smudiff_view::{DiffType, Rgba, SyntaxStyle, Theme, Token};
 
 pub fn hsla(c: Rgba) -> Hsla {
     gpui::Rgba {
@@ -32,6 +32,39 @@ impl From<&DiffColors> for UiDiffColors {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UiSyntax {
+    pub color: Hsla,
+    weight: FontWeight,
+    style: FontStyle,
+}
+
+impl UiSyntax {
+    fn new(s: SyntaxStyle) -> Self {
+        Self {
+            color: hsla(s.color),
+            weight: if s.bold {
+                FontWeight::BOLD
+            } else {
+                FontWeight::NORMAL
+            },
+            style: if s.italic {
+                FontStyle::Italic
+            } else {
+                FontStyle::Normal
+            },
+        }
+    }
+
+    pub fn font(&self, base: &Font) -> Font {
+        Font {
+            weight: self.weight,
+            style: self.style,
+            ..base.clone()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiTheme {
     pub editor_bg: Hsla,
     pub editor_fg: Hsla,
@@ -48,6 +81,7 @@ pub struct UiTheme {
     inserted: UiDiffColors,
     deleted: UiDiffColors,
     modified: UiDiffColors,
+    syntax: [UiSyntax; Token::ALL.len()],
 }
 
 impl UiTheme {
@@ -67,6 +101,7 @@ impl UiTheme {
             inserted: (&theme.inserted).into(),
             deleted: (&theme.deleted).into(),
             modified: (&theme.modified).into(),
+            syntax: Token::ALL.map(|t| UiSyntax::new(theme.syntax(t))),
         }
     }
 
@@ -76,6 +111,10 @@ impl UiTheme {
 
     pub fn light() -> Self {
         Self::new(&Theme::light())
+    }
+
+    pub fn syntax(&self, token: Token) -> &UiSyntax {
+        &self.syntax[token as usize]
     }
 
     pub fn diff(&self, diff_type: DiffType) -> &UiDiffColors {

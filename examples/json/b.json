@@ -1,0 +1,17 @@
+{
+  "name": "kurs-app",
+  "version": "1.3.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "engines": { "node": ">=22" },
+  "sideEffects": false
+}

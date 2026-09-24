@@ -1,0 +1,15 @@
+# Deploy av kurs-api
+name: kurs-api
+replicas: 2
+image:
+  repository: ghcr.io/eksempel/kurs-api
+  tag: "1.4.2"
+env:
+  - name: LOG_LEVEL
+    value: info
+  - name: CACHE_TTL
+    value: 30
+resources:
+  limits:
+    memory: 512Mi
+healthcheck: true

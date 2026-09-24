@@ -28,10 +28,13 @@ pub fn load_font(cx: &App) -> &'static str {
         return PREFERRED_FAMILY;
     }
     for path in bundled_jetbrains_mono() {
-        if let Ok(bytes) = std::fs::read(&path)
-            && ts.add_fonts(vec![Cow::Owned(bytes)]).is_ok()
-            && pick_family(&ts.all_font_names()) == PREFERRED_FAMILY
-        {
+        // Italic og bold brukes av syntaksfargene
+        let fonts = ["Regular", "Italic", "Bold", "BoldItalic"]
+            .map(|v| path.with_file_name(format!("JetBrainsMono-{v}.ttf")))
+            .iter()
+            .filter_map(|p| std::fs::read(p).ok().map(Cow::Owned))
+            .collect();
+        if ts.add_fonts(fonts).is_ok() && pick_family(&ts.all_font_names()) == PREFERRED_FAMILY {
             return PREFERRED_FAMILY;
         }
     }

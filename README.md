@@ -17,6 +17,14 @@ cargo run --release -p smudiff -- <venstre> <høyre> [--light]
 
 Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer.
 
+Syntaksfarger fra IntelliJ for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML og Markdown. Språket velges fra filendelsen, høyre side først.
+
+Eksempler per språk ligger i `examples/`:
+
+```
+cargo run --release -p smudiff -- examples/kotlin/a.kt examples/kotlin/b.kt
+```
+
 ### Taster
 
 Et lite, vim-inspirert keymap for lesing. Tastelinja nederst viser de viktigste.
@@ -64,6 +72,8 @@ Ny case: lag mappa med `a.txt` og `b.txt`, kjør `gen.sh`, og kjør `cargo test`
 ## Struktur
 
 - `crates/smudiff-core`: diff-algoritmen, portert fra IntelliJ
+- `crates/smudiff-syntax`: syntax highlighting med tree-sitter og egne queries
+- `examples/`: filpar å prøve viewen på, ett per språk
 - `fixtures/`: testcaser med fasit
 - `tools/golden/`: Kotlin-generator som lager fasiten
 - `docs/`: overordnet løsning og research

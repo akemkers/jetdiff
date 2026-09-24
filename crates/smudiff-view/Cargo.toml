@@ -6,3 +6,4 @@ license.workspace = true
 
 [dependencies]
 smudiff-core = { path = "../smudiff-core" }
+smudiff-syntax = { path = "../smudiff-syntax" }
