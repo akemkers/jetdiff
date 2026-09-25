@@ -83,6 +83,8 @@ pub struct Theme {
     pub scrollbar_thumb: Rgba,
     /// `Tree.selectionBackground`.
     pub tree_selection: Rgba,
+    /// `Tree.selectionInactiveBackground`, når panelet ikke har fokus.
+    pub tree_selection_inactive: Rgba,
     /// Linja og prikkene i commit-lista.
     pub commit_graph: Rgba,
     /// Beskjed over tastelinja. Advarsler er gule.
@@ -117,6 +119,7 @@ impl Theme {
             separator_wave: rgb(0x555555),
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x2E436E),
+            tree_selection_inactive: rgb(0x43454A),
             commit_graph: rgb(0x56A8F5),
             message_bg: rgb(0x73BD79),
             warning_bg: rgb(0xD5B778),
@@ -166,6 +169,7 @@ impl Theme {
             separator_wave: rgb(0xD0D0D0),
             scrollbar_thumb: [0x00, 0x00, 0x00, 0x33],
             tree_selection: rgb(0xD5E1FF),
+            tree_selection_inactive: rgb(0xDFE1E5),
             commit_graph: rgb(0x3574F0),
             message_bg: rgb(0xBEE6BE),
             warning_bg: rgb(0xF5D98B),
@@ -219,6 +223,8 @@ impl Theme {
             separator_wave: rgb(0x555555),
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x353748),
+            // Mellom base og valgt, siden surface0 er nesten lik valgt
+            tree_selection_inactive: rgb(0x2A2B3C),
             commit_graph: rgb(0x94E2D5),
             message_bg: rgb(0xA6E3A1),
             warning_bg: rgb(0xF9E2AF),

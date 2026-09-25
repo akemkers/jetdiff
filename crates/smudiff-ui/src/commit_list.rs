@@ -4,13 +4,14 @@ use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use gpui::{
-    Context, Div, EventEmitter, Render, SharedString, UniformListScrollHandle, Window, div,
-    prelude::*, px, relative, uniform_list,
+    App, Context, Div, EventEmitter, FocusHandle, Focusable, Hsla, KeyDownEvent, Render,
+    ScrollStrategy, SharedString, UniformListScrollHandle, Window, div, prelude::*, px, relative,
+    uniform_list,
 };
 use smudiff_git::Commit;
 use smudiff_view::metrics::FONT_SIZE;
 
-use crate::changes_tree::{GAP, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE};
+use crate::changes_tree::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key};
 use crate::theme::UiTheme;
 
 /// Litt luftigere enn treet, så grafen får plass.
@@ -27,24 +28,35 @@ pub struct CommitList {
     label: SharedString,
     commits: Rc<[Commit]>,
     selected: Option<String>,
+    /// Raden j og k flytter, som hash. Enter åpner den.
+    cursor: Option<String>,
     theme: UiTheme,
     family: &'static str,
     scroll: UniformListScrollHandle,
     scale: f32,
+    focus: FocusHandle,
 }
 
 impl EventEmitter<SelectCommit> for CommitList {}
 
 impl CommitList {
-    pub fn new(label: String, commits: Vec<Commit>, theme: UiTheme, family: &'static str) -> Self {
+    pub fn new(
+        label: String,
+        commits: Vec<Commit>,
+        theme: UiTheme,
+        family: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Self {
         Self {
             label: label.into(),
             commits: commits.into(),
             selected: None,
+            cursor: None,
             theme,
             family,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
+            focus: cx.focus_handle(),
         }
     }
 
@@ -60,6 +72,8 @@ impl CommitList {
     }
 
     fn select(&mut self, hash: Option<String>, cx: &mut Context<Self>) {
+        self.cursor = hash.clone();
+        cx.notify();
         if hash != self.selected {
             self.selected = hash.clone();
             cx.emit(SelectCommit(hash));
@@ -67,7 +81,35 @@ impl CommitList {
         }
     }
 
-    fn render_row(&self, i: usize, now: i64, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn on_key_down(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(key) = list_key(ev) else {
+            return;
+        };
+        cx.stop_propagation();
+        // Rad 0 er working tree. En commit som er borte gir rad 0.
+        let row = self.cursor.as_ref().map_or(0, |h| {
+            self.commits
+                .iter()
+                .position(|c| &c.hash == h)
+                .map_or(0, |c| c + 1)
+        });
+        let row = match key {
+            ListKey::Down => (row + 1).min(self.commits.len()),
+            ListKey::Up => row.saturating_sub(1),
+            ListKey::Open => return self.select(self.cursor.clone(), cx),
+        };
+        self.scroll.scroll_to_item(row, ScrollStrategy::Top);
+        self.cursor = row.checked_sub(1).map(|c| self.commits[c].hash.clone());
+        cx.notify();
+    }
+
+    fn render_row(
+        &self,
+        i: usize,
+        now: i64,
+        focused: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let s = |v: f32| px(v * self.scale);
         let commit = i.checked_sub(1).map(|c| &self.commits[c]);
         let hash = commit.map(|c| c.hash.clone());
@@ -75,6 +117,9 @@ impl CommitList {
             Some(c) => (SharedString::from(c.subject.clone()), age(now - c.time)),
             None => (self.label.clone(), String::new()),
         };
+        let bg = self
+            .theme
+            .row_bg(hash == self.cursor, hash == self.selected, focused);
         div()
             .id(i)
             .h(s(COMMIT_ROW_HEIGHT))
@@ -84,8 +129,8 @@ impl CommitList {
             .pl(s(PAD_LEFT))
             .pr(s(PAD_RIGHT))
             .whitespace_nowrap()
-            .when(hash == self.selected, |d| d.bg(self.theme.tree_selection))
-            .child(self.graph(i, hash == self.selected))
+            .when_some(bg, |d, bg| d.bg(bg))
+            .child(self.graph(i, bg))
             .child(div().flex_1().min_w_0().truncate().child(text))
             .child(
                 div()
@@ -97,7 +142,8 @@ impl CommitList {
     }
 
     /// Én linje gjennom alle radene, med en prikk per commit. Working tree er en ring.
-    fn graph(&self, i: usize, selected: bool) -> Div {
+    /// `bg` er bakgrunnen til raden.
+    fn graph(&self, i: usize, bg: Option<Hsla>) -> Div {
         let s = |v: f32| px(v * self.scale);
         let color = self.theme.commit_graph;
         let line = || {
@@ -119,11 +165,7 @@ impl CommitList {
                     .border(s(LINE_WIDTH))
                     .border_color(color)
                     // Dekker linja under, i samme farge som raden
-                    .bg(if selected {
-                        self.theme.tree_selection
-                    } else {
-                        self.theme.editor_bg
-                    }),
+                    .bg(bg.unwrap_or(self.theme.editor_bg)),
                 _ => d.bg(color),
             });
         div()
@@ -137,8 +179,15 @@ impl CommitList {
     }
 }
 
+impl Focusable for CommitList {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
 impl Render for CommitList {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let focused = self.focus.is_focused(window);
         let s = |v: f32| px(v * self.scale);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -147,6 +196,8 @@ impl Render for CommitList {
             .size_full()
             .flex()
             .flex_col()
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::on_key_down))
             .font_family(self.family)
             .text_size(s(TEXT_SIZE))
             .text_color(self.theme.editor_fg)
@@ -166,7 +217,7 @@ impl Render for CommitList {
                     self.commits.len() + 1,
                     cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                         range
-                            .map(|i| this.render_row(i, now, cx))
+                            .map(|i| this.render_row(i, now, focused, cx))
                             .collect::<Vec<_>>()
                     }),
                 )

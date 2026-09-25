@@ -4,8 +4,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    Context, Entity, Hsla, ImageSource, Render, Resource, ScrollStrategy, Subscription,
-    UniformListScrollHandle, Window, div, img, prelude::*, px, uniform_list,
+    App, Context, Entity, FocusHandle, Focusable, Hsla, ImageSource, KeyDownEvent, Render,
+    Resource, ScrollStrategy, Subscription, UniformListScrollHandle, Window, div, img, prelude::*,
+    px, uniform_list,
 };
 use smudiff_changes::{ChangeTree, FileChange, Row, RowKind, Status};
 use smudiff_view::columns::display_width;
@@ -38,7 +39,29 @@ pub struct ChangesTree {
     scale: f32,
     /// Bredden innholdet trenger, uskalert. Regnes ut på nytt når endringene byttes.
     content_width: Option<f32>,
+    /// Raden j og k flytter. Enter åpner den.
+    cursor: usize,
+    focus: FocusHandle,
     _selection: Subscription,
+}
+
+/// Tastene i treet og commit-lista.
+pub(crate) enum ListKey {
+    Down,
+    Up,
+    Open,
+}
+
+pub(crate) fn list_key(ev: &KeyDownEvent) -> Option<ListKey> {
+    if ev.keystroke.modifiers.modified() {
+        return None;
+    }
+    match ev.keystroke.key.as_str() {
+        "j" | "down" => Some(ListKey::Down),
+        "k" | "up" => Some(ListKey::Up),
+        "enter" | "l" => Some(ListKey::Open),
+        _ => None,
+    }
 }
 
 impl ChangesTree {
@@ -61,6 +84,8 @@ impl ChangesTree {
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
             content_width: None,
+            cursor: 0,
+            focus: cx.focus_handle(),
             _selection: observe,
         }
     }
@@ -103,12 +128,15 @@ impl ChangesTree {
         self.tree.reveal(file, &self.changes);
         self.rows = self.tree.rows().into();
         if let Some(i) = self.rows.iter().position(|r| r.kind == RowKind::File(file)) {
+            self.cursor = i;
             self.scroll.scroll_to_item(i, ScrollStrategy::Top);
         }
         cx.notify();
     }
 
-    fn click(&mut self, row: usize, cx: &mut Context<Self>) {
+    /// Mapper klappes sammen eller opp, filer velges.
+    fn open(&mut self, row: usize, cx: &mut Context<Self>) {
+        self.cursor = row;
         match &self.rows[row].kind {
             RowKind::Dir { path, .. } => {
                 self.tree.toggle(&path.clone());
@@ -138,10 +166,28 @@ impl ChangesTree {
         }
     }
 
+    fn on_key_down(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(key) = list_key(ev) else {
+            return;
+        };
+        cx.stop_propagation();
+        let last = self.rows.len().saturating_sub(1);
+        let cursor = self.cursor.min(last);
+        match key {
+            ListKey::Down => self.cursor = (cursor + 1).min(last),
+            ListKey::Up => self.cursor = cursor.saturating_sub(1),
+            ListKey::Open if !self.rows.is_empty() => return self.open(cursor, cx),
+            ListKey::Open => return,
+        }
+        self.scroll.scroll_to_item(self.cursor, ScrollStrategy::Top);
+        cx.notify();
+    }
+
     fn render_row(
         &self,
         i: usize,
         selected: Option<usize>,
+        focused: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let row = &self.rows[i];
@@ -164,11 +210,15 @@ impl ChangesTree {
             .pl(s(PAD_LEFT + row.depth as f32 * INDENT))
             .whitespace_nowrap()
             .overflow_hidden()
-            .when(
-                selected.is_some_and(|f| row.kind == RowKind::File(f)),
-                |d| d.bg(theme.tree_selection),
+            .when_some(
+                theme.row_bg(
+                    i == self.cursor,
+                    selected.is_some_and(|f| row.kind == RowKind::File(f)),
+                    focused,
+                ),
+                |d, bg| d.bg(bg),
             )
-            .on_click(cx.listener(move |this, _, _, cx| this.click(i, cx)));
+            .on_click(cx.listener(move |this, _, _, cx| this.open(i, cx)));
         match &row.kind {
             RowKind::Dir {
                 name,
@@ -201,10 +251,19 @@ impl ChangesTree {
     }
 }
 
+impl Focusable for ChangesTree {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
 impl Render for ChangesTree {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let focused = self.focus.is_focused(window);
         div()
             .size_full()
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::on_key_down))
             .font_family(self.family)
             .text_size(px(TEXT_SIZE * self.scale))
             .text_color(self.theme.editor_fg)
@@ -212,10 +271,10 @@ impl Render for ChangesTree {
                 uniform_list(
                     "changes",
                     self.rows.len(),
-                    cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                    cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                         let selected = this.selection.read(cx).0;
                         range
-                            .map(|i| this.render_row(i, selected, cx))
+                            .map(|i| this.render_row(i, selected, focused, cx))
                             .collect::<Vec<_>>()
                     }),
                 )

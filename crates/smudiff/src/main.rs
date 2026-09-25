@@ -12,8 +12,8 @@ use gpui::{
 };
 use smudiff_git::Repo;
 use smudiff_ui::{
-    Assets, ChangesView, FileDiffView, Message, NextContextRange, ResetZoom, UiTheme, ZoomIn,
-    ZoomOut, load_font,
+    Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, Message,
+    NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut, load_font,
 };
 use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 
@@ -84,6 +84,10 @@ fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-0", ResetZoom, None),
         // IntelliJ har ingen snarvei, bare en meny i verktøylinja
         KeyBinding::new("cmd-alt-c", NextContextRange, None),
+        KeyBinding::new("ctrl-h", FocusLeft, None),
+        KeyBinding::new("ctrl-j", FocusDown, None),
+        KeyBinding::new("ctrl-k", FocusUp, None),
+        KeyBinding::new("ctrl-l", FocusRight, None),
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-w", Quit, None),
     ]);

@@ -46,7 +46,7 @@ const HELP: [(&str, &str); 10] = [
 ];
 
 /// Vises først når diffen er en del av et filtre.
-const FILE_HELP: (&str, &str) = ("J K", "neste/forrige fil");
+const FILE_HELP: [(&str, &str); 2] = [("J K", "neste/forrige fil"), ("C-hjkl", "bytt panel")];
 
 /// Linjer utenfor viewporten som beholdes shapet per side.
 const CACHE_CAPACITY: usize = 2000;
@@ -484,15 +484,15 @@ impl FileDiffView {
         self.execute(Command::NextContextRange, w, cx);
     }
 
-    fn zoom_in(&mut self, _: &ZoomIn, w: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn zoom_in(&mut self, _: &ZoomIn, w: &mut Window, cx: &mut Context<Self>) {
         self.execute(Command::ZoomIn, w, cx);
     }
 
-    fn zoom_out(&mut self, _: &ZoomOut, w: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn zoom_out(&mut self, _: &ZoomOut, w: &mut Window, cx: &mut Context<Self>) {
         self.execute(Command::ZoomOut, w, cx);
     }
 
-    fn reset_zoom(&mut self, _: &ResetZoom, w: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn reset_zoom(&mut self, _: &ResetZoom, w: &mut Window, cx: &mut Context<Self>) {
         self.execute(Command::ResetZoom, w, cx);
     }
 
@@ -626,6 +626,7 @@ impl Render for FileDiffView {
                 self.file_keys
                     .then_some(&FILE_HELP)
                     .into_iter()
+                    .flatten()
                     .chain(&HELP)
                     .filter(|(keys, _)| !(single && *keys == "H L"))
                     .map(|(keys, what)| {

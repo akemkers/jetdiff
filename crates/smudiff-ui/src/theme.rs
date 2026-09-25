@@ -81,6 +81,7 @@ pub struct UiTheme {
     pub separator_wave: Hsla,
     pub scrollbar_thumb: Hsla,
     pub tree_selection: Hsla,
+    pub tree_selection_inactive: Hsla,
     pub commit_graph: Hsla,
     pub message_bg: Hsla,
     pub warning_bg: Hsla,
@@ -110,6 +111,7 @@ impl UiTheme {
             separator_wave: hsla(theme.separator_wave),
             scrollbar_thumb: hsla(theme.scrollbar_thumb),
             tree_selection: hsla(theme.tree_selection),
+            tree_selection_inactive: hsla(theme.tree_selection_inactive),
             commit_graph: hsla(theme.commit_graph),
             message_bg: hsla(theme.message_bg),
             warning_bg: hsla(theme.warning_bg),
@@ -134,6 +136,18 @@ impl UiTheme {
 
     pub fn mocha() -> Self {
         Self::new(&Theme::mocha(), true)
+    }
+
+    /// Bakgrunnen til en rad i treet eller commit-lista. Markøren vises bare med fokus, og
+    /// det som er åpnet er svakere.
+    pub fn row_bg(&self, cursor: bool, open: bool, focused: bool) -> Option<Hsla> {
+        if focused && cursor {
+            Some(self.tree_selection)
+        } else if open {
+            Some(self.tree_selection_inactive)
+        } else {
+            None
+        }
     }
 
     pub fn syntax(&self, token: Token) -> &UiSyntax {

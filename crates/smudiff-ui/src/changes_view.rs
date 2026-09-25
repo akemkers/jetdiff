@@ -4,8 +4,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, Context, Div, Entity, FocusHandle, Focusable, Render, Subscription, Task, Window, div,
-    prelude::*, px,
+    App, Context, Div, Entity, FocusHandle, Focusable, Render, Subscription, Task, Window, actions,
+    div, prelude::*, px,
 };
 use smudiff_changes::FileChange;
 use smudiff_git::{Commit, Repo};
@@ -14,11 +14,14 @@ use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
-use crate::file_diff::{FileDiffView, StepFile, Zoomed};
+use crate::file_diff::{FileDiffView, ResetZoom, StepFile, ZoomIn, ZoomOut, Zoomed};
 use crate::message::{Level, Message};
 use crate::panel_size::{PanelHeight, PanelWidth};
 use crate::theme::UiTheme;
 use crate::watcher::Watcher;
+
+// Vim sine vindustaster. Treet og commitene er til venstre, diffen til høyre.
+actions!(smudiff, [FocusLeft, FocusDown, FocusUp, FocusRight]);
 
 /// Det som hentes fra git i bakgrunnen.
 struct Loaded {
@@ -77,7 +80,7 @@ impl ChangesView {
         });
         let commits = repo.is_work_tree().then(|| {
             let list = repo.commits().unwrap_or_default();
-            cx.new(|_| CommitList::new(repo.label(), list, theme, family))
+            cx.new(|cx| CommitList::new(repo.label(), list, theme, family, cx))
         });
         let mut subscriptions = vec![
             cx.observe(&selection, |this, _, cx| this.load(cx)),
@@ -271,6 +274,34 @@ impl Focusable for ChangesView {
 }
 
 impl ChangesView {
+    fn focus_left(&mut self, _: &FocusLeft, window: &mut Window, cx: &mut Context<Self>) {
+        if self.diff.focus_handle(cx).is_focused(window) {
+            window.focus(&self.tree.focus_handle(cx));
+        }
+    }
+
+    fn focus_right(&mut self, _: &FocusRight, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.diff.focus_handle(cx));
+    }
+
+    fn focus_down(&mut self, _: &FocusDown, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(commits) = &self.commits
+            && self.tree.focus_handle(cx).is_focused(window)
+        {
+            window.focus(&commits.focus_handle(cx));
+        }
+    }
+
+    fn focus_up(&mut self, _: &FocusUp, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .commits
+            .as_ref()
+            .is_some_and(|c| c.focus_handle(cx).is_focused(window))
+        {
+            window.focus(&self.tree.focus_handle(cx));
+        }
+    }
+
     /// Treet med commitene under. Bredden følger treet.
     fn side_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let viewport = window.viewport_size();
@@ -304,9 +335,20 @@ impl ChangesView {
 
 impl Render for ChangesView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Zoom virker også når treet eller commitene har fokus
+        let diff = self.diff.clone();
+        let zoom = diff.clone();
+        let reset = diff.clone();
         div()
             .size_full()
             .flex()
+            .on_action(cx.listener(Self::focus_left))
+            .on_action(cx.listener(Self::focus_right))
+            .on_action(cx.listener(Self::focus_down))
+            .on_action(cx.listener(Self::focus_up))
+            .on_action(move |a: &ZoomIn, w, cx| diff.update(cx, |d, cx| d.zoom_in(a, w, cx)))
+            .on_action(move |a: &ZoomOut, w, cx| zoom.update(cx, |d, cx| d.zoom_out(a, w, cx)))
+            .on_action(move |a: &ResetZoom, w, cx| reset.update(cx, |d, cx| d.reset_zoom(a, w, cx)))
             .child(self.side_panel(window, cx))
             .child(div().flex_1().min_w_0().h_full().child(self.diff.clone()))
     }

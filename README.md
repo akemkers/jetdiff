@@ -46,6 +46,7 @@ Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert l
 | Tast | Gjør |
 | --- | --- |
 | `J` `K`, Tab Shift+Tab | Neste og forrige fil i treet |
+| Ctrl+h Ctrl+j Ctrl+k Ctrl+l | Bytt mellom diffen, treet og commitene. Der flytter `j` `k` og pilene, og Enter eller `l` åpner |
 | `j` `k`, pil opp og ned | Flytt markert linje. Hopper over lukkede folds |
 | `h` `l`, pil venstre og høyre | Scroll sideveis 4 tegn |
 | `0` `$` | Scroll til linjestart og til slutten av markert linje |
