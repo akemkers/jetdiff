@@ -4955,6 +4955,8 @@ name = "smudiff"
 version = "0.1.0"
 dependencies = [
  "gpui",
+ "smudiff-changes",
+ "smudiff-git",
  "smudiff-ui",
  "smudiff-view",
 ]
@@ -5002,7 +5004,9 @@ name = "smudiff-ui"
 version = "0.1.0"
 dependencies = [
  "gpui",
+ "smudiff-changes",
  "smudiff-core",
+ "smudiff-git",
  "smudiff-view",
 ]
 

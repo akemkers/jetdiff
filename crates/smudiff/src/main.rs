@@ -1,19 +1,31 @@
-//! smudiff <venstre> <høyre> [--light]
+//! smudiff [<commit> | <venstre> <høyre>] [--light]
+//!
+//! Uten argumenter vises lokale endringer mot HEAD. Med én commit vises den mot forelderen.
 
+use std::path::Path;
 use std::process::ExitCode;
 
 use gpui::{
-    App, AppContext, Application, Bounds, Focusable, KeyBinding, WindowBounds, WindowOptions,
-    actions, px, size,
+    App, AppContext, Application, Bounds, Context, Focusable, KeyBinding, Render, WindowBounds,
+    WindowOptions, actions, px, size,
 };
-use smudiff_ui::{FileDiffView, NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut, load_font};
+use smudiff_git::Repo;
+use smudiff_ui::{
+    Assets, ChangesView, FileDiffView, NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut,
+    load_font,
+};
 use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 
 actions!(smudiff, [Quit]);
 
+enum Source {
+    WorkTree,
+    Commit(String),
+    Files(String, String),
+}
+
 struct Args {
-    left: String,
-    right: String,
+    source: Source,
     light: bool,
 }
 
@@ -27,10 +39,15 @@ fn parse_args() -> Result<Args, String> {
             _ => paths.push(arg),
         }
     }
-    match <[String; 2]>::try_from(paths) {
-        Ok([left, right]) => Ok(Args { left, right, light }),
-        Err(_) => Err("bruk: smudiff <venstre> <høyre> [--light]".into()),
-    }
+    let source = match <[String; 2]>::try_from(paths) {
+        Ok([left, right]) => Source::Files(left, right),
+        Err(paths) => match <[String; 1]>::try_from(paths) {
+            Ok([rev]) => Source::Commit(rev),
+            Err(paths) if paths.is_empty() => Source::WorkTree,
+            Err(_) => return Err("bruk: smudiff [<commit> | <venstre> <høyre>] [--light]".into()),
+        },
+    };
+    Ok(Args { source, light })
 }
 
 fn read(path: &str) -> Result<String, String> {
@@ -55,6 +72,64 @@ fn bind_keys(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| cx.quit());
 }
 
+/// Det vinduet skal vise, klart før appen starter så feil kan skrives til terminalen.
+enum Content {
+    File(Box<FileDiff>),
+    Changes(Repo, Vec<smudiff_changes::FileChange>),
+}
+
+fn load(source: &Source) -> Result<(Content, String), String> {
+    let (repo, title) = match source {
+        Source::Files(left, right) => {
+            let diff = file_diff(left, right)?;
+            return Ok((Content::File(Box::new(diff)), format!("{left} ↔ {right}")));
+        }
+        Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
+        Source::WorkTree => (Repo::work_tree(Path::new("."))?, "Lokale endringer".into()),
+    };
+    let changes = repo.changes()?;
+    if changes.is_empty() {
+        return Err("ingen endringer".into());
+    }
+    Ok((Content::Changes(repo, changes), title))
+}
+
+fn file_diff(left: &str, right: &str) -> Result<FileDiff, String> {
+    let (l, r) = (read(left)?, read(right)?);
+    let mut diff = FileDiff::new(&l, &r, ComparisonPolicy::Default)
+        .map_err(|_| "filene er for store til å diffes".to_owned())?;
+    // Høyre side først, venstre kan være en midlertidig fil fra git difftool
+    if let Some(lang) = Language::from_path(right).or_else(|| Language::from_path(left)) {
+        diff.highlight_syntax(lang);
+    }
+    Ok(diff)
+}
+
+fn open<V: Render + Focusable>(
+    cx: &mut App,
+    title: String,
+    build: impl FnOnce(&mut Context<V>) -> V + 'static,
+) {
+    let bounds = Bounds::centered(None, size(px(1400.), px(900.)), cx);
+    cx.open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            titlebar: Some(gpui::TitlebarOptions {
+                title: Some(title.into()),
+                ..Default::default()
+            }),
+            focus: true,
+            ..Default::default()
+        },
+        |window, cx| {
+            let view = cx.new(build);
+            window.focus(&view.focus_handle(cx));
+            view
+        },
+    )
+    .expect("kunne ikke åpne vindu");
+}
+
 fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(a) => a,
@@ -63,55 +138,34 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let (left, right) = match (read(&args.left), read(&args.right)) {
-        (Ok(l), Ok(r)) => (l, r),
-        (Err(e), _) | (_, Err(e)) => {
+    let (content, title) = match load(&args.source) {
+        Ok(c) => c,
+        Err(e) => {
             eprintln!("{e}");
             return ExitCode::from(1);
         }
     };
-    let mut diff = match FileDiff::new(&left, &right, ComparisonPolicy::Default) {
-        Ok(d) => d,
-        Err(_) => {
-            eprintln!("filene er for store til å diffes");
-            return ExitCode::from(1);
-        }
-    };
-    // Høyre side først, venstre kan være en midlertidig fil fra git difftool
-    if let Some(lang) = Language::from_path(&args.right).or_else(|| Language::from_path(&args.left))
-    {
-        diff.highlight_syntax(lang);
-    }
     let theme = if args.light {
         UiTheme::light()
     } else {
         UiTheme::dark()
     };
-    let title = format!("{} ↔ {}", args.left, args.right);
 
-    Application::new().run(move |cx: &mut App| {
-        bind_keys(cx);
-        let family = load_font(cx);
-        let bounds = Bounds::centered(None, size(px(1400.), px(900.)), cx);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: Some(gpui::TitlebarOptions {
-                    title: Some(title.into()),
-                    ..Default::default()
+    Application::new()
+        .with_assets(Assets)
+        .run(move |cx: &mut App| {
+            bind_keys(cx);
+            let family = load_font(cx);
+            match content {
+                Content::File(diff) => open(cx, title, move |cx| {
+                    FileDiffView::new(*diff, theme, family, cx)
                 }),
-                focus: true,
-                ..Default::default()
-            },
-            |window, cx| {
-                let view = cx.new(|cx| FileDiffView::new(diff, theme, family, cx));
-                window.focus(&view.focus_handle(cx));
-                view
-            },
-        )
-        .expect("kunne ikke åpne vindu");
-        cx.on_window_closed(|cx| cx.quit()).detach();
-        cx.activate(true);
-    });
+                Content::Changes(repo, changes) => open(cx, title, move |cx| {
+                    ChangesView::new(repo, changes, theme, family, cx)
+                }),
+            }
+            cx.on_window_closed(|cx| cx.quit()).detach();
+            cx.activate(true);
+        });
     ExitCode::SUCCESS
 }

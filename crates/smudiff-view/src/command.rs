@@ -14,6 +14,9 @@ pub enum Command {
     HalfPageUp,
     NextChange,
     PrevChange,
+    /// Neste fil i treet. Gjør ingenting når bare én fil vises.
+    NextFile,
+    PrevFile,
     SwitchSide,
     /// Ett nivå, som `ExpandRegionAction`.
     FoldOpen,

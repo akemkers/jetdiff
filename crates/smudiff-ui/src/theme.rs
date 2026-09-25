@@ -66,6 +66,8 @@ impl UiSyntax {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiTheme {
+    /// Velger `_dark`-ikonene.
+    pub dark: bool,
     pub editor_bg: Hsla,
     pub editor_fg: Hsla,
     pub gutter_bg: Hsla,
@@ -78,6 +80,10 @@ pub struct UiTheme {
     /// `DIFF_SEPARATOR_WAVE`.
     pub separator_wave: Hsla,
     pub scrollbar_thumb: Hsla,
+    pub tree_selection: Hsla,
+    pub file_added: Hsla,
+    pub file_deleted: Hsla,
+    pub file_modified: Hsla,
     inserted: UiDiffColors,
     deleted: UiDiffColors,
     modified: UiDiffColors,
@@ -85,8 +91,9 @@ pub struct UiTheme {
 }
 
 impl UiTheme {
-    fn new(theme: &Theme) -> Self {
+    fn new(theme: &Theme, dark: bool) -> Self {
         Self {
+            dark,
             editor_bg: hsla(theme.editor_bg),
             editor_fg: hsla(theme.editor_fg),
             gutter_bg: hsla(theme.gutter_bg),
@@ -98,6 +105,10 @@ impl UiTheme {
             indent_guide: hsla(theme.indent_guide),
             separator_wave: hsla(theme.separator_wave),
             scrollbar_thumb: hsla(theme.scrollbar_thumb),
+            tree_selection: hsla(theme.tree_selection),
+            file_added: hsla(theme.file_added),
+            file_deleted: hsla(theme.file_deleted),
+            file_modified: hsla(theme.file_modified),
             inserted: (&theme.inserted).into(),
             deleted: (&theme.deleted).into(),
             modified: (&theme.modified).into(),
@@ -106,11 +117,11 @@ impl UiTheme {
     }
 
     pub fn dark() -> Self {
-        Self::new(&Theme::dark())
+        Self::new(&Theme::dark(), true)
     }
 
     pub fn light() -> Self {
-        Self::new(&Theme::light())
+        Self::new(&Theme::light(), false)
     }
 
     pub fn syntax(&self, token: Token) -> &UiSyntax {

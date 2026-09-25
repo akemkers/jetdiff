@@ -6,9 +6,9 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
-    Bounds, Context, FocusHandle, Focusable, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
-    MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window, actions, canvas, div,
-    prelude::*, px,
+    Bounds, Context, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Keystroke, MouseButton,
+    MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window, actions,
+    canvas, div, prelude::*, px,
 };
 use smudiff_core::side::Side;
 use smudiff_view::columns::{ExpandedLine, display_width};
@@ -42,6 +42,9 @@ const HELP: [(&str, &str); 8] = [
     ("q", "avslutt"),
 ];
 
+/// Vises først når diffen er en del av et filtre.
+const FILE_HELP: (&str, &str) = ("J K", "neste/forrige fil");
+
 /// Linjer utenfor viewporten som beholdes shapet per side.
 const CACHE_CAPACITY: usize = 2000;
 
@@ -49,6 +52,16 @@ const SIDES: [Side; 2] = [Side::Left, Side::Right];
 
 fn idx(side: Side) -> usize {
     side.select(0, 1)
+}
+
+/// `J`/`K`. Den som eier filtreet bytter fil.
+pub struct StepFile {
+    pub forward: bool,
+}
+
+/// Ny fontstørrelse etter zoom, så resten av vinduet kan følge med.
+pub struct Zoomed {
+    pub font_size: f32,
 }
 
 struct Animation {
@@ -79,6 +92,7 @@ pub struct FileDiffView {
     markers: Rc<[Vec<StripeMarker>; 2]>,
     /// Lengste linje i tegn, regnet én gang. Gir maks horisontal scroll uten å shape alt.
     max_cols: usize,
+    file_keys: bool,
     shared: Rc<Shared>,
     focus: FocusHandle,
 }
@@ -129,15 +143,9 @@ impl FileDiffView {
         family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
-        let max_cols = SIDES
-            .iter()
-            .flat_map(|&s| (0..diff.line_count(s)).map(move |l| (s, l)))
-            .map(|(s, l)| display_width(diff.line(s, l)))
-            .max()
-            .unwrap_or(0);
-        let folding = Folding::new(&diff, FoldSettings::default());
         Self {
-            state: DiffState::new(Rc::new(diff), Rc::new(folding)),
+            max_cols: max_cols(&diff),
+            state: diff_state(diff),
             theme,
             family,
             font_size: FONT_SIZE,
@@ -148,18 +156,34 @@ impl FileDiffView {
             initialized: false,
             viewport_height: 0.,
             markers: Rc::new([Vec::new(), Vec::new()]),
-            max_cols,
+            file_keys: false,
             shared: Rc::new(Shared {
                 bounds: Cell::new(None),
-                caches: RefCell::new([
-                    SideCache::new(CACHE_CAPACITY),
-                    SideCache::new(CACHE_CAPACITY),
-                ]),
+                caches: RefCell::new(new_caches()),
                 stripes: RefCell::new([StripeRects::default(), StripeRects::default()]),
                 widest: Cell::new(0.),
             }),
             focus: cx.focus_handle(),
         }
+    }
+
+    pub fn with_file_keys(mut self) -> Self {
+        self.file_keys = true;
+        self
+    }
+
+    /// Ny fil i samme visning. Zoom beholdes, cursor og scroll starter på nytt.
+    pub fn set_diff(&mut self, diff: FileDiff, cx: &mut Context<Self>) {
+        self.max_cols = max_cols(&diff);
+        self.state = diff_state(diff);
+        self.shown = ScrollState::default();
+        self.animation = None;
+        self.keys.reset();
+        self.initialized = false;
+        *self.shared.caches.borrow_mut() = new_caches();
+        self.shared.widest.set(0.);
+        self.update_markers();
+        cx.notify();
     }
 
     fn viewport(&self) -> Option<Viewport> {
@@ -229,10 +253,19 @@ impl FileDiffView {
                 cx.quit();
                 return;
             }
+            Command::NextFile | Command::PrevFile => {
+                cx.emit(StepFile {
+                    forward: cmd == Command::NextFile,
+                });
+                return;
+            }
             _ => None,
         };
         if let Some(size) = size {
             self.zoom(size, window);
+            cx.emit(Zoomed {
+                font_size: self.font_size,
+            });
             cx.notify();
             return;
         }
@@ -461,6 +494,27 @@ impl FileDiffView {
     }
 }
 
+fn diff_state(diff: FileDiff) -> DiffState {
+    let folding = Folding::new(&diff, FoldSettings::default());
+    DiffState::new(Rc::new(diff), Rc::new(folding))
+}
+
+fn max_cols(diff: &FileDiff) -> usize {
+    SIDES
+        .iter()
+        .flat_map(|&s| (0..diff.line_count(s)).map(move |l| (s, l)))
+        .map(|(s, l)| display_width(diff.line(s, l)))
+        .max()
+        .unwrap_or(0)
+}
+
+fn new_caches() -> [SideCache; 2] {
+    [
+        SideCache::new(CACHE_CAPACITY),
+        SideCache::new(CACHE_CAPACITY),
+    ]
+}
+
 fn side_geometry(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> [SideGeometry; 2] {
     let (x, width) = (f32::from(bounds.origin.x), f32::from(bounds.size.width));
     smudiff_view::side_geometry(diff, style.number_char_width, x, width)
@@ -471,6 +525,9 @@ fn snap(y: f32, scale: f32) -> f32 {
     (y * scale).round() / scale
 }
 
+impl EventEmitter<StepFile> for FileDiffView {}
+impl EventEmitter<Zoomed> for FileDiffView {}
+
 impl Focusable for FileDiffView {
     fn focus_handle(&self, _: &gpui::App) -> FocusHandle {
         self.focus.clone()
@@ -480,7 +537,12 @@ impl Focusable for FileDiffView {
 impl Render for FileDiffView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_style(window);
-        self.resize(f32::from(window.viewport_size().height) - HELP_HEIGHT);
+        // Tastelinja kan bryte over flere linjer, så høyden kommer fra forrige layout
+        let height = self.shared.bounds.get().map_or(
+            f32::from(window.viewport_size().height) - HELP_HEIGHT,
+            |b| f32::from(b.size.height),
+        );
+        self.resize(height);
         self.step(window);
 
         let scale = window.scale_factor();
@@ -510,21 +572,30 @@ impl Render for FileDiffView {
         let help = div()
             .flex()
             .flex_none()
-            .h(px(HELP_HEIGHT))
+            .flex_wrap()
+            .min_h(px(HELP_HEIGHT))
             .px(px(10.))
-            .gap(px(16.))
+            .py(px(4.))
+            .gap_x(px(16.))
+            .gap_y(px(2.))
             .items_center()
             .bg(theme.gutter_bg)
             .font_family(self.family)
             .text_size(px(12.))
             .text_color(theme.line_number)
-            .children(HELP.iter().map(|(keys, what)| {
-                div()
-                    .flex()
-                    .gap(px(6.))
-                    .child(div().text_color(theme.editor_fg).child(*keys))
-                    .child(*what)
-            }));
+            .children(
+                self.file_keys
+                    .then_some(&FILE_HELP)
+                    .into_iter()
+                    .chain(&HELP)
+                    .map(|(keys, what)| {
+                        div()
+                            .flex()
+                            .gap(px(6.))
+                            .child(div().text_color(theme.editor_fg).child(*keys))
+                            .child(*what)
+                    }),
+            );
 
         div()
             .size_full()
@@ -548,7 +619,10 @@ impl Render for FileDiffView {
                         let Some(style) = style else {
                             return;
                         };
-                        shared.bounds.set(Some(bounds));
+                        let old = shared.bounds.replace(Some(bounds));
+                        if old.map(|b| b.size.height) != Some(bounds.size.height) {
+                            window.refresh();
+                        }
                         let top = f32::from(bounds.origin.y);
                         let height = f32::from(bounds.size.height);
                         let geoms = side_geometry(&diff, &style, bounds);

@@ -117,6 +117,8 @@ fn command(key: Key) -> Option<Command> {
             'f' => ToggleFolds,
             'q' => Quit,
             'G' => GoToBottom,
+            'J' => NextFile,
+            'K' => PrevFile,
             _ => return None,
         },
         KeyCode::Tab => SwitchSide,
@@ -175,6 +177,8 @@ mod tests {
         assert_eq!(last(&chars("f")), c(ToggleFolds));
         assert_eq!(last(&chars("q")), c(Quit));
         assert_eq!(last(&chars("G")), c(GoToBottom));
+        assert_eq!(last(&chars("J")), c(NextFile));
+        assert_eq!(last(&chars("K")), c(PrevFile));
         assert_eq!(last(&chars("gg")), c(GoToTop));
         assert_eq!(last(&[Key::new(KeyCode::Tab)]), c(SwitchSide));
     }
