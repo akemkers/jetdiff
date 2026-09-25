@@ -7,6 +7,7 @@ mod divider;
 mod file_diff;
 mod icons;
 mod message;
+mod panel_width;
 mod side_editor;
 mod text;
 mod theme;

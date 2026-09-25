@@ -22,7 +22,7 @@ cargo run --release -p smudiff -- [<mappe> | <commit> | <venstre> <høyre>] [--l
 
 `cargo install --path crates/smudiff` legger `smudiff` på PATH. Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
-Commit og lokale endringer åpnes med et tre over endrede filer til venstre. Nye og slettede filer vises som én side. Binærfiler vises ikke.
+Commit og lokale endringer åpnes med et tre over endrede filer til venstre. Nye og slettede filer vises som én side. Binærfiler vises ikke. Treet er så bredt som innholdet trenger. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
 
 Lokale endringer lastes inn på nytt når filer endres. Valgt fil beholdes, og diffen starter på toppen hvis innholdet er endret.
 

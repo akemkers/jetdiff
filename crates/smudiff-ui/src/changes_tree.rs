@@ -4,17 +4,23 @@
 use std::rc::Rc;
 
 use gpui::{
-    Context, Entity, Hsla, ImageSource, Render, Resource, ScrollStrategy, Subscription,
+    Context, Entity, Hsla, ImageSource, Pixels, Render, Resource, ScrollStrategy, Subscription,
     UniformListScrollHandle, Window, div, img, prelude::*, px, uniform_list,
 };
 use smudiff_changes::{ChangeTree, FileChange, Row, RowKind, Status};
+use smudiff_view::columns::display_width;
 use smudiff_view::metrics::FONT_SIZE;
 
 use crate::icons::{chevron_icon, file_icon, folder_icon};
+use crate::panel_width::PanelWidth;
+use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
-const TREE_WIDTH: f32 = 280.;
 const ROW_HEIGHT: f32 = 22.;
+const TEXT_SIZE: f32 = 14.;
+const PAD_LEFT: f32 = 8.;
+const PAD_RIGHT: f32 = 12.;
+const GAP: f32 = 4.;
 const INDENT: f32 = 16.;
 const ICON_SIZE: f32 = 16.;
 
@@ -31,6 +37,9 @@ pub struct ChangesTree {
     scroll: UniformListScrollHandle,
     /// Følger zoomen i diffen, som hele UI-et i IntelliJ.
     scale: f32,
+    width: PanelWidth,
+    /// Bredden innholdet trenger, uskalert. Regnes ut på nytt når endringene byttes.
+    content_width: Option<f32>,
     _selection: Subscription,
 }
 
@@ -53,6 +62,8 @@ impl ChangesTree {
             family,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
+            width: PanelWidth::default(),
+            content_width: None,
             _selection: observe,
         }
     }
@@ -66,6 +77,7 @@ impl ChangesTree {
         self.tree.rebuild(&changes);
         self.rows = self.tree.rows().into();
         self.changes = changes;
+        self.content_width = None;
         cx.notify();
     }
 
@@ -113,6 +125,16 @@ impl ChangesTree {
         }
     }
 
+    /// Etter innholdet, eller det som er satt med musa.
+    fn pixel_width(&mut self, window: &Window) -> Pixels {
+        let content = *self.content_width.get_or_insert_with(|| {
+            let char_width = TextStyle::new(self.family, TEXT_SIZE, window).char_width;
+            content_width(&self.changes, char_width)
+        });
+        let window_width = f32::from(window.viewport_size().width) / self.scale;
+        px(self.width.resolve(content, window_width) * self.scale)
+    }
+
     fn status_color(&self, status: Status) -> Hsla {
         match status {
             Status::Added => self.theme.file_added,
@@ -143,8 +165,8 @@ impl ChangesTree {
             .w_full()
             .flex()
             .items_center()
-            .gap(s(4.))
-            .pl(s(8. + row.depth as f32 * INDENT))
+            .gap(s(GAP))
+            .pl(s(PAD_LEFT + row.depth as f32 * INDENT))
             .whitespace_nowrap()
             .overflow_hidden()
             .when(
@@ -158,21 +180,19 @@ impl ChangesTree {
                 count,
                 expanded,
                 ..
-            } => {
-                let files = if *count == 1 { "fil" } else { "filer" };
-                base.child(icon(chevron_icon(*expanded, dark)))
-                    .child(icon(folder_icon(dark)))
-                    .child(name.clone())
-                    .child(
-                        div()
-                            .pl(s(2.))
-                            .text_color(theme.line_number)
-                            .child(format!("{count} {files}")),
-                    )
-            }
+            } => base
+                .child(icon(chevron_icon(*expanded, dark)))
+                .child(icon(folder_icon(dark)))
+                .child(name.clone())
+                .child(
+                    div()
+                        .pl(s(2.))
+                        .text_color(theme.line_number)
+                        .child(count_label(*count)),
+                ),
             &RowKind::File(f) => {
                 let change = &self.changes[f];
-                let name = change.path.rsplit('/').next().unwrap_or_default();
+                let name = file_name(&change.path);
                 // Plassen der mappene har pila, så ikonene står under hverandre
                 base.child(div().w(s(ICON_SIZE)).flex_none())
                     .child(icon(file_icon(&change.path, dark)))
@@ -187,18 +207,17 @@ impl ChangesTree {
 }
 
 impl Render for ChangesTree {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
-        let s = |v: f32| px(v * self.scale);
-        div()
+        let panel = div()
             .flex_none()
-            .w(s(TREE_WIDTH))
+            .w(self.pixel_width(window))
             .h_full()
             .bg(theme.editor_bg)
             .border_r_1()
             .border_color(theme.indent_guide)
             .font_family(self.family)
-            .text_size(s(14.))
+            .text_size(px(TEXT_SIZE * self.scale))
             .text_color(theme.editor_fg)
             .child(
                 uniform_list(
@@ -213,6 +232,56 @@ impl Render for ChangesTree {
                 )
                 .size_full()
                 .track_scroll(self.scroll.clone()),
-            )
+            );
+        PanelWidth::attach(panel, cx, |this| (&mut this.width, this.scale))
+    }
+}
+
+fn count_label(count: usize) -> String {
+    let files = if count == 1 { "fil" } else { "filer" };
+    format!("{count} {files}")
+}
+
+fn file_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or_default()
+}
+
+/// Bredden som får plass til alle rader med alle mapper åpne, uskalert. Fonten er monospace.
+fn content_width(changes: &[FileChange], char_width: f32) -> f32 {
+    let text = |s: &str| display_width(s) as f32 * char_width;
+    let icons = 2. * (ICON_SIZE + GAP);
+    ChangeTree::new(changes)
+        .rows()
+        .iter()
+        .map(|r| {
+            let row = match &r.kind {
+                RowKind::Dir { name, count, .. } => {
+                    icons + text(name) + GAP + 2. + text(&count_label(*count))
+                }
+                &RowKind::File(f) => icons + text(file_name(&changes[f].path)),
+            };
+            PAD_LEFT + r.depth as f32 * INDENT + row
+        })
+        .fold(0., f32::max)
+        + PAD_RIGHT
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bredde_etter_lengste_rad() {
+        let change = |path: &str| FileChange {
+            path: path.into(),
+            old_path: None,
+            status: Status::Modified,
+        };
+        // Mappa `src` med «1 fil» er bredere enn `a.rs` ett nivå inn
+        let dir = PAD_LEFT + 2. * (ICON_SIZE + GAP) + 30. + GAP + 2. + 50.;
+        assert_eq!(content_width(&[change("src/a.rs")], 10.), dir + PAD_RIGHT);
+        let file = PAD_LEFT + INDENT + 2. * (ICON_SIZE + GAP) + 200.;
+        let long = format!("src/{}.rs", "x".repeat(17));
+        assert_eq!(content_width(&[change(&long)], 10.), file + PAD_RIGHT);
     }
 }
