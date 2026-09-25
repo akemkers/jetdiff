@@ -12,12 +12,15 @@ Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode.
 ## Kjøre
 
 ```
-cargo run --release -p smudiff -- [<commit> | <venstre> <høyre>] [--light]
+cargo run --release -p smudiff -- [<mappe> | <commit> | <venstre> <høyre>] [--light]
 ```
 
 - Uten argumenter: lokale endringer, også nye filer git ikke kjenner. På en branch er det mot der den gikk ut fra default-branchen (`main`), så commits underveis er med. På main er det mot HEAD
+- `<mappe>`: som uten argumenter, men for repoet eller worktreet mappa ligger i
 - `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
 - `<venstre> <høyre>`: to filer
+
+`cargo install --path crates/smudiff` legger `smudiff` på PATH. Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
 Commit og lokale endringer åpnes med et tre over endrede filer til venstre. Nye og slettede filer vises som én side. Binærfiler vises ikke.
 

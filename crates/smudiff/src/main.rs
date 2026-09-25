@@ -1,9 +1,9 @@
-//! smudiff [<commit> | <venstre> <høyre>] [--light]
+//! smudiff [<mappe> | <commit> | <venstre> <høyre>] [--light]
 //!
 //! Uten argumenter vises lokale endringer, på en branch mot der den gikk ut fra main.
-//! Med én commit vises den mot forelderen.
+//! En mappe viser lokale endringer der. Med én commit vises den mot forelderen.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use gpui::{
@@ -20,7 +20,7 @@ use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 actions!(smudiff, [Quit]);
 
 enum Source {
-    WorkTree,
+    WorkTree(PathBuf),
     Commit(String),
     Files(String, String),
 }
@@ -43,9 +43,14 @@ fn parse_args() -> Result<Args, String> {
     let source = match <[String; 2]>::try_from(paths) {
         Ok([left, right]) => Source::Files(left, right),
         Err(paths) => match <[String; 1]>::try_from(paths) {
+            Ok([dir]) if Path::new(&dir).is_dir() => Source::WorkTree(dir.into()),
             Ok([rev]) => Source::Commit(rev),
-            Err(paths) if paths.is_empty() => Source::WorkTree,
-            Err(_) => return Err("bruk: smudiff [<commit> | <venstre> <høyre>] [--light]".into()),
+            Err(paths) if paths.is_empty() => Source::WorkTree(".".into()),
+            Err(_) => {
+                return Err(
+                    "bruk: smudiff [<mappe> | <commit> | <venstre> <høyre>] [--light]".into(),
+                );
+            }
         },
     };
     Ok(Args { source, light })
@@ -86,8 +91,8 @@ fn load(source: &Source) -> Result<(Content, String), String> {
             return Ok((Content::File(Box::new(diff)), format!("{left} ↔ {right}")));
         }
         Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
-        Source::WorkTree => {
-            let repo = Repo::work_tree(Path::new("."))?;
+        Source::WorkTree(dir) => {
+            let repo = Repo::work_tree(dir)?;
             let title = match &repo.base {
                 Some(base) => format!("Endringer mot {base}"),
                 None => "Lokale endringer".into(),
@@ -95,6 +100,8 @@ fn load(source: &Source) -> Result<(Content, String), String> {
             (repo, title)
         }
     };
+    // Flere vinduer åpne samtidig må kunne skilles i tittelen
+    let title = format!("{}: {title}", repo.name());
     let changes = repo.changes()?;
     if changes.is_empty() {
         return Err("ingen endringer".into());

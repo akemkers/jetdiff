@@ -62,6 +62,14 @@ impl Repo {
         })
     }
 
+    /// Mappenavnet til repoet eller worktreet.
+    pub fn name(&self) -> &str {
+        self.root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+    }
+
     pub fn changes(&self) -> Result<Vec<FileChange>, String> {
         let mut args = vec!["diff", "--name-status", "-z", "-M", &self.left];
         args.extend(self.right.as_deref());
