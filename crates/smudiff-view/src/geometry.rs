@@ -49,6 +49,8 @@ const THUMB_X: (f32, f32) = (6., 16.);
 #[derive(Debug, Clone, PartialEq)]
 pub struct SideGeometry {
     pub side: Side,
+    /// Venstre side i et par. En side alene er aldri speilet.
+    pub mirrored: bool,
     /// Hele tekstområdet. Scrollbaren ligger over den ytterste delen.
     pub text: Range<f32>,
     /// Der teksten starter. Venstre side har scrollbaren på innsiden, så teksten flyttes forbi den.
@@ -60,24 +62,34 @@ pub struct SideGeometry {
 
 impl SideGeometry {
     /// `x` er venstre kant av siden og `width` hele bredden den får.
-    pub fn new(side: Side, x: f32, width: f32, gutter_layout: GutterLayout) -> Self {
+    pub fn new(
+        side: Side,
+        mirrored: bool,
+        x: f32,
+        width: f32,
+        gutter_layout: GutterLayout,
+    ) -> Self {
         let end = x + width;
         let gw = gutter_layout.width.min(width);
-        let (text, gutter) = match side {
-            Side::Left => (x..end - gw, end - gw..end),
-            Side::Right => (x + gw..end, x..x + gw),
+        let (text, gutter) = if mirrored {
+            (x..end - gw, end - gw..end)
+        } else {
+            (x + gw..end, x..x + gw)
         };
         let sw = SCROLLBAR_THICKNESS.min(text.end - text.start);
-        let scrollbar = match side {
-            Side::Left => text.start..text.start + sw,
-            Side::Right => text.end - sw..text.end,
+        let scrollbar = if mirrored {
+            text.start..text.start + sw
+        } else {
+            text.end - sw..text.end
         };
-        let text_x = match side {
-            Side::Left => (text.start + sw).min(text.end),
-            Side::Right => text.start,
+        let text_x = if mirrored {
+            (text.start + sw).min(text.end)
+        } else {
+            text.start
         };
         Self {
             side,
+            mirrored,
             text,
             text_x,
             gutter,
@@ -87,32 +99,31 @@ impl SideGeometry {
     }
 
     pub fn bounds(&self) -> Range<f32> {
-        match self.side {
-            Side::Left => self.text.start..self.gutter.end,
-            Side::Right => self.gutter.start..self.text.end,
+        if self.mirrored {
+            self.text.start..self.gutter.end
+        } else {
+            self.gutter.start..self.text.end
         }
     }
 
     /// Lokalt gutter-intervall til vindus-x. Speilet på venstre side.
     pub fn gutter_x(&self, local: Range<f32>) -> Range<f32> {
-        match self.side {
-            Side::Left => self.gutter.end - local.end..self.gutter.end - local.start,
-            Side::Right => self.gutter.start + local.start..self.gutter.start + local.end,
+        if self.mirrored {
+            self.gutter.end - local.end..self.gutter.end - local.start
+        } else {
+            self.gutter.start + local.start..self.gutter.start + local.end
         }
     }
 
     /// Lokalt scrollbar-intervall, 0 mot teksten, til vindus-x. Speilet på venstre side.
     fn scrollbar_x(&self, (start, end): (f32, f32)) -> Range<f32> {
         let clip = |r: Range<f32>| r.start.max(self.scrollbar.start)..r.end.min(self.scrollbar.end);
-        match self.side {
-            Side::Left => {
-                let right = self.scrollbar.start + SCROLLBAR_THICKNESS;
-                clip(right - end..right - start)
-            }
-            Side::Right => {
-                let left = self.scrollbar.end - SCROLLBAR_THICKNESS;
-                clip(left + start..left + end)
-            }
+        if self.mirrored {
+            let right = self.scrollbar.start + SCROLLBAR_THICKNESS;
+            clip(right - end..right - start)
+        } else {
+            let left = self.scrollbar.end - SCROLLBAR_THICKNESS;
+            clip(left + start..left + end)
         }
     }
 
@@ -129,35 +140,47 @@ impl SideGeometry {
     /// (`textOffset = offset - areaWidth - 1`).
     pub fn number_x(&self, text_width: f32) -> f32 {
         let (start, end) = self.gutter_layout.numbers;
-        match self.side {
-            Side::Left => self.gutter_x(start..end).start - 1.,
-            Side::Right => self.gutter_x(start..end).end - text_width,
+        if self.mirrored {
+            self.gutter_x(start..end).start - 1.
+        } else {
+            self.gutter_x(start..end).end - text_width
         }
     }
 }
 
-/// Begge sidene for et vindu som starter på `x` og er `width` bredt.
+/// Begge sidene for et vindu som starter på `x` og er `width` bredt. Med én side
+/// (`FileDiff::single_side`) får den hele bredden og den andre null.
 pub fn side_geometry(
     diff: &FileDiff,
     number_char_width: f32,
     x: f32,
     width: f32,
 ) -> [SideGeometry; 2] {
-    let side_width = ((width - DIVIDER_WIDTH) / 2.).floor().max(0.);
-    [Side::Left, Side::Right].map(|side| {
+    let geom = |side: Side, mirrored, x, width| {
         // Siste linjenummer bestemmer bredden, som `getMaxLineNumberString`
         let digits = diff.line_count(side).to_string().len();
         let gutter = gutter_layout(digits as f32 * number_char_width);
-        match side {
-            Side::Left => SideGeometry::new(side, x, side_width, gutter),
-            Side::Right => SideGeometry::new(
-                side,
-                x + side_width + DIVIDER_WIDTH,
-                width - side_width - DIVIDER_WIDTH,
-                gutter,
-            ),
-        }
-    })
+        SideGeometry::new(side, mirrored, x, width, gutter)
+    };
+    if let Some(shown) = diff.single_side() {
+        return [Side::Left, Side::Right].map(|side| {
+            if side == shown {
+                geom(side, false, x, width)
+            } else {
+                geom(side, false, x + width, 0.)
+            }
+        });
+    }
+    let side_width = ((width - DIVIDER_WIDTH) / 2.).floor().max(0.);
+    [
+        geom(Side::Left, true, x, side_width),
+        geom(
+            Side::Right,
+            false,
+            x + side_width + DIVIDER_WIDTH,
+            width - side_width - DIVIDER_WIDTH,
+        ),
+    ]
 }
 
 #[cfg(test)]
@@ -183,7 +206,7 @@ mod tests {
 
     #[test]
     fn venstre_er_speilet() {
-        let g = SideGeometry::new(Side::Left, 0., 500., G);
+        let g = SideGeometry::new(Side::Left, true, 0., 500., G);
         assert_eq!(g.text, 0. ..460.);
         assert_eq!(g.gutter, 460. ..500.);
         assert_eq!(g.bounds(), 0. ..500.);
@@ -197,7 +220,7 @@ mod tests {
 
     #[test]
     fn hoyre_er_uspeilet() {
-        let g = SideGeometry::new(Side::Right, 524., 500., G);
+        let g = SideGeometry::new(Side::Right, false, 524., 500., G);
         assert_eq!(g.gutter, 524. ..564.);
         assert_eq!(g.text, 564. ..1024.);
         assert_eq!(g.gutter_x(G.separator..G.width), 561. ..564.);
@@ -208,8 +231,18 @@ mod tests {
     }
 
     #[test]
+    fn ny_fil_far_hele_bredden() {
+        use crate::ComparisonPolicy;
+        let diff = FileDiff::new("", "a\n", ComparisonPolicy::Default).unwrap();
+        let [left, right] = side_geometry(&diff, 7., 100., 800.);
+        assert_eq!(right.bounds(), 100. ..900.);
+        assert!(!right.mirrored);
+        assert!(left.bounds().is_empty());
+    }
+
+    #[test]
     fn smalt_vindu_gir_ikke_negative_bredder() {
-        let g = SideGeometry::new(Side::Right, 0., 30., G);
+        let g = SideGeometry::new(Side::Right, false, 0., 30., G);
         assert_eq!(g.gutter, 0. ..30.);
         assert!(g.text.is_empty());
         assert!(g.scrollbar.is_empty());

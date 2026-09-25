@@ -5,7 +5,6 @@ use gpui::{
     App, Bounds, ContentMask, Hsla, Pixels, ShapedLine, SharedString, TextRun, Window, fill, point,
     px, quad, size,
 };
-use smudiff_core::side::Side;
 use smudiff_view::columns::{self, ExpandedLine};
 use smudiff_view::separator::{stroke_width, wave};
 use smudiff_view::{FileDiff, Folding, SideGeometry, StripeMarker, thumb_range};
@@ -266,9 +265,10 @@ impl SideEditor<'_> {
         let g = self.geom;
         let lh = self.style.line_height();
         let layout = self.folding.layout(g.side, lh);
-        let (edge, mirrored) = match g.side {
-            Side::Left => (g.gutter.end, true),
-            Side::Right => (g.gutter.start, false),
+        let edge = if g.mirrored {
+            g.gutter.end
+        } else {
+            g.gutter.start
         };
         let hovered = self.folding.hovered();
         for (id, fold) in self.folding.visible(g.side) {
@@ -279,7 +279,7 @@ impl SideEditor<'_> {
                 break;
             }
             let y = self.top + layout.visual_line_to_y(fold.visual) - self.scroll_y;
-            let path = wave(g.bounds(), edge, mirrored, y, lh);
+            let path = wave(g.bounds(), edge, g.mirrored, y, lh);
             let width = stroke_width(hovered == Some(id));
             let p = |pt: smudiff_view::Point| point(px(pt.x), px(pt.y));
             stroke_path(window, &path, p, width, self.theme.separator_wave);

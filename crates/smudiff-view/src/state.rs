@@ -74,13 +74,14 @@ fn scrolloff(vp: Viewport) -> usize {
 
 impl DiffState {
     pub fn new(diff: Rc<FileDiff>, folding: Rc<Folding>) -> Self {
+        // `getCurrentSide` er RIGHT som default i SimpleDiffViewer
+        let side = diff.single_side().unwrap_or(Side::Right);
         Self {
             diff,
             folding,
             scroll: ScrollState::default(),
-            // `getCurrentSide` er RIGHT som default i SimpleDiffViewer
-            master: Side::Right,
-            cursor: Cursor::new(Side::Right, 0),
+            master: side,
+            cursor: Cursor::new(side, 0),
         }
     }
 
@@ -372,6 +373,9 @@ impl DiffState {
     /// `MyFocusOppositePaneAction`: cursoren flyttes, siden blir master, og så
     /// `scrollToCaret(MAKE_VISIBLE)`.
     fn switch_side(&mut self, vp: Viewport, hx: Horizontal) -> Outcome {
+        if self.diff.single_side().is_some() {
+            return Outcome::default();
+        }
         self.cursor = self.transferred_cursor();
         self.follow(vp, hx, false);
         Outcome::animated()
@@ -631,6 +635,14 @@ mod tests {
         run(&mut s, NextChange);
         let t = target_for_block(&s.diff, &s.folding, 1, VP);
         assert_eq!(s.scroll.y, t.scroll_y);
+    }
+
+    #[test]
+    fn slettet_fil_vises_alene() {
+        let mut s = state("a\nb\n", "", false);
+        assert_eq!((s.cursor.side, s.master), (L, L));
+        run(&mut s, SwitchSide);
+        assert_eq!(s.cursor.side, L);
     }
 
     #[test]

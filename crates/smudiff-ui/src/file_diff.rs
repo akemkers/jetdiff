@@ -229,9 +229,8 @@ impl FileDiffView {
         let (Some(bounds), Some(style)) = (self.shared.bounds.get(), self.style.as_ref()) else {
             return Horizontal::default();
         };
-        let [left, _] = side_geometry(&self.state.diff, style, bounds);
         Horizontal {
-            text_width: left.text.end - left.text_x,
+            text_width: self.text_width(style, bounds),
             char_width: style.char_width,
             max_x: self.max_scroll_x(),
         }
@@ -381,6 +380,9 @@ impl FileDiffView {
     }
 
     fn side_at(&self, x: Pixels) -> Side {
+        if let Some(side) = self.state.diff.single_side() {
+            return side;
+        }
         let Some(bounds) = self.shared.bounds.get() else {
             return self.state.master;
         };
@@ -395,9 +397,15 @@ impl FileDiffView {
         let (Some(bounds), Some(style)) = (self.shared.bounds.get(), self.style.as_ref()) else {
             return 0.;
         };
-        let [left, _] = side_geometry(&self.state.diff, style, bounds);
         let content = (self.max_cols + 1) as f32 * style.char_width;
-        content.max(self.shared.widest.get()) - (left.text.end - left.text_x)
+        content.max(self.shared.widest.get()) - self.text_width(style, bounds)
+    }
+
+    /// Sidene er like brede, så venstre side holder når begge vises.
+    fn text_width(&self, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
+        let side = self.state.diff.single_side().unwrap_or(Side::Left);
+        let g = &side_geometry(&self.state.diff, style, bounds)[idx(side)];
+        g.text.end - g.text_x
     }
 
     fn on_scroll(&mut self, ev: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -569,6 +577,7 @@ impl Render for FileDiffView {
             }
         });
 
+        let single = self.state.diff.single_side().is_some();
         let help = div()
             .flex()
             .flex_none()
@@ -588,6 +597,7 @@ impl Render for FileDiffView {
                     .then_some(&FILE_HELP)
                     .into_iter()
                     .chain(&HELP)
+                    .filter(|(keys, _)| !(single && *keys == "Tab"))
                     .map(|(keys, what)| {
                         div()
                             .flex()
@@ -629,8 +639,12 @@ impl Render for FileDiffView {
                         let mut caches = shared.caches.borrow_mut();
                         let mut stripes = shared.stripes.borrow_mut();
                         let mut widest = shared.widest.get();
+                        let single = diff.single_side();
                         for (i, geom) in geoms.iter().enumerate() {
                             let side = SIDES[i];
+                            if single.is_some_and(|s| s != side) {
+                                continue;
+                            }
                             if stripes[i].track_height != height {
                                 let content =
                                     folding.layout(side, style.line_height()).content_height();
@@ -652,6 +666,9 @@ impl Render for FileDiffView {
                             widest = widest.max(editor.paint(&mut caches[i], window, cx));
                         }
                         shared.widest.set(widest);
+                        if single.is_some() {
+                            return;
+                        }
                         crate::divider::Divider {
                             diff: &diff,
                             folding: &folding,

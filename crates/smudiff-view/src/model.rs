@@ -133,6 +133,17 @@ impl FileDiff {
         &self.side(side).text
     }
 
+    /// Siden som vises alene når den andre er tom, som for nye og slettede filer.
+    pub fn single_side(&self) -> Option<Side> {
+        if self.text(Side::Left).is_empty() {
+            Some(Side::Right)
+        } else if self.text(Side::Right).is_empty() {
+            Some(Side::Left)
+        } else {
+            None
+        }
+    }
+
     /// Minst én linje. Tekst som slutter på `'\n'` har en tom siste linje, som i IntelliJ.
     pub fn line_count(&self, side: Side) -> usize {
         self.side(side).line_count()
