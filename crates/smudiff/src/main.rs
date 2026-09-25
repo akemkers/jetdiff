@@ -1,6 +1,7 @@
 //! smudiff [<commit> | <venstre> <høyre>] [--light]
 //!
-//! Uten argumenter vises lokale endringer mot HEAD. Med én commit vises den mot forelderen.
+//! Uten argumenter vises lokale endringer, på en branch mot der den gikk ut fra main.
+//! Med én commit vises den mot forelderen.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -85,7 +86,14 @@ fn load(source: &Source) -> Result<(Content, String), String> {
             return Ok((Content::File(Box::new(diff)), format!("{left} ↔ {right}")));
         }
         Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
-        Source::WorkTree => (Repo::work_tree(Path::new("."))?, "Lokale endringer".into()),
+        Source::WorkTree => {
+            let repo = Repo::work_tree(Path::new("."))?;
+            let title = match &repo.base {
+                Some(base) => format!("Endringer mot {base}"),
+                None => "Lokale endringer".into(),
+            };
+            (repo, title)
+        }
     };
     let changes = repo.changes()?;
     if changes.is_empty() {

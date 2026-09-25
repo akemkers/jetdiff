@@ -15,7 +15,7 @@ Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode.
 cargo run --release -p smudiff -- [<commit> | <venstre> <høyre>] [--light]
 ```
 
-- Uten argumenter: lokale endringer mot HEAD, også nye filer git ikke kjenner
+- Uten argumenter: lokale endringer, også nye filer git ikke kjenner. På en branch er det mot der den gikk ut fra default-branchen (`main`), så commits underveis er med. På main er det mot HEAD
 - `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
 - `<venstre> <høyre>`: to filer
 

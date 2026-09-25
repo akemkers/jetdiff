@@ -12,6 +12,8 @@ pub struct Repo {
     left: String,
     /// `None` er working tree.
     right: Option<String>,
+    /// Default-branchen når venstre side er der branchen gikk ut fra den.
+    pub base: Option<String>,
 }
 
 impl Repo {
@@ -27,20 +29,36 @@ impl Repo {
             root,
             left,
             right: Some(right),
+            base: None,
         })
     }
 
-    /// Working tree mot HEAD, med filer git ikke sporer ennå.
+    /// Working tree med filer git ikke sporer ennå. På en branch er det mot der den gikk ut
+    /// fra default-branchen, så commits på branchen er med. Ellers mot HEAD.
     pub fn work_tree(dir: &Path) -> Result<Self, String> {
         let root = toplevel(dir)?;
-        let left = match verify(&root, "HEAD") {
-            Some(head) => head,
-            None => empty_tree(&root)?,
+        let Some(head) = verify(&root, "HEAD") else {
+            let left = empty_tree(&root)?;
+            return Ok(Self {
+                root,
+                left,
+                right: None,
+                base: None,
+            });
+        };
+        let fork = default_branch(&root).and_then(|b| {
+            let out = git(&root, &["merge-base", "HEAD", &b]).ok()?;
+            Some((b, out.trim_end().to_owned()))
+        });
+        let (left, base) = match fork {
+            Some((b, fork)) if fork != head => (fork, Some(b)),
+            _ => (head, None),
         };
         Ok(Self {
             root,
             left,
             right: None,
+            base,
         })
     }
 
@@ -94,6 +112,24 @@ fn verify(root: &Path, rev: &str) -> Option<String> {
     let spec = format!("{rev}^{{commit}}");
     let out = git(root, &["rev-parse", "--verify", "--quiet", &spec]).ok()?;
     Some(out.trim_end().to_owned())
+}
+
+/// Lokal branch først, siden worktrees lages fra den og `origin` kan ligge bak.
+fn default_branch(root: &Path) -> Option<String> {
+    let remote = git(
+        root,
+        &["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+    )
+    .ok()
+    .map(|s| s.trim_end().to_owned());
+    let local = remote
+        .as_deref()
+        .and_then(|r| r.strip_prefix("origin/"))
+        .map(str::to_owned);
+    [local, remote, Some("main".into()), Some("master".into())]
+        .into_iter()
+        .flatten()
+        .find(|b| verify(root, b).is_some())
 }
 
 /// Hashen avhenger av om repoet bruker SHA-1 eller SHA-256.
@@ -165,7 +201,7 @@ mod tests {
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             let repo = Self(dir);
-            repo.git(&["init", "-q"]);
+            repo.git(&["init", "-q", "-b", "main"]);
             repo.git(&["config", "user.email", "t@t"]);
             repo.git(&["config", "user.name", "t"]);
             repo
@@ -269,6 +305,53 @@ mod tests {
             ]
         );
         assert_eq!(repo.read(&changes[0]).unwrap(), ["gammel\n", "ny\n"]);
+    }
+
+    #[test]
+    fn branch_mot_default_branchen() {
+        let r = TempRepo::new("branch");
+        r.write("a.rs", "a\n");
+        r.commit();
+        r.git(&["checkout", "-q", "-b", "feature"]);
+        r.write("b.rs", "b\n");
+        r.commit();
+        r.write("a.rs", "endret\n");
+        let repo = Repo::work_tree(&r.0).unwrap();
+        assert_eq!(repo.base.as_deref(), Some("main"));
+        assert_eq!(
+            summary(&repo.changes().unwrap()),
+            [
+                (Status::Modified, "a.rs", None),
+                (Status::Added, "b.rs", None)
+            ]
+        );
+        // Nye commits på main endrer ikke diffen
+        r.git(&["checkout", "-q", "main"]);
+        r.write("a.rs", "a\n");
+        r.write("c.rs", "c\n");
+        r.commit();
+        r.git(&["checkout", "-q", "feature"]);
+        let repo = Repo::work_tree(&r.0).unwrap();
+        assert_eq!(
+            summary(&repo.changes().unwrap()),
+            [(Status::Added, "b.rs", None)]
+        );
+    }
+
+    #[test]
+    fn default_branchen_mot_head() {
+        let r = TempRepo::new("main");
+        r.write("a.rs", "a\n");
+        r.commit();
+        r.write("b.rs", "b\n");
+        r.commit();
+        r.write("a.rs", "endret\n");
+        let repo = Repo::work_tree(&r.0).unwrap();
+        assert_eq!(repo.base, None);
+        assert_eq!(
+            summary(&repo.changes().unwrap()),
+            [(Status::Modified, "a.rs", None)]
+        );
     }
 
     #[test]
