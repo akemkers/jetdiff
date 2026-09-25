@@ -3,11 +3,12 @@
 mod cache;
 mod changes_tree;
 mod changes_view;
+mod commit_list;
 mod divider;
 mod file_diff;
 mod icons;
 mod message;
-mod panel_width;
+mod panel_size;
 mod side_editor;
 mod text;
 mod theme;

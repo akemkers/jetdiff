@@ -4,7 +4,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    Context, Entity, Hsla, ImageSource, Pixels, Render, Resource, ScrollStrategy, Subscription,
+    Context, Entity, Hsla, ImageSource, Render, Resource, ScrollStrategy, Subscription,
     UniformListScrollHandle, Window, div, img, prelude::*, px, uniform_list,
 };
 use smudiff_changes::{ChangeTree, FileChange, Row, RowKind, Status};
@@ -12,15 +12,14 @@ use smudiff_view::columns::display_width;
 use smudiff_view::metrics::FONT_SIZE;
 
 use crate::icons::{chevron_icon, file_icon, folder_icon};
-use crate::panel_width::PanelWidth;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
-const ROW_HEIGHT: f32 = 22.;
-const TEXT_SIZE: f32 = 14.;
-const PAD_LEFT: f32 = 8.;
-const PAD_RIGHT: f32 = 12.;
-const GAP: f32 = 4.;
+pub(crate) const ROW_HEIGHT: f32 = 22.;
+pub(crate) const TEXT_SIZE: f32 = 14.;
+pub(crate) const PAD_LEFT: f32 = 8.;
+pub(crate) const PAD_RIGHT: f32 = 12.;
+pub(crate) const GAP: f32 = 4.;
 const INDENT: f32 = 16.;
 const ICON_SIZE: f32 = 16.;
 
@@ -37,7 +36,6 @@ pub struct ChangesTree {
     scroll: UniformListScrollHandle,
     /// Følger zoomen i diffen, som hele UI-et i IntelliJ.
     scale: f32,
-    width: PanelWidth,
     /// Bredden innholdet trenger, uskalert. Regnes ut på nytt når endringene byttes.
     content_width: Option<f32>,
     _selection: Subscription,
@@ -62,7 +60,6 @@ impl ChangesTree {
             family,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
-            width: PanelWidth::default(),
             content_width: None,
             _selection: observe,
         }
@@ -125,14 +122,12 @@ impl ChangesTree {
         }
     }
 
-    /// Etter innholdet, eller det som er satt med musa.
-    fn pixel_width(&mut self, window: &Window) -> Pixels {
-        let content = *self.content_width.get_or_insert_with(|| {
+    /// Bredden innholdet trenger, uskalert.
+    pub fn content_width(&mut self, window: &Window) -> f32 {
+        *self.content_width.get_or_insert_with(|| {
             let char_width = TextStyle::new(self.family, TEXT_SIZE, window).char_width;
             content_width(&self.changes, char_width)
-        });
-        let window_width = f32::from(window.viewport_size().width) / self.scale;
-        px(self.width.resolve(content, window_width) * self.scale)
+        })
     }
 
     fn status_color(&self, status: Status) -> Hsla {
@@ -207,18 +202,12 @@ impl ChangesTree {
 }
 
 impl Render for ChangesTree {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = self.theme;
-        let panel = div()
-            .flex_none()
-            .w(self.pixel_width(window))
-            .h_full()
-            .bg(theme.editor_bg)
-            .border_r_1()
-            .border_color(theme.indent_guide)
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .size_full()
             .font_family(self.family)
             .text_size(px(TEXT_SIZE * self.scale))
-            .text_color(theme.editor_fg)
+            .text_color(self.theme.editor_fg)
             .child(
                 uniform_list(
                     "changes",
@@ -232,8 +221,7 @@ impl Render for ChangesTree {
                 )
                 .size_full()
                 .track_scroll(self.scroll.clone()),
-            );
-        PanelWidth::attach(panel, cx, |this| (&mut this.width, this.scale))
+            )
     }
 }
 

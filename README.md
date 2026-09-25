@@ -25,6 +25,8 @@ cargo run --release -p smudiff -- [<mappe> | <commit> | <venstre> <høyre>] [--t
 
 Commit og lokale endringer åpnes med et tre over endrede filer til venstre. Nye og slettede filer vises som én side. Binærfiler vises ikke. Treet er så bredt som innholdet trenger. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
 
+For lokale endringer ligger commitene under treet: branchens commits, eller de 50 siste på main. Klikk på en commit for å se den, og på raden øverst for å gå tilbake. Skillelinja kan dras.
+
 Lokale endringer lastes inn på nytt når filer endres. Valgt fil beholdes, og diffen starter på toppen hvis innholdet er endret.
 
 Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer.

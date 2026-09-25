@@ -6,6 +6,18 @@ use std::process::Command;
 
 use smudiff_changes::{FileChange, Status};
 
+/// Uten branch vises de siste commitene.
+const MAX_COMMITS: usize = 50;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit {
+    pub hash: String,
+    /// Første linje av meldingen.
+    pub subject: String,
+    /// Sekunder siden 1970.
+    pub time: i64,
+}
+
 pub struct Repo {
     root: PathBuf,
     /// Venstre side. Det tomme treet hvis det ikke finnes noen forelder.
@@ -69,6 +81,30 @@ impl Repo {
     /// Working tree kan endre seg mens den vises, en commit kan ikke.
     pub fn is_work_tree(&self) -> bool {
         self.right.is_none()
+    }
+
+    /// Det working tree vises mot.
+    pub fn label(&self) -> String {
+        match &self.base {
+            Some(base) => format!("Endringer mot {base}"),
+            None => "Lokale endringer".into(),
+        }
+    }
+
+    /// For working tree. Commitene på branchen, eller de siste. Nyeste først.
+    pub fn commits(&self) -> Result<Vec<Commit>, String> {
+        if verify(&self.root, "HEAD").is_none() {
+            return Ok(Vec::new());
+        }
+        let range = format!("{}..HEAD", self.left);
+        let max = format!("-n{MAX_COMMITS}");
+        let rev = match self.base {
+            Some(_) => [range.as_str(), "--"],
+            None => [max.as_str(), "HEAD"],
+        };
+        let mut args = vec!["log", "-z", "--format=%H%x1f%ct%x1f%s"];
+        args.extend(rev);
+        Ok(parse_log(&git(&self.root, &args)?))
     }
 
     /// Mappenavnet til repoet eller worktreet.
@@ -208,6 +244,20 @@ fn parse_name_status(out: &str) -> Vec<FileChange> {
         changes.push(change);
     }
     changes
+}
+
+/// `hash\x1ftid\x1fmelding\0` per commit.
+fn parse_log(out: &str) -> Vec<Commit> {
+    out.split_terminator('\0')
+        .filter_map(|entry| {
+            let mut fields = entry.splitn(3, '\x1f');
+            Some(Commit {
+                hash: fields.next()?.to_owned(),
+                time: fields.next()?.parse().ok()?,
+                subject: fields.next()?.to_owned(),
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -373,6 +423,45 @@ mod tests {
         assert_eq!(
             summary(&repo.changes().unwrap()),
             [(Status::Modified, "a.rs", None)]
+        );
+    }
+
+    #[test]
+    fn commits_pa_branchen_ellers_de_siste() {
+        let r = TempRepo::new("commits");
+        let subjects = |repo: &Repo| -> Vec<String> {
+            repo.commits()
+                .unwrap()
+                .into_iter()
+                .map(|c| c.subject)
+                .collect()
+        };
+        assert!(Repo::work_tree(&r.0).unwrap().commits().unwrap().is_empty());
+        r.write("a.rs", "a\n");
+        r.git(&["add", "-A"]);
+        r.git(&["commit", "-q", "-m", "første"]);
+        r.write("a.rs", "b\n");
+        r.git(&["commit", "-q", "-am", "andre\n\nmer tekst"]);
+        assert_eq!(
+            subjects(&Repo::work_tree(&r.0).unwrap()),
+            ["andre", "første"]
+        );
+        r.git(&["checkout", "-q", "-b", "feature"]);
+        r.write("a.rs", "c\n");
+        r.git(&["commit", "-q", "-am", "på branchen"]);
+        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["på branchen"]);
+    }
+
+    #[test]
+    fn parser_log() {
+        let c = parse_log("abc\x1f1700000000\x1fen: melding\0");
+        assert_eq!(
+            c,
+            [Commit {
+                hash: "abc".into(),
+                subject: "en: melding".into(),
+                time: 1_700_000_000,
+            }]
         );
     }
 

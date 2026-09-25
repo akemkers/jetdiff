@@ -1,34 +1,53 @@
-//! Filtre og diff side om side. Henter innholdet fra git når en fil velges, og på nytt
-//! når working tree endrer seg.
+//! Filtre og diff side om side, med commitene under treet. Henter innholdet fra git når en
+//! fil eller commit velges, og på nytt når working tree endrer seg.
 
 use std::rc::Rc;
 
 use gpui::{
-    App, Context, Entity, FocusHandle, Focusable, Render, Subscription, Task, Window, div,
-    prelude::*,
+    App, Context, Div, Entity, FocusHandle, Focusable, Render, Subscription, Task, Window, div,
+    prelude::*, px,
 };
 use smudiff_changes::FileChange;
-use smudiff_git::Repo;
+use smudiff_git::{Commit, Repo};
+use smudiff_view::metrics::FONT_SIZE;
 use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 
 use crate::changes_tree::{ChangesTree, Selection};
+use crate::commit_list::{CommitList, SelectCommit};
 use crate::file_diff::{FileDiffView, StepFile, Zoomed};
 use crate::message::{Level, Message};
+use crate::panel_size::{PanelHeight, PanelWidth};
 use crate::theme::UiTheme;
 use crate::watcher::Watcher;
 
+/// Det som hentes fra git i bakgrunnen.
+struct Loaded {
+    repo: Repo,
+    changes: Vec<FileChange>,
+    label: String,
+    commits: Vec<Commit>,
+}
+
 pub struct ChangesView {
     repo: Repo,
+    /// Commiten som vises. `None` er working tree.
+    commit: Option<String>,
     changes: Rc<[FileChange]>,
     selection: Entity<Selection>,
     tree: Entity<ChangesTree>,
     diff: Entity<FileDiffView>,
     message: Entity<Message>,
+    /// Bare for working tree.
+    commits: Option<Entity<CommitList>>,
+    theme: UiTheme,
+    scale: f32,
+    width: PanelWidth,
+    commits_height: PanelHeight,
     /// Det diffen viser nå. Samme innhold etter en reload lar posisjonen stå.
     shown: Option<(FileChange, Result<[String; 2], String>)>,
     _watcher: Option<Watcher>,
     _reload: Option<Task<()>>,
-    _subscriptions: [Subscription; 3],
+    _subscriptions: Vec<Subscription>,
 }
 
 impl ChangesView {
@@ -56,16 +75,25 @@ impl ChangesView {
             )
             .with_file_keys()
         });
-        let subscriptions = [
+        let commits = repo.is_work_tree().then(|| {
+            let list = repo.commits().unwrap_or_default();
+            cx.new(|_| CommitList::new(repo.label(), list, theme, family))
+        });
+        let mut subscriptions = vec![
             cx.observe(&selection, |this, _, cx| this.load(cx)),
             cx.subscribe(&diff, |this, _, e: &StepFile, cx| {
                 this.tree.update(cx, |t, cx| t.step(e.forward, cx))
             }),
             cx.subscribe(&diff, |this, _, e: &Zoomed, cx| {
-                this.tree
-                    .update(cx, |t, cx| t.set_font_size(e.font_size, cx))
+                this.zoomed(e.font_size, cx)
             }),
         ];
+        if let Some(commits) = &commits {
+            subscriptions.push(cx.subscribe(commits, |this, _, e: &SelectCommit, cx| {
+                this.commit = e.0.clone();
+                this.changed(Vec::new(), cx);
+            }));
+        }
         let watcher = repo
             .is_work_tree()
             .then(|| Watcher::new(repo.root(), cx, Self::changed))
@@ -78,11 +106,17 @@ impl ChangesView {
             });
         let mut view = Self {
             repo,
+            commit: None,
             changes,
             selection,
             tree,
             diff,
             message,
+            commits,
+            theme,
+            scale: 1.,
+            width: PanelWidth::default(),
+            commits_height: PanelHeight::default(),
             shown: None,
             _watcher: watcher,
             _reload: None,
@@ -92,16 +126,37 @@ impl ChangesView {
         view
     }
 
-    /// Git leses i bakgrunnen. En ny endring underveis avbryter den forrige.
+    fn zoomed(&mut self, font_size: f32, cx: &mut Context<Self>) {
+        self.scale = font_size / FONT_SIZE;
+        self.tree.update(cx, |t, cx| t.set_font_size(font_size, cx));
+        if let Some(commits) = &self.commits {
+            commits.update(cx, |c, cx| c.set_font_size(font_size, cx));
+        }
+    }
+
+    /// Git leses i bakgrunnen. En ny endring underveis avbryter den forrige. Commit-lista
+    /// hentes på nytt hver gang, siden working tree bestemmer hvilke commits den har.
     fn changed(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
         let root = self.repo.root().to_owned();
+        let commit = self.commit.clone();
         self._reload = Some(cx.spawn(async move |this, cx| {
             let loaded = cx
                 .background_executor()
                 .spawn(async move {
-                    let repo = Repo::work_tree(&root)?;
+                    let home = Repo::work_tree(&root)?;
+                    let label = home.label();
+                    let commits = home.commits()?;
+                    let repo = match commit {
+                        Some(hash) => Repo::commit(&root, &hash)?,
+                        None => home,
+                    };
                     let changes = repo.changes()?;
-                    Ok((repo, changes))
+                    Ok(Loaded {
+                        repo,
+                        changes,
+                        label,
+                        commits,
+                    })
                 })
                 .await;
             this.update(cx, |v, cx| v.reloaded(loaded, &paths, cx)).ok();
@@ -110,11 +165,16 @@ impl ChangesView {
 
     fn reloaded(
         &mut self,
-        loaded: Result<(Repo, Vec<FileChange>), String>,
+        loaded: Result<Loaded, String>,
         paths: &[String],
         cx: &mut Context<Self>,
     ) {
-        let (repo, changes) = match loaded {
+        let Loaded {
+            repo,
+            changes,
+            label,
+            commits,
+        } = match loaded {
             Ok(l) => l,
             Err(e) => {
                 self.message
@@ -122,7 +182,14 @@ impl ChangesView {
                 return;
             }
         };
-        let touched = smudiff_changes::touched(&self.changes, &changes, paths);
+        if let Some(list) = &self.commits {
+            list.update(cx, |l, cx| l.set_commits(label, commits, cx));
+        }
+        // En commit endrer seg ikke, og et bytte er ingen oppdatering
+        let touched = match self.commit {
+            None if !paths.is_empty() => smudiff_changes::touched(&self.changes, &changes, paths),
+            _ => 0,
+        };
         let selected = self.shown.as_ref().map(|(c, _)| c.path.clone());
         self.repo = repo;
         if *changes != *self.changes {
@@ -203,12 +270,44 @@ impl Focusable for ChangesView {
     }
 }
 
+impl ChangesView {
+    /// Treet med commitene under. Bredden følger treet.
+    fn side_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let viewport = window.viewport_size();
+        let unscaled = |v: gpui::Pixels| f32::from(v) / self.scale;
+        let content = self.tree.update(cx, |t, _| t.content_width(window));
+        let width = self.width.resolve(content, unscaled(viewport.width));
+        let mut panel = div()
+            .flex_none()
+            .w(px(width * self.scale))
+            .h_full()
+            .flex()
+            .flex_col()
+            .bg(self.theme.editor_bg)
+            .border_r_1()
+            .border_color(self.theme.indent_guide)
+            .child(div().flex_1().min_h_0().child(self.tree.clone()));
+        if let Some(commits) = self.commits.clone() {
+            let height = self.commits_height.resolve(unscaled(viewport.height));
+            let section = div()
+                .h(px(height * self.scale))
+                .border_t_1()
+                .border_color(self.theme.indent_guide)
+                .child(commits);
+            panel = PanelHeight::attach(panel, section, cx, |this| {
+                (&mut this.commits_height, this.scale)
+            });
+        }
+        PanelWidth::attach(panel, cx, |this| (&mut this.width, this.scale))
+    }
+}
+
 impl Render for ChangesView {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .flex()
-            .child(self.tree.clone())
+            .child(self.side_panel(window, cx))
             .child(div().flex_1().min_w_0().h_full().child(self.diff.clone()))
     }
 }

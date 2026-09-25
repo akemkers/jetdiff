@@ -107,10 +107,7 @@ fn load(source: &Source) -> Result<(Content, String), String> {
         Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
         Source::WorkTree(dir) => {
             let repo = Repo::work_tree(dir)?;
-            let title = match &repo.base {
-                Some(base) => format!("Endringer mot {base}"),
-                None => "Lokale endringer".into(),
-            };
+            let title = repo.label();
             (repo, title)
         }
     };
