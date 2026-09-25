@@ -126,7 +126,12 @@ fn verify(root: &Path, rev: &str) -> Option<String> {
 fn default_branch(root: &Path) -> Option<String> {
     let remote = git(
         root,
-        &["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+        &[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ],
     )
     .ok()
     .map(|s| s.trim_end().to_owned());

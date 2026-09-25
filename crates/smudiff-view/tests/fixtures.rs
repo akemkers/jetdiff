@@ -448,6 +448,7 @@ fn cursor_holder_seg_gyldig() {
         FoldOpen,
         ToggleFolds,
         NextContextRange,
+        CopyLocation,
     ];
     let small = Viewport {
         height: 60.,

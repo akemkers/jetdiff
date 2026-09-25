@@ -3,8 +3,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, Context, Entity, FocusHandle, Focusable, Render, SharedString, Subscription, Window, div,
-    prelude::*, px,
+    App, Context, Entity, FocusHandle, Focusable, Render, Subscription, Window, div, prelude::*,
 };
 use smudiff_changes::FileChange;
 use smudiff_git::Repo;
@@ -12,6 +11,7 @@ use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::file_diff::{FileDiffView, StepFile, Zoomed};
+use crate::message::{Level, Message};
 use crate::theme::UiTheme;
 
 pub struct ChangesView {
@@ -20,8 +20,7 @@ pub struct ChangesView {
     selection: Entity<Selection>,
     tree: Entity<ChangesTree>,
     diff: Entity<FileDiffView>,
-    /// Vises i stedet for diffen når filen ikke kan diffes.
-    notice: Option<SharedString>,
+    message: Entity<Message>,
     _subscriptions: [Subscription; 3],
 }
 
@@ -41,7 +40,18 @@ impl ChangesView {
         let selection = cx.new(|_| Selection(first));
         let tree =
             cx.new(|cx| ChangesTree::new(changes.clone(), selection.clone(), theme, family, cx));
-        let diff = cx.new(|cx| FileDiffView::new(empty_diff(), theme, family, cx).with_file_keys());
+        let message = cx.new(|_| Message::new(theme, family));
+        let diff = cx.new(|cx| {
+            FileDiffView::new(
+                empty_diff(),
+                Default::default(),
+                message.clone(),
+                theme,
+                family,
+                cx,
+            )
+            .with_file_keys()
+        });
         let subscriptions = [
             cx.observe(&selection, |this, _, cx| this.load(cx)),
             cx.subscribe(&diff, |this, _, e: &StepFile, cx| {
@@ -58,7 +68,7 @@ impl ChangesView {
             selection,
             tree,
             diff,
-            notice: None,
+            message,
             _subscriptions: subscriptions,
         };
         view.load(cx);
@@ -70,7 +80,7 @@ impl ChangesView {
         let (diff, notice) = match self.repo.read(change) {
             Err(e) => (empty_diff(), Some(e)),
             Ok([l, r]) if l.contains('\0') || r.contains('\0') => {
-                (empty_diff(), Some("Binærfil".to_owned()))
+                (empty_diff(), Some("Binærfil kan ikke vises".to_owned()))
             }
             Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
                 Ok(mut diff) => {
@@ -83,12 +93,16 @@ impl ChangesView {
                 }
                 Err(_) => (
                     empty_diff(),
-                    Some("Filen er for stor til å diffes".to_owned()),
+                    Some("Filen er for stor til å vises".to_owned()),
                 ),
             },
         };
-        self.notice = notice.map(Into::into);
-        self.diff.update(cx, |v, cx| v.set_diff(diff, cx));
+        self.message.update(cx, |m, cx| match notice {
+            Some(text) => m.pin(text, Level::Warning, cx),
+            None => m.unpin(cx),
+        });
+        let paths = [change.left_path().to_owned(), change.path.clone()];
+        self.diff.update(cx, |v, cx| v.set_diff(diff, paths, cx));
         cx.notify();
     }
 }
@@ -105,25 +119,10 @@ impl Focusable for ChangesView {
 
 impl Render for ChangesView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().flex().child(self.tree.clone()).child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .relative()
-                .child(self.diff.clone())
-                .when_some(self.notice.clone(), |d, notice| {
-                    d.child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(13.))
-                            .child(notice),
-                    )
-                }),
-        )
+        div()
+            .size_full()
+            .flex()
+            .child(self.tree.clone())
+            .child(div().flex_1().min_w_0().h_full().child(self.diff.clone()))
     }
 }

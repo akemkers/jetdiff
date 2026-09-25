@@ -28,6 +28,8 @@ pub enum Command {
     /// Åpner alle hvis noen er lukket, ellers lukkes alle.
     ToggleFolds,
     NextContextRange,
+    /// `fil:linje` for markert linje til utklippstavla.
+    CopyLocation,
     ZoomIn,
     ZoomOut,
     ResetZoom,

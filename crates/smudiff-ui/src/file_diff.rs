@@ -6,9 +6,9 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
-    Bounds, Context, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Keystroke, MouseButton,
-    MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window, actions,
-    canvas, div, prelude::*, px,
+    Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
+    Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render,
+    ScrollWheelEvent, SharedString, Window, actions, canvas, div, prelude::*, px,
 };
 use smudiff_core::side::Side;
 use smudiff_view::columns::display_width;
@@ -19,6 +19,7 @@ use smudiff_view::{
     stripe_markers,
 };
 
+use crate::message::{Level, Message};
 use crate::side_editor::{CaretRow, SideCache, SideEditor, StripeRects};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
@@ -31,13 +32,14 @@ const NAV_ANIMATION_MS: f32 = 170.;
 /// Høyden på tastelinja nederst.
 const HELP_HEIGHT: f32 = 24.;
 
-const HELP: [(&str, &str); 9] = [
+const HELP: [(&str, &str); 10] = [
     ("j k", "opp/ned"),
     ("h l", "sideveis"),
     ("d u", "scroll side"),
     ("n p", "hopp til endring"),
     ("o", "åpne fold"),
     ("f", "toggle folds"),
+    ("y", "kopier fil:linje"),
     ("H L", "venstre/høyre side"),
     ("gg G", "topp og bunn"),
     ("q", "avslutt"),
@@ -94,6 +96,9 @@ pub struct FileDiffView {
     /// Lengste linje i tegn, regnet én gang. Gir maks horisontal scroll uten å shape alt.
     max_cols: usize,
     file_keys: bool,
+    /// Venstre og høyre sti for `y`. Tom når det ikke finnes noen fil.
+    paths: [String; 2],
+    message: Entity<Message>,
     shared: Rc<Shared>,
     focus: FocusHandle,
 }
@@ -140,6 +145,8 @@ fn to_key(k: &Keystroke) -> Key {
 impl FileDiffView {
     pub fn new(
         diff: FileDiff,
+        paths: [String; 2],
+        message: Entity<Message>,
         theme: UiTheme,
         family: &'static str,
         cx: &mut Context<Self>,
@@ -158,6 +165,8 @@ impl FileDiffView {
             viewport_height: 0.,
             markers: Rc::new([Vec::new(), Vec::new()]),
             file_keys: false,
+            paths,
+            message,
             shared: Rc::new(Shared {
                 bounds: Cell::new(None),
                 caches: RefCell::new(new_caches()),
@@ -174,7 +183,8 @@ impl FileDiffView {
     }
 
     /// Ny fil i samme visning. Zoom beholdes, cursor og scroll starter på nytt.
-    pub fn set_diff(&mut self, diff: FileDiff, cx: &mut Context<Self>) {
+    pub fn set_diff(&mut self, diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) {
+        self.paths = paths;
         self.max_cols = max_cols(&diff);
         self.state = diff_state(diff);
         self.shown = ScrollState::default();
@@ -259,6 +269,16 @@ impl FileDiffView {
                 });
                 return;
             }
+            Command::CopyLocation => {
+                let c = self.state.location();
+                let path = &self.paths[idx(c.side)];
+                if !path.is_empty() {
+                    let location = format!("{path}:{}", c.line + 1);
+                    cx.write_to_clipboard(ClipboardItem::new_string(location.clone()));
+                    self.show_message(format!("Kopierte {location}"), cx);
+                }
+                return;
+            }
             _ => None,
         };
         if let Some(size) = size {
@@ -273,6 +293,25 @@ impl FileDiffView {
             return;
         };
         let out = self.state.execute(cmd, vp, self.horizontal());
+        if cmd == Command::NextContextRange {
+            let text = match self.state.folding.settings().context_range {
+                Some(1) => "Kontekst: 1 linje".into(),
+                Some(n) => format!("Kontekst: {n} linjer"),
+                None => "Folding av".into(),
+            };
+            self.show_message(text, cx);
+        }
+        if cmd == Command::ToggleFolds && out.changed {
+            let closed = self.state.folding.visible(Side::Left).next().is_some();
+            self.show_message(
+                if closed {
+                    "Folds lukket"
+                } else {
+                    "Folds åpnet"
+                },
+                cx,
+            );
+        }
         if !out.changed {
             return;
         }
@@ -286,6 +325,12 @@ impl FileDiffView {
             self.shown = self.state.scroll;
         }
         cx.notify();
+    }
+
+    fn show_message(&self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
+        let text = text.into();
+        self.message
+            .update(cx, |m, cx| m.show(text, Level::Info, cx));
     }
 
     /// Fra det som vises til målet. Midt i en animasjon starter den nye der den gamle står.
@@ -591,6 +636,11 @@ impl Render for FileDiffView {
                             .child(*what)
                     }),
             );
+        let footer = div()
+            .relative()
+            .flex_none()
+            .child(help)
+            .child(self.message.clone());
 
         div()
             .size_full()
@@ -672,7 +722,7 @@ impl Render for FileDiffView {
                 .flex_1()
                 .w_full(),
             )
-            .child(help)
+            .child(footer)
     }
 }
 

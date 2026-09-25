@@ -12,8 +12,8 @@ use gpui::{
 };
 use smudiff_git::Repo;
 use smudiff_ui::{
-    Assets, ChangesView, FileDiffView, NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut,
-    load_font,
+    Assets, ChangesView, FileDiffView, Message, NextContextRange, ResetZoom, UiTheme, ZoomIn,
+    ZoomOut, load_font,
 };
 use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 
@@ -80,7 +80,7 @@ fn bind_keys(cx: &mut App) {
 
 /// Det vinduet skal vise, klart før appen starter så feil kan skrives til terminalen.
 enum Content {
-    File(Box<FileDiff>),
+    File(Box<FileDiff>, [String; 2]),
     Changes(Repo, Vec<smudiff_changes::FileChange>),
 }
 
@@ -88,7 +88,9 @@ fn load(source: &Source) -> Result<(Content, String), String> {
     let (repo, title) = match source {
         Source::Files(left, right) => {
             let diff = file_diff(left, right)?;
-            return Ok((Content::File(Box::new(diff)), format!("{left} ↔ {right}")));
+            let title = format!("{left} ↔ {right}");
+            let paths = [left.clone(), right.clone()];
+            return Ok((Content::File(Box::new(diff), paths), title));
         }
         Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
         Source::WorkTree(dir) => {
@@ -172,8 +174,9 @@ fn main() -> ExitCode {
             bind_keys(cx);
             let family = load_font(cx);
             match content {
-                Content::File(diff) => open(cx, title, move |cx| {
-                    FileDiffView::new(*diff, theme, family, cx)
+                Content::File(diff, paths) => open(cx, title, move |cx| {
+                    let message = cx.new(|_| Message::new(theme, family));
+                    FileDiffView::new(*diff, paths, message, theme, family, cx)
                 }),
                 Content::Changes(repo, changes) => open(cx, title, move |cx| {
                     ChangesView::new(repo, changes, theme, family, cx)

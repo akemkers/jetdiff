@@ -117,6 +117,7 @@ fn command(key: Key) -> Option<Command> {
             'p' => PrevChange,
             'o' => FoldOpen,
             'f' => ToggleFolds,
+            'y' => CopyLocation,
             'q' => Quit,
             'G' => GoToBottom,
             'J' => NextFile,
@@ -180,6 +181,7 @@ mod tests {
         assert_eq!(last(&chars("p")), c(PrevChange));
         assert_eq!(last(&chars("o")), c(FoldOpen));
         assert_eq!(last(&chars("f")), c(ToggleFolds));
+        assert_eq!(last(&chars("y")), c(CopyLocation));
         assert_eq!(last(&chars("q")), c(Quit));
         assert_eq!(last(&chars("G")), c(GoToBottom));
         assert_eq!(last(&chars("J")), c(NextFile));

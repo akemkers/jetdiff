@@ -83,6 +83,10 @@ pub struct Theme {
     pub scrollbar_thumb: Rgba,
     /// `Tree.selectionBackground`.
     pub tree_selection: Rgba,
+    /// Beskjed over tastelinja. Advarsler er gule.
+    pub message_bg: Rgba,
+    pub warning_bg: Rgba,
+    pub message_fg: Rgba,
     /// `FileStatus` ADDED, DELETED og MODIFIED. Rename bruker MODIFIED.
     pub file_added: Rgba,
     pub file_deleted: Rgba,
@@ -111,6 +115,9 @@ impl Theme {
             separator_wave: rgb(0x555555),
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x2E436E),
+            message_bg: rgb(0x73BD79),
+            warning_bg: rgb(0xD5B778),
+            message_fg: bg,
             file_added: rgb(0x73BD79),
             file_deleted: rgb(0x6F737A),
             file_modified: rgb(0x70AEFF),
@@ -153,6 +160,9 @@ impl Theme {
             separator_wave: rgb(0xD0D0D0),
             scrollbar_thumb: [0x00, 0x00, 0x00, 0x33],
             tree_selection: rgb(0xD5E1FF),
+            message_bg: rgb(0xBEE6BE),
+            warning_bg: rgb(0xF5D98B),
+            message_fg: rgb(0x080808),
             file_added: rgb(0x067D17),
             file_deleted: rgb(0x6C707E),
             file_modified: rgb(0x0033B3),

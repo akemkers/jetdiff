@@ -264,7 +264,9 @@ impl DiffState {
                 })
             }
             // Zoom og avslutning eies av UI-et. Etter zoom kalles `rescale`.
-            NextFile | PrevFile | ZoomIn | ZoomOut | ResetZoom | Quit => Outcome::default(),
+            NextFile | PrevFile | CopyLocation | ZoomIn | ZoomOut | ResetZoom | Quit => {
+                Outcome::default()
+            }
         }
     }
 
@@ -334,6 +336,16 @@ impl DiffState {
     /// `TwosideTextDiffViewer.transferPosition`, uten kolonne.
     pub fn transferred_cursor(&self) -> Cursor {
         Cursor::new(self.cursor.side.other(), self.transferred_line())
+    }
+
+    /// Markert linje i nyeste versjon, siden det er den som finnes på disk. Slettede filer
+    /// har bare venstre side.
+    pub fn location(&self) -> Cursor {
+        if self.cursor.side == Side::Right || self.diff.single_side().is_some() {
+            self.cursor
+        } else {
+            self.transferred_cursor()
+        }
     }
 
     /// `MyFocusOppositePaneAction`: cursoren flyttes, siden blir master, og så
@@ -602,6 +614,17 @@ mod tests {
         s.execute(NextChange, vp, NO_X);
         let t = target_for_block(&s.diff, &s.folding, 1, vp);
         assert_eq!(s.scroll.y, t.scroll_y);
+    }
+
+    #[test]
+    fn plassering_er_i_nyeste_versjon() {
+        let mut s = state("x\nny1\nny2\nfelles\n", "x\nfelles\n", false);
+        s.click(L, 3);
+        assert_eq!(s.location(), Cursor::new(R, 1));
+        s.click(R, 0);
+        assert_eq!(s.location(), Cursor::new(R, 0));
+        let s = state("a\nb\n", "", false);
+        assert_eq!(s.location(), Cursor::new(L, 0));
     }
 
     #[test]
