@@ -38,7 +38,7 @@ pub struct ChangesTree {
     rows: Rc<[Row]>,
     selection: Entity<Selection>,
     theme: UiTheme,
-    family: &'static str,
+    font_family: &'static str,
     scroll: UniformListScrollHandle,
     /// Følger zoomen i diffen, som hele UI-et i IntelliJ.
     scale: f32,
@@ -55,7 +55,7 @@ impl ChangesTree {
         changes: Rc<[FileChange]>,
         selection: Entity<Selection>,
         theme: UiTheme,
-        family: &'static str,
+        font_family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
         let tree = ChangeTree::new(&changes);
@@ -66,7 +66,7 @@ impl ChangesTree {
             tree,
             selection,
             theme,
-            family,
+            font_family,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
             content_width: None,
@@ -134,7 +134,7 @@ impl ChangesTree {
     /// Bredden innholdet trenger, uskalert.
     pub fn content_width(&mut self, window: &Window) -> f32 {
         *self.content_width.get_or_insert_with(|| {
-            let char_width = TextStyle::new(self.family, TEXT_SIZE, window).char_width;
+            let char_width = TextStyle::new(self.font_family, TEXT_SIZE, window).char_width;
             content_width(&self.changes, char_width)
         })
     }
@@ -245,7 +245,7 @@ impl Render for ChangesTree {
             .size_full()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))
-            .font_family(self.family)
+            .font_family(self.font_family)
             .text_size(px(TEXT_SIZE * self.scale))
             .text_color(self.theme.editor_fg)
             .child(

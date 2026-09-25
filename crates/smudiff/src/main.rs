@@ -188,13 +188,13 @@ fn main() -> ExitCode {
         .with_assets(Assets)
         .run(move |cx: &mut App| {
             bind_keys(cx);
-            let family = load_font(cx);
+            let font_family = load_font(cx);
             match content {
                 Content::File(diff, paths) => open(cx, title, move |cx| {
-                    FileDiffView::standalone(*diff, paths, theme, family, cx)
+                    FileDiffView::standalone(*diff, paths, theme, font_family, cx)
                 }),
                 Content::Changes(repo, changes) => open(cx, title, move |cx| {
-                    ChangesView::new(repo, changes, theme, family, cx)
+                    ChangesView::new(repo, changes, theme, font_family, cx)
                 }),
             }
             cx.on_window_closed(|cx| cx.quit()).detach();

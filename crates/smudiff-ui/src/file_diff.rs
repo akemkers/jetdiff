@@ -83,7 +83,7 @@ struct Shared {
 pub struct FileDiffView {
     state: DiffState,
     theme: UiTheme,
-    family: &'static str,
+    font_family: &'static str,
     font_size: f32,
     style: Option<TextStyle>,
     /// Det som vises nå. Under en animasjon ligger den etter `state.scroll`, som er målet.
@@ -149,11 +149,11 @@ impl FileDiffView {
         diff: FileDiff,
         paths: [String; 2],
         theme: UiTheme,
-        family: &'static str,
+        font_family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
-        let message = cx.new(|_| Message::new(theme, family));
-        Self::new(diff, paths, message, theme, family, cx)
+        let message = cx.new(|_| Message::new(theme, font_family));
+        Self::new(diff, paths, message, theme, font_family, cx)
     }
 
     pub(crate) fn new(
@@ -161,14 +161,14 @@ impl FileDiffView {
         paths: [String; 2],
         message: Entity<Message>,
         theme: UiTheme,
-        family: &'static str,
+        font_family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
             max_cols: max_cols(&diff),
             state: diff_state(diff),
             theme,
-            family,
+            font_family,
             font_size: FONT_SIZE,
             style: None,
             shown: ScrollState::default(),
@@ -222,11 +222,11 @@ impl FileDiffView {
         if self
             .style
             .as_ref()
-            .is_some_and(|s| s.font.family == self.family && s.font_size == px(self.font_size))
+            .is_some_and(|s| s.font.family == self.font_family && s.font_size == px(self.font_size))
         {
             return;
         }
-        let style = TextStyle::new(self.family, self.font_size, window);
+        let style = TextStyle::new(self.font_family, self.font_size, window);
         // Nøkkelen har fontstørrelsen, så zoom tømmer cachen
         let mut caches = self.shared.caches.borrow_mut();
         for cache in caches.iter_mut() {
@@ -632,7 +632,7 @@ impl Render for FileDiffView {
             .gap_y(px(2.))
             .items_center()
             .bg(theme.editor_bg)
-            .font_family(self.family)
+            .font_family(self.font_family)
             .text_size(px(12.))
             .text_color(theme.line_number)
             .children(

@@ -10,9 +10,7 @@ use gpui::{
 };
 use smudiff_git::Commit;
 
-use crate::list::{
-    GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key, row_bg, step,
-};
+use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, TEXT_SIZE, list_key, row_bg, step};
 use crate::theme::UiTheme;
 
 /// Plass til meldingen med alderen under.
@@ -33,7 +31,7 @@ pub struct CommitList {
     /// Raden j og k flytter, som hash. Enter åpner den.
     cursor: Option<String>,
     theme: UiTheme,
-    family: &'static str,
+    font_family: &'static str,
     scroll: UniformListScrollHandle,
     scale: f32,
     focus: FocusHandle,
@@ -46,7 +44,7 @@ impl CommitList {
         label: String,
         commits: Vec<Commit>,
         theme: UiTheme,
-        family: &'static str,
+        font_family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
@@ -55,7 +53,7 @@ impl CommitList {
             selected: None,
             cursor: None,
             theme,
-            family,
+            font_family,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
             focus: cx.focus_handle(),
@@ -232,19 +230,9 @@ impl Render for CommitList {
             .flex_col()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))
-            .font_family(self.family)
+            .font_family(self.font_family)
             .text_size(s(TEXT_SIZE))
             .text_color(self.theme.editor_fg)
-            .child(
-                div()
-                    .flex_none()
-                    .h(s(ROW_HEIGHT))
-                    .flex()
-                    .items_center()
-                    .pl(s(PAD_LEFT))
-                    .text_color(self.theme.line_number)
-                    .child("Commits"),
-            )
             .child(
                 uniform_list(
                     "commits",

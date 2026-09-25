@@ -4,8 +4,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, Context, Div, Entity, FocusHandle, Focusable, Render, Subscription, Task, Window, actions,
-    div, prelude::*, px,
+    App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
+    Window, actions, div, prelude::*, px,
 };
 use smudiff_changes::FileChange;
 use smudiff_git::{Commit, Repo};
@@ -15,6 +15,7 @@ use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
 use crate::file_diff::{FileDiffView, ResetZoom, StepFile, ZoomIn, ZoomOut, Zoomed};
+use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::message::{Level, Message};
 use crate::panel_size::{PanelHeight, PanelWidth};
 use crate::theme::UiTheme;
@@ -46,7 +47,11 @@ pub struct ChangesView {
     /// Bare for working tree.
     commits: Option<Entity<CommitList>>,
     theme: UiTheme,
+    font_family: &'static str,
     scale: f32,
+    /// Seksjonene i sidepanelet kan klappes sammen til bare overskriften.
+    files_open: bool,
+    commits_open: bool,
     width: PanelWidth,
     commits_height: PanelHeight,
     /// Det diffen viser nå. Samme innhold etter en reload lar posisjonen stå.
@@ -61,22 +66,22 @@ impl ChangesView {
         repo: Repo,
         changes: Vec<FileChange>,
         theme: UiTheme,
-        family: &'static str,
+        font_family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
         let changes: Rc<[FileChange]> = changes.into();
         let first = smudiff_changes::ChangeTree::new(&changes).first();
         let selection = cx.new(|_| Selection(first));
-        let tree =
-            cx.new(|cx| ChangesTree::new(changes.clone(), selection.clone(), theme, family, cx));
-        let message = cx.new(|_| Message::new(theme, family));
+        let tree = cx
+            .new(|cx| ChangesTree::new(changes.clone(), selection.clone(), theme, font_family, cx));
+        let message = cx.new(|_| Message::new(theme, font_family));
         let diff = cx.new(|cx| {
             FileDiffView::new(
                 empty_diff(),
                 Default::default(),
                 message.clone(),
                 theme,
-                family,
+                font_family,
                 cx,
             )
             .with_file_keys()
@@ -97,7 +102,7 @@ impl ChangesView {
                 message.update(cx, |m, cx| m.show(e, Level::Warning, cx));
                 Vec::new()
             });
-            let list = cx.new(|cx| CommitList::new(repo.label(), list, theme, family, cx));
+            let list = cx.new(|cx| CommitList::new(repo.label(), list, theme, font_family, cx));
             subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectCommit, cx| {
                 this.commit = e.0.clone();
                 this.changed(Vec::new(), cx);
@@ -123,7 +128,10 @@ impl ChangesView {
             message,
             commits,
             theme,
+            font_family,
             scale: 1.,
+            files_open: true,
+            commits_open: true,
             width: PanelWidth::default(),
             commits_height: PanelHeight::default(),
             shown: None,
@@ -258,9 +266,19 @@ impl ChangesView {
         cx.notify();
     }
 
+    /// Treet og commit-lista, bare de som er åpne.
+    fn open_panes(&self, cx: &App) -> (Option<FocusHandle>, Option<FocusHandle>) {
+        let tree = self.files_open.then(|| self.tree.focus_handle(cx));
+        let commits = self.commits.as_ref().filter(|_| self.commits_open);
+        (tree, commits.map(|c| c.focus_handle(cx)))
+    }
+
     fn focus_left(&mut self, _: &FocusLeft, window: &mut Window, cx: &mut Context<Self>) {
         if self.diff.focus_handle(cx).is_focused(window) {
-            window.focus(&self.tree.focus_handle(cx));
+            let (tree, commits) = self.open_panes(cx);
+            if let Some(pane) = tree.or(commits) {
+                window.focus(&pane);
+            }
         }
     }
 
@@ -269,21 +287,55 @@ impl ChangesView {
     }
 
     fn focus_down(&mut self, _: &FocusDown, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(commits) = &self.commits
-            && self.tree.focus_handle(cx).is_focused(window)
+        if let (Some(tree), Some(commits)) = self.open_panes(cx)
+            && tree.is_focused(window)
         {
-            window.focus(&commits.focus_handle(cx));
+            window.focus(&commits);
         }
     }
 
     fn focus_up(&mut self, _: &FocusUp, window: &mut Window, cx: &mut Context<Self>) {
-        if self
-            .commits
-            .as_ref()
-            .is_some_and(|c| c.focus_handle(cx).is_focused(window))
+        if let (Some(tree), Some(commits)) = self.open_panes(cx)
+            && commits.is_focused(window)
         {
-            window.focus(&self.tree.focus_handle(cx));
+            window.focus(&tree);
         }
+    }
+
+    /// Overskrift med + eller −. Klikk klapper seksjonen sammen eller opp.
+    fn heading(
+        &self,
+        title: &'static str,
+        open: bool,
+        cx: &mut Context<Self>,
+        toggle: fn(&mut Self) -> &mut bool,
+    ) -> Stateful<Div> {
+        let s = |v: f32| px(v * self.scale);
+        div()
+            .id(title)
+            .flex_none()
+            .h(s(ROW_HEIGHT))
+            .flex()
+            .items_center()
+            .gap(s(GAP))
+            .pl(s(PAD_LEFT))
+            .text_color(self.theme.line_number)
+            .cursor_pointer()
+            .child(title)
+            .child(if open { "−" } else { "+" })
+            .on_click(cx.listener(move |this, _, window, cx| {
+                let open = toggle(this);
+                *open = !*open;
+                // Fokus i en lukket seksjon går til diffen
+                let tree = this.tree.focus_handle(cx);
+                let commits = this.commits.as_ref().map(|c| c.focus_handle(cx));
+                let hidden = (!this.files_open && tree.is_focused(window))
+                    || (!this.commits_open && commits.is_some_and(|c| c.is_focused(window)));
+                if hidden {
+                    window.focus(&this.diff.focus_handle(cx));
+                }
+                cx.notify();
+            }))
     }
 
     /// Treet med commitene under. Bredden følger treet.
@@ -301,17 +353,36 @@ impl ChangesView {
             .bg(self.theme.editor_bg)
             .border_r_1()
             .border_color(self.theme.indent_guide)
-            .child(div().flex_1().min_h_0().child(self.tree.clone()));
+            .font_family(self.font_family)
+            .text_size(px(TEXT_SIZE * self.scale))
+            .child(self.heading("Filer", self.files_open, cx, |this| &mut this.files_open))
+            .when(self.files_open, |d| {
+                d.child(div().flex_1().min_h_0().child(self.tree.clone()))
+            });
         if let Some(commits) = self.commits.clone() {
-            let height = self.commits_height.resolve(unscaled(viewport.height));
             let section = div()
-                .h(px(height * self.scale))
+                .flex()
+                .flex_col()
                 .border_t_1()
                 .border_color(self.theme.indent_guide)
-                .child(commits);
-            panel = PanelHeight::attach(panel, section, cx, |this| {
-                (&mut this.commits_height, this.scale)
-            });
+                .child(self.heading("Commits", self.commits_open, cx, |this| {
+                    &mut this.commits_open
+                }))
+                .when(self.commits_open, |d| {
+                    d.child(div().flex_1().min_h_0().child(commits))
+                });
+            // Lukket legger seksjonen seg nederst. Uten treet tar commitene resten.
+            panel = match (self.files_open, self.commits_open) {
+                (true, true) => {
+                    let height = self.commits_height.resolve(unscaled(viewport.height));
+                    PanelHeight::attach(panel, section.h(px(height * self.scale)), cx, |this| {
+                        (&mut this.commits_height, this.scale)
+                    })
+                }
+                (false, true) => panel.child(section.flex_1().min_h_0()),
+                (true, false) => panel.child(section),
+                (false, false) => panel.child(div().flex_1()).child(section),
+            };
         }
         PanelWidth::attach(panel, cx, |this| (&mut this.width, this.scale))
     }

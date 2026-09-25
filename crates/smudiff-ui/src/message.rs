@@ -23,17 +23,17 @@ pub struct Message {
     /// En ny kort beskjed erstatter den, og den gamle timeren droppes.
     timer: Option<Task<()>>,
     theme: UiTheme,
-    family: &'static str,
+    font_family: &'static str,
 }
 
 impl Message {
-    pub fn new(theme: UiTheme, family: &'static str) -> Self {
+    pub fn new(theme: UiTheme, font_family: &'static str) -> Self {
         Self {
             pinned: None,
             brief: None,
             timer: None,
             theme,
-            family,
+            font_family,
         }
     }
 
@@ -79,7 +79,7 @@ impl Render for Message {
                             Level::Warning => theme.warning_bg,
                         })
                         .text_color(theme.message_fg)
-                        .font_family(self.family)
+                        .font_family(self.font_family)
                         .text_size(px(12.))
                         .child(text)
                 }),

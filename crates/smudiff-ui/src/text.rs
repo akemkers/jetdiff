@@ -39,11 +39,11 @@ pub struct TextStyle {
 }
 
 impl TextStyle {
-    pub fn new(family: &'static str, size: f32, window: &Window) -> Self {
+    pub fn new(font_family: &'static str, size: f32, window: &Window) -> Self {
         let font = Font {
             // Ingen ligaturer i diff, som IntelliJ sin default
             features: FontFeatures::disable_ligatures(),
-            ..font(family)
+            ..font(font_family)
         };
         let ts = window.text_system();
         let id = ts.resolve_font(&font);
