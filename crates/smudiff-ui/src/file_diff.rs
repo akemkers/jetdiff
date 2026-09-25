@@ -38,7 +38,7 @@ const HELP: [(&str, &str); 9] = [
     ("n p", "hopp til endring"),
     ("o", "åpne fold"),
     ("f", "toggle folds"),
-    ("Tab", "bytt side"),
+    ("H L", "venstre/høyre side"),
     ("gg G", "topp og bunn"),
     ("q", "avslutt"),
 ];
@@ -549,7 +549,7 @@ impl Render for FileDiffView {
         let markers = self.markers.clone();
         let shared = self.shared.clone();
 
-        // Den andre siden viser overført linje svakere, så man ser hvor Tab lander.
+        // Den andre siden viser overført linje svakere, så man ser hvor H og L lander.
         // IntelliJ har caret row bare på aktiv side.
         let focused = self.focus.is_focused(window) && window.is_window_active();
         let cursor = self.state.cursor;
@@ -582,7 +582,7 @@ impl Render for FileDiffView {
                     .then_some(&FILE_HELP)
                     .into_iter()
                     .chain(&HELP)
-                    .filter(|(keys, _)| !(single && *keys == "Tab"))
+                    .filter(|(keys, _)| !(single && *keys == "H L"))
                     .map(|(keys, what)| {
                         div()
                             .flex()

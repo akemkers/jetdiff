@@ -37,14 +37,14 @@ Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert l
 
 | Tast | Gjør |
 | --- | --- |
-| `J` `K` | Neste og forrige fil i treet |
+| `J` `K`, Tab Shift+Tab | Neste og forrige fil i treet |
 | `j` `k`, pil opp og ned | Flytt markert linje. Hopper over lukkede folds |
 | `h` `l`, pil venstre og høyre | Scroll sideveis 4 tegn |
 | `0` `$` | Scroll til linjestart og til slutten av markert linje |
 | `gg` `G` | Første og siste linje |
 | `d` `u`, Ctrl+d Ctrl+u | Halv side ned og opp |
 | `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Neste og forrige endring |
-| Tab | Bytt side |
+| `H` `L` | Til venstre og høyre side |
 | `o` | Åpne fold ved markert linje ett nivå |
 | `f` | Åpne alle folds, eller lukk alle hvis ingen er lukket |
 | Cmd+Pluss Cmd+Minus Cmd+0 | Zoom inn, ut og tilbake til 16pt. Treet følger med |

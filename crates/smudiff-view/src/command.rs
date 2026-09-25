@@ -1,5 +1,7 @@
 //! Alt brukeren kan be diffen om. Tastene oversettes hit i `keys`, og `DiffState` utfører.
 
+use smudiff_core::side::Side;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     MoveDown,
@@ -19,7 +21,8 @@ pub enum Command {
     /// Neste fil i treet. Gjør ingenting når bare én fil vises.
     NextFile,
     PrevFile,
-    SwitchSide,
+    /// Gjør ingenting når bare én side vises, eller siden alt er aktiv.
+    FocusSide(Side),
     /// Ett nivå, som `ExpandRegionAction`.
     FoldOpen,
     /// Åpner alle hvis noen er lukket, ellers lukkes alle.

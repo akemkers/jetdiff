@@ -250,7 +250,7 @@ impl DiffState {
             HalfPageUp => self.half_page(-1, vp),
             NextChange => self.change(true, vp),
             PrevChange => self.change(false, vp),
-            SwitchSide => self.switch_side(vp),
+            FocusSide(side) => self.focus_side(side, vp),
             FoldOpen => self.change_folding(vp, |s, f| f.expand_at(s.0, s.1)),
             ToggleFolds => self.change_folding(vp, |_, f| {
                 let any_closed = f.visible(Side::Left).next().is_some();
@@ -338,8 +338,8 @@ impl DiffState {
 
     /// `MyFocusOppositePaneAction`: cursoren flyttes, siden blir master, og så
     /// `scrollToCaret(MAKE_VISIBLE)`.
-    fn switch_side(&mut self, vp: Viewport) -> Outcome {
-        if self.diff.single_side().is_some() {
+    fn focus_side(&mut self, side: Side, vp: Viewport) -> Outcome {
+        if self.diff.single_side().is_some() || self.cursor.side == side {
             return Outcome::default();
         }
         self.cursor = self.transferred_cursor();
@@ -608,7 +608,7 @@ mod tests {
     fn slettet_fil_vises_alene() {
         let mut s = state("a\nb\n", "", false);
         assert_eq!((s.cursor.side, s.master), (L, L));
-        run(&mut s, SwitchSide);
+        run(&mut s, FocusSide(R));
         assert_eq!(s.cursor.side, L);
     }
 
@@ -619,16 +619,17 @@ mod tests {
         let b = "x\nfelles æøå\ny\n";
         let mut s = state(a, b, false);
         s.click(L, 4);
-        let out = run(&mut s, SwitchSide);
+        assert!(!run(&mut s, FocusSide(L)).animate);
+        let out = run(&mut s, FocusSide(R));
         assert!(out.animate);
         assert_eq!((s.cursor.side, s.cursor.line), (R, 1));
         assert_eq!(s.master, R);
         // Linje i en blokk som er tom på høyre side går til linja etter
         s.click(L, 2);
-        run(&mut s, SwitchSide);
+        run(&mut s, FocusSide(R));
         assert_eq!((s.cursor.side, s.cursor.line), (R, 1));
         // `transferLine` på starten av en tom blokk gir starten av blokken på andre siden
-        run(&mut s, SwitchSide);
+        run(&mut s, FocusSide(L));
         assert_eq!((s.cursor.side, s.cursor.line), (L, 1));
     }
 

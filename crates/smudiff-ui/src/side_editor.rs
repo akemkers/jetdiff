@@ -85,7 +85,7 @@ pub struct SideEditor<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CaretRow {
     pub line: usize,
-    /// Aktiv side med fokus får full farge, så man ser hvor Tab og `o` virker.
+    /// Aktiv side med fokus får full farge, så man ser hvor `o` virker.
     pub active: bool,
 }
 

@@ -1,6 +1,8 @@
 //! Tastetrykk til `Command`. Et lite, vim-inspirert keymap for lesing. Ikke vim-kompatibelt:
 //! vi velger taster som er lette å nå, også på norsk tastatur. Kun `g` venter på neste tast.
 
+use smudiff_core::side::Side;
+
 use crate::command::Command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,9 +121,12 @@ fn command(key: Key) -> Option<Command> {
             'G' => GoToBottom,
             'J' => NextFile,
             'K' => PrevFile,
+            'H' => FocusSide(Side::Left),
+            'L' => FocusSide(Side::Right),
             _ => return None,
         },
-        KeyCode::Tab => SwitchSide,
+        KeyCode::Tab if key.shift => PrevFile,
+        KeyCode::Tab => NextFile,
         KeyCode::Down => MoveDown,
         KeyCode::Up => MoveUp,
         KeyCode::Left => ScrollLeft,
@@ -179,8 +184,11 @@ mod tests {
         assert_eq!(last(&chars("G")), c(GoToBottom));
         assert_eq!(last(&chars("J")), c(NextFile));
         assert_eq!(last(&chars("K")), c(PrevFile));
+        assert_eq!(last(&chars("H")), c(FocusSide(Side::Left)));
+        assert_eq!(last(&chars("L")), c(FocusSide(Side::Right)));
         assert_eq!(last(&chars("gg")), c(GoToTop));
-        assert_eq!(last(&[Key::new(KeyCode::Tab)]), c(SwitchSide));
+        assert_eq!(last(&[Key::new(KeyCode::Tab)]), c(NextFile));
+        assert_eq!(last(&[Key::new(KeyCode::Tab).shift()]), c(PrevFile));
     }
 
     #[test]

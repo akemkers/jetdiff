@@ -47,7 +47,7 @@ smudiff-ui       GPUI
 smudiff          binær: CLI
 ```
 
-Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy og kontekstnivå. Treet skriver til `Selection` ved klikk, og diff-viewen følger den. `J`/`K` i diffen sender et event som treet flytter valget for. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.
+Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy og kontekstnivå. Treet skriver til `Selection` ved klikk, og diff-viewen følger den. `J`/`K` og Tab i diffen sender et event som treet flytter valget for. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.
 
 Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, folding og geometri skal kunne testes uten vindu. `ui` skal bare tegne det `view` sier.
 
