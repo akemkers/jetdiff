@@ -25,6 +25,7 @@ actions!(smudiff, [FocusLeft, FocusDown, FocusUp, FocusRight]);
 
 /// Det som hentes fra git i bakgrunnen.
 struct Loaded {
+    commit: Option<String>,
     repo: Repo,
     changes: Vec<FileChange>,
     label: String,
@@ -33,8 +34,10 @@ struct Loaded {
 
 pub struct ChangesView {
     repo: Repo,
-    /// Commiten som vises. `None` er working tree.
+    /// Commiten som skal vises. `None` er working tree.
     commit: Option<String>,
+    /// Commiten `changes` er fra. Blir lik `commit` når lastingen er ferdig.
+    loaded_commit: Option<String>,
     changes: Rc<[FileChange]>,
     selection: Entity<Selection>,
     tree: Entity<ChangesTree>,
@@ -78,10 +81,6 @@ impl ChangesView {
             )
             .with_file_keys()
         });
-        let commits = repo.is_work_tree().then(|| {
-            let list = repo.commits().unwrap_or_default();
-            cx.new(|cx| CommitList::new(repo.label(), list, theme, family, cx))
-        });
         let mut subscriptions = vec![
             cx.observe(&selection, |this, _, cx| this.load(cx)),
             cx.subscribe(&diff, |this, _, e: &StepFile, cx| {
@@ -91,25 +90,32 @@ impl ChangesView {
                 this.zoomed(e.font_size, cx)
             }),
         ];
-        if let Some(commits) = &commits {
-            subscriptions.push(cx.subscribe(commits, |this, _, e: &SelectCommit, cx| {
+
+        let (mut commits, mut watcher) = (None, None);
+        if repo.is_work_tree() {
+            let list = repo.commits().unwrap_or_else(|e| {
+                message.update(cx, |m, cx| m.show(e, Level::Warning, cx));
+                Vec::new()
+            });
+            let list = cx.new(|cx| CommitList::new(repo.label(), list, theme, family, cx));
+            subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectCommit, cx| {
                 this.commit = e.0.clone();
                 this.changed(Vec::new(), cx);
             }));
-        }
-        let watcher = repo
-            .is_work_tree()
-            .then(|| Watcher::new(repo.root(), cx, Self::changed))
-            .and_then(|w| {
-                w.map_err(|e| {
+            commits = Some(list);
+            match Watcher::new(repo.root(), cx, Self::changed) {
+                Ok(w) => watcher = Some(w),
+                Err(e) => {
                     let text = format!("Følger ikke endringer: {e}");
                     message.update(cx, |m, cx| m.show(text, Level::Warning, cx));
-                })
-                .ok()
-            });
+                }
+            }
+        }
+
         let mut view = Self {
             repo,
             commit: None,
+            loaded_commit: None,
             changes,
             selection,
             tree,
@@ -131,9 +137,10 @@ impl ChangesView {
 
     fn zoomed(&mut self, font_size: f32, cx: &mut Context<Self>) {
         self.scale = font_size / FONT_SIZE;
-        self.tree.update(cx, |t, cx| t.set_font_size(font_size, cx));
+        let scale = self.scale;
+        self.tree.update(cx, |t, cx| t.set_scale(scale, cx));
         if let Some(commits) = &self.commits {
-            commits.update(cx, |c, cx| c.set_font_size(font_size, cx));
+            commits.update(cx, |c, cx| c.set_scale(scale, cx));
         }
     }
 
@@ -149,12 +156,13 @@ impl ChangesView {
                     let home = Repo::work_tree(&root)?;
                     let label = home.label();
                     let commits = home.commits()?;
-                    let repo = match commit {
-                        Some(hash) => Repo::commit(&root, &hash)?,
+                    let repo = match &commit {
+                        Some(hash) => Repo::commit(&root, hash)?,
                         None => home,
                     };
                     let changes = repo.changes()?;
                     Ok(Loaded {
+                        commit,
                         repo,
                         changes,
                         label,
@@ -173,6 +181,7 @@ impl ChangesView {
         cx: &mut Context<Self>,
     ) {
         let Loaded {
+            commit,
             repo,
             changes,
             label,
@@ -180,6 +189,12 @@ impl ChangesView {
         } = match loaded {
             Ok(l) => l,
             Err(e) => {
+                // Lista skal vise det som faktisk vises
+                self.commit = self.loaded_commit.clone();
+                if let Some(list) = &self.commits {
+                    let shown = self.commit.clone();
+                    list.update(cx, |l, cx| l.set_selected(shown, cx));
+                }
                 self.message
                     .update(cx, |m, cx| m.show(e, Level::Warning, cx));
                 return;
@@ -188,13 +203,16 @@ impl ChangesView {
         if let Some(list) = &self.commits {
             list.update(cx, |l, cx| l.set_commits(label, commits, cx));
         }
-        // En commit endrer seg ikke, og et bytte er ingen oppdatering
-        let touched = match self.commit {
-            None if !paths.is_empty() => smudiff_changes::touched(&self.changes, &changes, paths),
-            _ => 0,
+        // Bare working tree mot working tree er en oppdatering. En commit endrer seg ikke.
+        let same_work_tree = commit.is_none() && self.loaded_commit.is_none();
+        let touched = if same_work_tree && !paths.is_empty() {
+            smudiff_changes::touched(&self.changes, &changes, paths)
+        } else {
+            0
         };
         let selected = self.shown.as_ref().map(|(c, _)| c.path.clone());
         self.repo = repo;
+        self.loaded_commit = commit;
         if *changes != *self.changes {
             let changes: Rc<[FileChange]> = changes.into();
             self.changes = changes.clone();
@@ -204,10 +222,7 @@ impl ChangesView {
         let file = selected
             .and_then(|p| self.changes.iter().position(|c| c.path == p))
             .or_else(|| self.tree.read(cx).first());
-        self.selection.update(cx, |s, cx| {
-            s.0 = file;
-            cx.notify();
-        });
+        self.selection.update(cx, |s, cx| s.set(file, cx));
         if touched > 0 {
             let text = match touched {
                 1 => "Oppdatert: 1 fil endret".to_owned(),
@@ -233,26 +248,7 @@ impl ChangesView {
             return;
         }
         self.shown = shown;
-        let (diff, notice) = match content {
-            Err(e) => (empty_diff(), Some(e)),
-            Ok([l, r]) if l.contains('\0') || r.contains('\0') => {
-                (empty_diff(), Some("Binærfil kan ikke vises".to_owned()))
-            }
-            Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
-                Ok(mut diff) => {
-                    let lang = Language::from_path(&change.path)
-                        .or_else(|| Language::from_path(change.left_path()));
-                    if let Some(lang) = lang {
-                        diff.highlight_syntax(lang);
-                    }
-                    (diff, None)
-                }
-                Err(_) => (
-                    empty_diff(),
-                    Some("Filen er for stor til å vises".to_owned()),
-                ),
-            },
-        };
+        let (diff, notice) = build_diff(&change, content);
         self.message.update(cx, |m, cx| match notice {
             Some(text) => m.pin(text, Level::Warning, cx),
             None => m.unpin(cx),
@@ -261,19 +257,7 @@ impl ChangesView {
         self.diff.update(cx, |v, cx| v.set_diff(diff, paths, cx));
         cx.notify();
     }
-}
 
-fn empty_diff() -> FileDiff {
-    FileDiff::new("", "", ComparisonPolicy::Default).expect("tom diff er aldri for stor")
-}
-
-impl Focusable for ChangesView {
-    fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.diff.focus_handle(cx)
-    }
-}
-
-impl ChangesView {
     fn focus_left(&mut self, _: &FocusLeft, window: &mut Window, cx: &mut Context<Self>) {
         if self.diff.focus_handle(cx).is_focused(window) {
             window.focus(&self.tree.focus_handle(cx));
@@ -333,12 +317,14 @@ impl ChangesView {
     }
 }
 
+impl Focusable for ChangesView {
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.diff.focus_handle(cx)
+    }
+}
+
 impl Render for ChangesView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Zoom virker også når treet eller commitene har fokus
-        let diff = self.diff.clone();
-        let zoom = diff.clone();
-        let reset = diff.clone();
         div()
             .size_full()
             .flex()
@@ -346,10 +332,48 @@ impl Render for ChangesView {
             .on_action(cx.listener(Self::focus_right))
             .on_action(cx.listener(Self::focus_down))
             .on_action(cx.listener(Self::focus_up))
-            .on_action(move |a: &ZoomIn, w, cx| diff.update(cx, |d, cx| d.zoom_in(a, w, cx)))
-            .on_action(move |a: &ZoomOut, w, cx| zoom.update(cx, |d, cx| d.zoom_out(a, w, cx)))
-            .on_action(move |a: &ResetZoom, w, cx| reset.update(cx, |d, cx| d.reset_zoom(a, w, cx)))
+            // Zoom virker også når treet eller commitene har fokus
+            .on_action(cx.listener(|this, a: &ZoomIn, w, cx| {
+                this.diff.update(cx, |d, cx| d.zoom_in(a, w, cx))
+            }))
+            .on_action(cx.listener(|this, a: &ZoomOut, w, cx| {
+                this.diff.update(cx, |d, cx| d.zoom_out(a, w, cx))
+            }))
+            .on_action(cx.listener(|this, a: &ResetZoom, w, cx| {
+                this.diff.update(cx, |d, cx| d.reset_zoom(a, w, cx))
+            }))
             .child(self.side_panel(window, cx))
             .child(div().flex_1().min_w_0().h_full().child(self.diff.clone()))
     }
+}
+
+/// Diffen for en fil, eller en tom diff og hvorfor den ikke kan vises.
+fn build_diff(
+    change: &FileChange,
+    content: Result<[String; 2], String>,
+) -> (FileDiff, Option<String>) {
+    match content {
+        Err(e) => (empty_diff(), Some(e)),
+        Ok([l, r]) if l.contains('\0') || r.contains('\0') => {
+            (empty_diff(), Some("Binærfil kan ikke vises".to_owned()))
+        }
+        Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
+            Ok(mut diff) => {
+                let lang = Language::from_path(&change.path)
+                    .or_else(|| Language::from_path(change.left_path()));
+                if let Some(lang) = lang {
+                    diff.highlight_syntax(lang);
+                }
+                (diff, None)
+            }
+            Err(_) => (
+                empty_diff(),
+                Some("Filen er for stor til å vises".to_owned()),
+            ),
+        },
+    }
+}
+
+fn empty_diff() -> FileDiff {
+    FileDiff::new("", "", ComparisonPolicy::Default).expect("tom diff er aldri for stor")
 }

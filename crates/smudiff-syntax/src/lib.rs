@@ -68,7 +68,6 @@ pub enum Token {
     Comment,
     DocComment,
     Function,
-    /// `DEFAULT_FUNCTION_CALL`.
     FunctionCall,
     /// Klasse- og typenavn, `DEFAULT_CLASS_NAME` og `DEFAULT_CLASS_REFERENCE`.
     Type,
@@ -119,6 +118,8 @@ pub struct Span {
 }
 
 /// Capture-navnene i `queries/`. `plain` nullstiller foreldren, som `${}` i en streng.
+/// Ved flere treff på samme node vinner det siste mønsteret, og captures på barn legger seg
+/// inni foreldren.
 const NAMES: [(&str, Option<Token>); 21] = [
     ("keyword", Some(Token::Keyword)),
     ("string", Some(Token::String)),
@@ -298,6 +299,31 @@ mod tests {
         }
     }
 
+    /// Ingen token for disse, de vises som vanlig tekst.
+    fn lacks(lang: Language, text: &str, plain: &[&str]) {
+        let got = tokens(lang, text);
+        for p in plain {
+            assert!(
+                !got.iter().any(|(t, _)| t == p),
+                "{p:?} har token i {got:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rekkefolge_som_enumen() {
+        for (i, t) in Token::ALL.iter().enumerate() {
+            assert_eq!(*t as usize, i, "{t:?}");
+            assert!(
+                NAMES.iter().any(|(_, n)| *n == Some(*t)),
+                "{t:?} mangler i NAMES"
+            );
+        }
+        for (i, l) in LANGUAGES.iter().enumerate() {
+            assert_eq!(*l as usize, i, "{l:?}");
+        }
+    }
+
     #[test]
     fn alle_queries_bygger() {
         for lang in LANGUAGES {
@@ -329,6 +355,65 @@ mod tests {
                 ("42", Number),
             ],
         );
+        let text = "fn f() { let a = UiTheme::dark(); std::env::args(); Some(A::B(MAX)); }";
+        has(
+            Language::Rust,
+            text,
+            &[
+                ("UiTheme", Type),
+                ("::", Operator),
+                ("{", Punctuation),
+                ("Some", Type),
+                ("B", Type),
+                ("MAX", Constant),
+            ],
+        );
+        lacks(Language::Rust, text, &["std"]);
+    }
+
+    #[test]
+    fn rust_attributt_i_en_farge() {
+        let got = tokens(
+            Language::Rust,
+            "#[derive(Debug, serde::Serialize)]\n#[cfg(all(unix, not(test)))]\n",
+        );
+        assert_eq!(
+            got,
+            [
+                ("#[derive(Debug, serde::Serialize)]", Token::Metadata),
+                ("#[cfg(all(unix, not(test)))]", Token::Metadata)
+            ]
+        );
+    }
+
+    #[test]
+    fn tegn() {
+        use Token::*;
+        has(
+            Language::Go,
+            "package main\nfunc f() { a &^= b }\n",
+            &[("&^=", Operator), ("{", Punctuation)],
+        );
+        has(
+            Language::Java,
+            "class A { int f() { return a ? b : c; } }",
+            &[("?", Operator), (":", Operator), (";", Punctuation)],
+        );
+        has(
+            Language::Kotlin,
+            "val a = b?.c ?: d",
+            &[("?.", Operator), ("?:", Operator)],
+        );
+        has(
+            Language::JavaScript,
+            "a ??= b < c ? d : e;",
+            &[("??=", Operator), ("<", Operator), (":", Operator)],
+        );
+        has(
+            Language::JavaScript,
+            "const a = <div>{b}</div>;",
+            &[("<", Punctuation), ("div", Tag)],
+        );
     }
 
     #[test]
@@ -349,8 +434,7 @@ mod tests {
                 ("Int", Type),
             ],
         );
-        let got = tokens(Language::Kotlin, text);
-        assert!(!got.iter().any(|&(t, _)| t == "x"), "{got:?}");
+        lacks(Language::Kotlin, text, &["x"]);
         has(
             Language::Kotlin,
             "data class A(val b: C?)",
@@ -378,8 +462,7 @@ mod tests {
                 ("String", Type),
             ],
         );
-        let got = tokens(Language::Java, text);
-        assert!(!got.iter().any(|&(t, _)| t == "s"), "{got:?}");
+        lacks(Language::Java, text, &["s"]);
         has(Language::Java, "class URL {}", &[("URL", Type)]);
     }
 
@@ -423,26 +506,21 @@ mod tests {
             "class A { void f() { g(); b.c(); } }",
             &[("g", FunctionCall), ("c", FunctionCall)],
         );
-        let text =
-            "fn f() { let a = UiTheme::dark(); g(b.c()); std::env::args(); Some(A::B(MAX)); }";
         has(
             Language::Rust,
-            text,
+            "fn f() { UiTheme::dark(); g(b.c()); std::env::args(); }",
             &[
-                ("UiTheme", Type),
                 ("dark", FunctionCall),
                 ("g", FunctionCall),
                 ("c", FunctionCall),
                 ("args", FunctionCall),
-                ("::", Operator),
-                (".", Punctuation),
-                ("Some", Type),
-                ("B", Type),
-                ("MAX", Constant),
             ],
         );
-        let got = tokens(Language::Rust, text);
-        assert!(!got.iter().any(|&(t, _)| t == "std"), "{got:?}");
+        has(
+            Language::JavaScript,
+            "class A {}\nnew B();",
+            &[("A", Type), ("B", Type)],
+        );
     }
 
     #[test]

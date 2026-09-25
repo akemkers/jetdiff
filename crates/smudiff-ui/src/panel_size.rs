@@ -1,7 +1,7 @@
 //! Størrelsen på paneler som kan dras. Bredden følger innholdet til den dras i kanten til
 //! høyre. Høyden på en seksjon nederst i et panel dras i overkanten.
 
-use gpui::{ClickEvent, Context, Div, DragMoveEvent, EmptyView, div, prelude::*, px};
+use gpui::{ClickEvent, Context, Div, DragMoveEvent, EmptyView, Stateful, div, prelude::*, px};
 
 const MIN_WIDTH: f32 = 160.;
 /// Automatisk bredde tar aldri mer enn dette av vinduet.
@@ -50,21 +50,14 @@ impl PanelWidth {
                 }),
             )
             .child(
-                div()
-                    .id("resize-width")
-                    .absolute()
-                    .top_0()
-                    .bottom_0()
-                    .right_0()
-                    .w(px(HANDLE_WIDTH))
-                    .cursor_col_resize()
-                    .on_drag(WidthDrag, |_, _, _, cx| cx.new(|_| EmptyView))
-                    .on_click(cx.listener(move |this, e: &ClickEvent, _, cx| {
-                        if e.click_count() == 2 {
-                            get(this).0.manual = None;
-                            cx.notify();
-                        }
-                    })),
+                handle("resize-width", WidthDrag, cx, move |this| {
+                    get(this).0.manual = None
+                })
+                .top_0()
+                .bottom_0()
+                .right_0()
+                .w(px(HANDLE_WIDTH))
+                .cursor_col_resize(),
             )
     }
 }
@@ -77,10 +70,10 @@ pub struct PanelHeight {
 }
 
 impl PanelHeight {
-    pub fn resolve(&self, panel: f32) -> f32 {
-        let max = (panel * MAX_FRACTION).max(MIN_HEIGHT);
+    pub fn resolve(&self, window: f32) -> f32 {
+        let max = (window * MAX_FRACTION).max(MIN_HEIGHT);
         self.manual
-            .unwrap_or(panel * DEFAULT_HEIGHT_FRACTION)
+            .unwrap_or(window * DEFAULT_HEIGHT_FRACTION)
             .clamp(MIN_HEIGHT, max)
     }
 
@@ -102,24 +95,36 @@ impl PanelHeight {
             )
             .child(
                 section.flex_none().relative().child(
-                    div()
-                        .id("resize-height")
-                        .absolute()
-                        .left_0()
-                        .right_0()
-                        .top(px(-HANDLE_HEIGHT / 2.))
-                        .h(px(HANDLE_HEIGHT))
-                        .cursor_row_resize()
-                        .on_drag(HeightDrag, |_, _, _, cx| cx.new(|_| EmptyView))
-                        .on_click(cx.listener(move |this, e: &ClickEvent, _, cx| {
-                            if e.click_count() == 2 {
-                                get(this).0.manual = None;
-                                cx.notify();
-                            }
-                        })),
+                    handle("resize-height", HeightDrag, cx, move |this| {
+                        get(this).0.manual = None
+                    })
+                    .left_0()
+                    .right_0()
+                    .top(px(-HANDLE_HEIGHT / 2.))
+                    .h(px(HANDLE_HEIGHT))
+                    .cursor_row_resize(),
                 ),
             )
     }
+}
+
+/// Et håndtak som drar `drag`. Dobbeltklikk kaller `reset`.
+fn handle<T: 'static, D: 'static>(
+    id: &'static str,
+    drag: D,
+    cx: &mut Context<T>,
+    reset: impl Fn(&mut T) + 'static,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .absolute()
+        .on_drag(drag, |_, _, _, cx| cx.new(|_| EmptyView))
+        .on_click(cx.listener(move |this, e: &ClickEvent, _, cx| {
+            if e.click_count() == 2 {
+                reset(this);
+                cx.notify();
+            }
+        }))
 }
 
 #[cfg(test)]

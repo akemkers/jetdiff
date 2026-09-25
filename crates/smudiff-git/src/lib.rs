@@ -6,7 +6,7 @@ use std::process::Command;
 
 use smudiff_changes::{FileChange, Status};
 
-/// Uten branch vises de siste commitene.
+/// Commit-lista viser aldri flere, så en gammel default-branch ikke gir tusenvis.
 const MAX_COMMITS: usize = 50;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,7 +25,9 @@ pub struct Repo {
     /// `None` er working tree.
     right: Option<String>,
     /// Default-branchen når venstre side er der branchen gikk ut fra den.
-    pub base: Option<String>,
+    base: Option<String>,
+    /// Revisjonene commit-lista viser. `None` for en commit og for et repo uten commits.
+    history: Option<String>,
 }
 
 impl Repo {
@@ -42,6 +44,7 @@ impl Repo {
             left,
             right: Some(right),
             base: None,
+            history: None,
         })
     }
 
@@ -56,21 +59,26 @@ impl Repo {
                 left,
                 right: None,
                 base: None,
+                history: None,
             });
         };
         let fork = default_branch(&root).and_then(|b| {
             let out = git(&root, &["merge-base", "HEAD", &b]).ok()?;
             Some((b, out.trim_end().to_owned()))
         });
-        let (left, base) = match fork {
-            Some((b, fork)) if fork != head => (fork, Some(b)),
-            _ => (head, None),
+        let (left, base, history) = match fork {
+            Some((b, fork)) if fork != head => {
+                let range = format!("{fork}..HEAD");
+                (fork, Some(b), range)
+            }
+            _ => (head, None, "HEAD".to_owned()),
         };
         Ok(Self {
             root,
             left,
             right: None,
             base,
+            history: Some(history),
         })
     }
 
@@ -83,7 +91,7 @@ impl Repo {
         self.right.is_none()
     }
 
-    /// Det working tree vises mot.
+    /// Det working tree vises mot. Gir ikke mening for en commit.
     pub fn label(&self) -> String {
         match &self.base {
             Some(base) => format!("Endringer mot {base}"),
@@ -91,19 +99,13 @@ impl Repo {
         }
     }
 
-    /// For working tree. Commitene på branchen, eller de siste. Nyeste først.
+    /// Commitene på branchen, eller de siste. Nyeste først. Tom for en commit.
     pub fn commits(&self) -> Result<Vec<Commit>, String> {
-        if verify(&self.root, "HEAD").is_none() {
+        let Some(history) = &self.history else {
             return Ok(Vec::new());
-        }
-        let range = format!("{}..HEAD", self.left);
-        let max = format!("-n{MAX_COMMITS}");
-        let rev = match self.base {
-            Some(_) => [range.as_str(), "--"],
-            None => [max.as_str(), "HEAD"],
         };
-        let mut args = vec!["log", "-z", "--format=%H%x1f%ct%x1f%s"];
-        args.extend(rev);
+        let max = format!("-n{MAX_COMMITS}");
+        let args = ["log", "-z", "--format=%H%x1f%ct%x1f%s", &max, history, "--"];
         Ok(parse_log(&git(&self.root, &args)?))
     }
 
@@ -454,14 +456,19 @@ mod tests {
 
     #[test]
     fn parser_log() {
-        let c = parse_log("abc\x1f1700000000\x1fen: melding\0");
+        // Resten av linja er meldingen, også \x1f. Ødelagte oppføringer hoppes over.
+        let c = parse_log("abc\x1f1700000000\x1fen: a\x1fb\0ødelagt\0def\x1f1\x1fto\0");
+        let commit = |hash: &str, time, subject: &str| Commit {
+            hash: hash.into(),
+            subject: subject.into(),
+            time,
+        };
         assert_eq!(
             c,
-            [Commit {
-                hash: "abc".into(),
-                subject: "en: melding".into(),
-                time: 1_700_000_000,
-            }]
+            [
+                commit("abc", 1_700_000_000, "en: a\x1fb"),
+                commit("def", 1, "to")
+            ]
         );
     }
 

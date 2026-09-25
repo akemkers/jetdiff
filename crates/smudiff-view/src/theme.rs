@@ -63,12 +63,11 @@ const fn bold(hex: u32) -> SyntaxStyle {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
+    /// Velger `_dark`-ikonene.
+    pub dark: bool,
+    /// Også gutter og divider. `EDITOR_GUTTER_BACKGROUND` er tom i IntelliJ, så de arver den.
     pub editor_bg: Rgba,
     pub editor_fg: Rgba,
-    /// `EDITOR_GUTTER_BACKGROUND` er tom i begge temaene, så gutteren arver editor-bakgrunnen.
-    pub gutter_bg: Rgba,
-    /// `DiffDrawUtil.getDividerColor`: divideren males med gutter-bakgrunnen.
-    pub divider_bg: Rgba,
     pub line_number: Rgba,
     pub line_number_caret_row: Rgba,
     /// Markert linje. Gjennomsiktig og sterkere enn `CARET_ROW_COLOR`, siden den er
@@ -106,11 +105,11 @@ impl Theme {
     /// Islands Dark. Ingen `DIFF_*`-nøkler i skjemaet, så diff-fargene kommer fra Darcula.
     pub fn dark() -> Self {
         let bg = rgb(0x191A1C);
+        let fg = 0xBCBEC4;
         Self {
+            dark: true,
             editor_bg: bg,
-            editor_fg: rgb(0xBCBEC4),
-            gutter_bg: bg,
-            divider_bg: bg,
+            editor_fg: rgb(fg),
             line_number: rgb(0x4B5059),
             line_number_caret_row: rgb(0xA1A3AB),
             row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
@@ -131,15 +130,14 @@ impl Theme {
             deleted: DiffColors::new(rgb(0x484A4A), rgb(0x656E76), bg),
             modified: DiffColors::new(rgb(0x385570), rgb(0x43698D), bg),
             syntax: Token::ALL.map(|t| match t {
-                Token::Keyword | Token::Escape => style(0xCF8E6D),
+                Token::Keyword => style(0xCF8E6D),
                 Token::String => style(0x6AAB73),
+                Token::Escape => style(0xCF8E6D),
                 Token::Number => style(0x2AACB8),
                 Token::Comment => style(0x7A7E85),
                 Token::DocComment => italic(0x5F826B),
                 Token::Function => style(0x56A8F5),
-                Token::FunctionCall | Token::Type | Token::Punctuation | Token::Operator => {
-                    style(0xBCBEC4)
-                }
+                Token::FunctionCall | Token::Type => style(fg),
                 Token::Constant => italic(0xC77DBB),
                 Token::Property => style(0xC77DBB),
                 Token::Metadata => style(0xB3AE60),
@@ -147,8 +145,9 @@ impl Theme {
                 Token::Attribute => style(0xBABABA),
                 Token::Heading => bold(0xCF8E6D),
                 Token::Link => style(0x548AF7),
-                Token::Strong => bold(0xBCBEC4),
-                Token::Emphasis => italic(0xBCBEC4),
+                Token::Strong => bold(fg),
+                Token::Emphasis => italic(fg),
+                Token::Punctuation | Token::Operator => style(fg),
             }),
         }
     }
@@ -156,11 +155,11 @@ impl Theme {
     /// Islands Light. MODIFIED kommer fra Light, INSERTED og DELETED fra Default.
     pub fn light() -> Self {
         let bg = rgb(0xFFFFFF);
+        let fg = 0x080808;
         Self {
+            dark: false,
             editor_bg: bg,
-            editor_fg: rgb(0x080808),
-            gutter_bg: bg,
-            divider_bg: bg,
+            editor_fg: rgb(fg),
             line_number: rgb(0xAEB3C2),
             line_number_caret_row: rgb(0x767A8A),
             row_highlight: [0x2E, 0x6B, 0xE6, 0x1A],
@@ -173,7 +172,7 @@ impl Theme {
             commit_graph: rgb(0x3574F0),
             message_bg: rgb(0xBEE6BE),
             warning_bg: rgb(0xF5D98B),
-            message_fg: rgb(0x080808),
+            message_fg: rgb(fg),
             file_added: rgb(0x067D17),
             file_deleted: rgb(0x6C707E),
             file_modified: rgb(0x0033B3),
@@ -181,23 +180,23 @@ impl Theme {
             deleted: DiffColors::new(rgb(0xD6D6D6), rgb(0xC8C8C8), bg),
             modified: DiffColors::new(rgb(0xC2D8F2), rgb(0xB6D2F2), bg),
             syntax: Token::ALL.map(|t| match t {
-                Token::Keyword | Token::Tag => style(0x0033B3),
+                Token::Keyword => style(0x0033B3),
                 Token::String => style(0x067D17),
                 Token::Escape => style(0x0037A6),
                 Token::Number => style(0x1750EB),
                 Token::Comment | Token::DocComment => italic(0x8C8C8C),
                 Token::Function => style(0x00627A),
-                Token::FunctionCall | Token::Type | Token::Punctuation | Token::Operator => {
-                    style(0x080808)
-                }
+                Token::FunctionCall | Token::Type => style(fg),
                 Token::Constant => italic(0x871094),
                 Token::Property => style(0x871094),
                 Token::Metadata => style(0x9E880D),
+                Token::Tag => style(0x0033B3),
                 Token::Attribute => style(0x174AD4),
                 Token::Heading => bold(0x0033B3),
                 Token::Link => style(0x006DCC),
-                Token::Strong => bold(0x080808),
-                Token::Emphasis => italic(0x080808),
+                Token::Strong => bold(fg),
+                Token::Emphasis => italic(fg),
+                Token::Punctuation | Token::Operator => style(fg),
             }),
         }
     }
@@ -206,54 +205,71 @@ impl Theme {
     /// `ui.theme.tera`). Blandede farger er regnet ut på forhånd, som
     /// `farge | mix(color=base, amount=a)`.
     pub fn mocha() -> Self {
-        let base = rgb(0x1E1E2E);
-        let text = 0xCDD6F4;
+        const BASE: u32 = 0x1E1E2E;
+        const SURFACE0: u32 = 0x313244;
+        const SURFACE2: u32 = 0x585B70;
+        const OVERLAY0: u32 = 0x6C7086;
+        const OVERLAY2: u32 = 0x9399B2;
+        const TEXT: u32 = 0xCDD6F4;
+        const LAVENDER: u32 = 0xB4BEFE;
+        const BLUE: u32 = 0x89B4FA;
+        const SKY: u32 = 0x89DCEB;
+        const TEAL: u32 = 0x94E2D5;
+        const GREEN: u32 = 0xA6E3A1;
+        const YELLOW: u32 = 0xF9E2AF;
+        const PEACH: u32 = 0xFAB387;
+        const RED: u32 = 0xF38BA8;
+        const MAUVE: u32 = 0xCBA6F7;
+        const PINK: u32 = 0xF5C2E7;
+        let base = rgb(BASE);
         Self {
+            dark: true,
             editor_bg: base,
-            editor_fg: rgb(text),
-            gutter_bg: base,
-            divider_bg: base,
-            line_number: rgb(0x6C7086),
-            line_number_caret_row: rgb(0xB4BEFE),
+            editor_fg: rgb(TEXT),
+            line_number: rgb(OVERLAY0),
+            line_number_caret_row: rgb(LAVENDER),
+            // Som Islands Dark
             row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
             // Yellow med 0.5
             gutter_highlight: rgb(0x8C806E),
-            indent_guide: rgb(0x313244),
+            indent_guide: rgb(SURFACE0),
             // Arvet fra Darcula
             separator_wave: rgb(0x555555),
+            // Som Islands Dark
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x353748),
             // Mellom base og valgt, siden surface0 er nesten lik valgt
             tree_selection_inactive: rgb(0x2A2B3C),
-            commit_graph: rgb(0x94E2D5),
-            message_bg: rgb(0xA6E3A1),
-            warning_bg: rgb(0xF9E2AF),
+            commit_graph: rgb(TEAL),
+            message_bg: rgb(GREEN),
+            warning_bg: rgb(YELLOW),
             message_fg: base,
-            file_added: rgb(0xA6E3A1),
-            file_deleted: rgb(0x585B70),
-            file_modified: rgb(0x89B4FA),
+            file_added: rgb(GREEN),
+            file_deleted: rgb(SURFACE2),
+            file_modified: rgb(BLUE),
             // Green, red og blue med 0.25 for bakgrunn og 0.2 for stripe
             inserted: DiffColors::new(rgb(0x404F4B), rgb(0x394545), base),
             deleted: DiffColors::new(rgb(0x53394C), rgb(0x493446), base),
             modified: DiffColors::new(rgb(0x394461), rgb(0x333C57), base),
             syntax: Token::ALL.map(|t| match t {
-                Token::Keyword => style(0xCBA6F7),
-                Token::String => style(0xA6E3A1),
-                Token::Escape => style(0xF5C2E7),
-                Token::Number | Token::Constant => style(0xFAB387),
-                Token::Comment | Token::DocComment => style(0x9399B2),
-                Token::Function | Token::FunctionCall => style(0x89B4FA),
-                Token::Type => style(0xF9E2AF),
-                Token::Property => style(text),
-                Token::Metadata => style(0xF9E2AF),
-                Token::Tag => style(0x94E2D5),
-                Token::Attribute => style(0xF9E2AF),
-                Token::Heading => bold(0xF38BA8),
-                Token::Link => style(0xB4BEFE),
-                Token::Strong => bold(0xF38BA8),
-                Token::Emphasis => style(0xF38BA8),
-                Token::Punctuation => style(0x9399B2),
-                Token::Operator => style(0x89DCEB),
+                Token::Keyword => style(MAUVE),
+                Token::String => style(GREEN),
+                Token::Escape => style(PINK),
+                Token::Number => style(PEACH),
+                Token::Comment | Token::DocComment => style(OVERLAY2),
+                Token::Function | Token::FunctionCall => style(BLUE),
+                Token::Type => style(YELLOW),
+                Token::Constant => style(PEACH),
+                Token::Property => style(TEXT),
+                Token::Metadata => style(YELLOW),
+                Token::Tag => style(TEAL),
+                Token::Attribute => style(YELLOW),
+                Token::Heading => bold(RED),
+                Token::Link => style(LAVENDER),
+                Token::Strong => bold(RED),
+                Token::Emphasis => style(RED),
+                Token::Punctuation => style(OVERLAY2),
+                Token::Operator => style(SKY),
             }),
         }
     }

@@ -1,9 +1,7 @@
-; Generelle mønstre først. tree-sitter-highlight lar det siste treffet på en node vinne.
-
 ; Først, så alt mer spesifikt vinner
 ["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
 [
-  "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "<<" ">>" "+=" "-=" "*=" "/=" "%=" "->" "=>" "::" ".." "..=" "?"
+  "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "<<" ">>" "+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>=" "->" "=>" "::" ".." "..=" "?"
 ] @operator
 
 (field_identifier) @property
@@ -13,7 +11,7 @@
  (#match? @type "^[A-Z]"))
 
 ((identifier) @constant
- (#match? @constant "^[A-Z][A-Z\\d_]+$"))
+ (#match? @constant "^_*[A-Z][A-Z\\d_]+$"))
 
 (type_identifier) @type
 
@@ -53,3 +51,15 @@
 
 (attribute_item) @metadata
 (inner_attribute_item) @metadata
+; Hele attributtet i én farge, også navn og tegn inni, som `#[derive(Debug)]`
+(attribute_item ["#" "[" "]"] @metadata)
+(inner_attribute_item ["#" "!" "[" "]"] @metadata)
+(attribute (identifier) @metadata)
+(attribute (scoped_identifier (identifier) @metadata))
+; Queries kan ikke matche rekursivt, så dybden skrives ut
+(attribute (token_tree ["(" ")" "," "=" "::"] @metadata))
+(attribute (token_tree (identifier) @metadata))
+(attribute (token_tree (token_tree ["(" ")" "," "=" "::"] @metadata)))
+(attribute (token_tree (token_tree (identifier) @metadata)))
+(attribute (token_tree (token_tree (token_tree ["(" ")" "," "=" "::"] @metadata))))
+(attribute (token_tree (token_tree (token_tree (identifier) @metadata))))

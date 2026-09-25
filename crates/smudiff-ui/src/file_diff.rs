@@ -98,6 +98,7 @@ pub struct FileDiffView {
     file_keys: bool,
     /// Venstre og høyre sti for `y`. Tom når det ikke finnes noen fil.
     paths: [String; 2],
+    /// Eies av den som lager diffen, men tegnes over tastelinja her.
     message: Entity<Message>,
     shared: Rc<Shared>,
     focus: FocusHandle,
@@ -143,7 +144,19 @@ fn to_key(k: &Keystroke) -> Key {
 }
 
 impl FileDiffView {
-    pub fn new(
+    /// Én fil, med egne beskjeder.
+    pub fn standalone(
+        diff: FileDiff,
+        paths: [String; 2],
+        theme: UiTheme,
+        family: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let message = cx.new(|_| Message::new(theme, family));
+        Self::new(diff, paths, message, theme, family, cx)
+    }
+
+    pub(crate) fn new(
         diff: FileDiff,
         paths: [String; 2],
         message: Entity<Message>,
@@ -618,7 +631,7 @@ impl Render for FileDiffView {
             .gap_x(px(16.))
             .gap_y(px(2.))
             .items_center()
-            .bg(theme.gutter_bg)
+            .bg(theme.editor_bg)
             .font_family(self.family)
             .text_size(px(12.))
             .text_color(theme.line_number)

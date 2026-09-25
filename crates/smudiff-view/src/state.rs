@@ -263,7 +263,7 @@ impl DiffState {
                     true
                 })
             }
-            // Zoom og avslutning eies av UI-et. Etter zoom kalles `rescale`.
+            // Eies av UI-et. Etter zoom kalles `rescale`.
             NextFile | PrevFile | CopyLocation | ZoomIn | ZoomOut | ResetZoom | Quit => {
                 Outcome::default()
             }
@@ -338,8 +338,7 @@ impl DiffState {
         Cursor::new(self.cursor.side.other(), self.transferred_line())
     }
 
-    /// Markert linje i nyeste versjon, siden det er den som finnes på disk. Slettede filer
-    /// har bare venstre side.
+    /// Markert linje i nyeste versjon. Slettede filer har bare venstre side.
     pub fn location(&self) -> Cursor {
         if self.cursor.side == Side::Right || self.diff.single_side().is_some() {
             self.cursor

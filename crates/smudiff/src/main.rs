@@ -12,12 +12,25 @@ use gpui::{
 };
 use smudiff_git::Repo;
 use smudiff_ui::{
-    Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, Message,
-    NextContextRange, ResetZoom, UiTheme, ZoomIn, ZoomOut, load_font,
+    Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, NextContextRange,
+    ResetZoom, UiTheme, ZoomIn, ZoomOut, load_font,
 };
 use smudiff_view::{ComparisonPolicy, FileDiff, Language};
 
 actions!(smudiff, [Quit]);
+
+type NewTheme = fn() -> UiTheme;
+
+/// Navnene til `--theme`. Det første er standard.
+const THEMES: [(&str, NewTheme); 3] = [
+    ("catppuccin-mocha", UiTheme::mocha),
+    ("jetbrains-dark", UiTheme::dark),
+    ("jetbrains-light", UiTheme::light),
+];
+
+fn theme_names(sep: &str) -> String {
+    THEMES.map(|(name, _)| name).join(sep)
+}
 
 enum Source {
     WorkTree(PathBuf),
@@ -31,22 +44,18 @@ struct Args {
 }
 
 fn parse_args() -> Result<Args, String> {
-    let mut theme = UiTheme::mocha();
+    let mut theme = THEMES[0].1();
     let mut paths = Vec::new();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--theme" => {
-                theme = match args.next().as_deref() {
-                    Some("catppuccin-mocha") => UiTheme::mocha(),
-                    Some("jetbrains-dark") => UiTheme::dark(),
-                    Some("jetbrains-light") => UiTheme::light(),
-                    _ => {
-                        return Err(
-                            "--theme må være catppuccin-mocha, jetbrains-dark eller jetbrains-light".into(),
-                        );
-                    }
-                }
+                let name = args.next();
+                theme = THEMES
+                    .iter()
+                    .find(|(n, _)| Some(*n) == name.as_deref())
+                    .map(|(_, t)| t())
+                    .ok_or_else(|| format!("--theme må være en av {}", theme_names(", ")))?;
             }
             s if s.starts_with("--") => return Err(format!("ukjent flagg: {s}")),
             _ => paths.push(arg),
@@ -59,9 +68,10 @@ fn parse_args() -> Result<Args, String> {
             Ok([rev]) => Source::Commit(rev),
             Err(paths) if paths.is_empty() => Source::WorkTree(".".into()),
             Err(_) => {
-                return Err(
-                    "bruk: smudiff [<mappe> | <commit> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]".into(),
-                );
+                return Err(format!(
+                    "bruk: smudiff [<mappe> | <commit> | <venstre> <høyre>] [--theme {}]",
+                    theme_names("|")
+                ));
             }
         },
     };
@@ -165,14 +175,14 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let (content, title) = match load(&args.source) {
+    let Args { source, theme } = args;
+    let (content, title) = match load(&source) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{e}");
             return ExitCode::from(1);
         }
     };
-    let theme = args.theme;
 
     Application::new()
         .with_assets(Assets)
@@ -181,8 +191,7 @@ fn main() -> ExitCode {
             let family = load_font(cx);
             match content {
                 Content::File(diff, paths) => open(cx, title, move |cx| {
-                    let message = cx.new(|_| Message::new(theme, family));
-                    FileDiffView::new(*diff, paths, message, theme, family, cx)
+                    FileDiffView::standalone(*diff, paths, theme, family, cx)
                 }),
                 Content::Changes(repo, changes) => open(cx, title, move |cx| {
                     ChangesView::new(repo, changes, theme, family, cx)

@@ -10,22 +10,27 @@ use gpui::{
 };
 use smudiff_changes::{ChangeTree, FileChange, Row, RowKind, Status};
 use smudiff_view::columns::display_width;
-use smudiff_view::metrics::FONT_SIZE;
 
 use crate::icons::{chevron_icon, file_icon, folder_icon};
+use crate::list::{
+    GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key, row_bg, step,
+};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
-pub(crate) const ROW_HEIGHT: f32 = 22.;
-pub(crate) const TEXT_SIZE: f32 = 14.;
-pub(crate) const PAD_LEFT: f32 = 8.;
-pub(crate) const PAD_RIGHT: f32 = 12.;
-pub(crate) const GAP: f32 = 4.;
 const INDENT: f32 = 16.;
 const ICON_SIZE: f32 = 16.;
 
-/// Valgt fil, indeks i endringslista. `None` når lista er tom. Treet og diffen observerer den.
+/// Valgt fil, indeks i endringslista. `None` når lista er tom. Treet og ChangesView
+/// observerer den.
 pub struct Selection(pub Option<usize>);
+
+impl Selection {
+    pub fn set(&mut self, file: Option<usize>, cx: &mut Context<Self>) {
+        self.0 = file;
+        cx.notify();
+    }
+}
 
 pub struct ChangesTree {
     changes: Rc<[FileChange]>,
@@ -43,25 +48,6 @@ pub struct ChangesTree {
     cursor: usize,
     focus: FocusHandle,
     _selection: Subscription,
-}
-
-/// Tastene i treet og commit-lista.
-pub(crate) enum ListKey {
-    Down,
-    Up,
-    Open,
-}
-
-pub(crate) fn list_key(ev: &KeyDownEvent) -> Option<ListKey> {
-    if ev.keystroke.modifiers.modified() {
-        return None;
-    }
-    match ev.keystroke.key.as_str() {
-        "j" | "down" => Some(ListKey::Down),
-        "k" | "up" => Some(ListKey::Up),
-        "enter" | "l" => Some(ListKey::Open),
-        _ => None,
-    }
 }
 
 impl ChangesTree {
@@ -90,8 +76,8 @@ impl ChangesTree {
         }
     }
 
-    pub fn set_font_size(&mut self, font_size: f32, cx: &mut Context<Self>) {
-        self.scale = font_size / FONT_SIZE;
+    pub fn set_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
+        self.scale = scale;
         cx.notify();
     }
 
@@ -100,6 +86,7 @@ impl ChangesTree {
         self.rows = self.tree.rows().into();
         self.changes = changes;
         self.content_width = None;
+        self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
         cx.notify();
     }
 
@@ -113,10 +100,7 @@ impl ChangesTree {
         };
         let next = self.tree.step(file, forward);
         if next != file {
-            self.selection.update(cx, |s, cx| {
-                s.0 = Some(next);
-                cx.notify();
-            });
+            self.selection.update(cx, |s, cx| s.set(Some(next), cx));
         }
     }
 
@@ -143,10 +127,7 @@ impl ChangesTree {
                 self.rows = self.tree.rows().into();
                 cx.notify();
             }
-            &RowKind::File(file) => self.selection.update(cx, |s, cx| {
-                s.0 = Some(file);
-                cx.notify();
-            }),
+            &RowKind::File(file) => self.selection.update(cx, |s, cx| s.set(Some(file), cx)),
         }
     }
 
@@ -171,12 +152,11 @@ impl ChangesTree {
             return;
         };
         cx.stop_propagation();
-        let last = self.rows.len().saturating_sub(1);
-        let cursor = self.cursor.min(last);
         match key {
-            ListKey::Down => self.cursor = (cursor + 1).min(last),
-            ListKey::Up => self.cursor = cursor.saturating_sub(1),
-            ListKey::Open if !self.rows.is_empty() => return self.open(cursor, cx),
+            ListKey::Down | ListKey::Up => {
+                self.cursor = step(self.cursor, matches!(key, ListKey::Down), self.rows.len())
+            }
+            ListKey::Open if !self.rows.is_empty() => return self.open(self.cursor, cx),
             ListKey::Open => return,
         }
         self.scroll.scroll_to_item(self.cursor, ScrollStrategy::Top);
@@ -211,7 +191,8 @@ impl ChangesTree {
             .whitespace_nowrap()
             .overflow_hidden()
             .when_some(
-                theme.row_bg(
+                row_bg(
+                    theme,
                     i == self.cursor,
                     selected.is_some_and(|f| row.kind == RowKind::File(f)),
                     focused,

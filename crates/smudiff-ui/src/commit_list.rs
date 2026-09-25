@@ -9,9 +9,10 @@ use gpui::{
     uniform_list,
 };
 use smudiff_git::Commit;
-use smudiff_view::metrics::FONT_SIZE;
 
-use crate::changes_tree::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key};
+use crate::list::{
+    GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key, row_bg, step,
+};
 use crate::theme::UiTheme;
 
 /// Litt luftigere enn treet, så grafen får plass.
@@ -63,22 +64,45 @@ impl CommitList {
     pub fn set_commits(&mut self, label: String, commits: Vec<Commit>, cx: &mut Context<Self>) {
         self.label = label.into();
         self.commits = commits.into();
+        // En commit som er borte, som etter en rebase, gir working tree
+        if self.row_of(&self.cursor) == 0 {
+            self.cursor = None;
+        }
         cx.notify();
     }
 
-    pub fn set_font_size(&mut self, font_size: f32, cx: &mut Context<Self>) {
-        self.scale = font_size / FONT_SIZE;
+    pub fn set_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
+        self.scale = scale;
+        cx.notify();
+    }
+
+    /// Uten `SelectCommit`, for når visningen ikke fikk byttet.
+    pub fn set_selected(&mut self, hash: Option<String>, cx: &mut Context<Self>) {
+        self.selected = hash;
         cx.notify();
     }
 
     fn select(&mut self, hash: Option<String>, cx: &mut Context<Self>) {
         self.cursor = hash.clone();
-        cx.notify();
         if hash != self.selected {
             self.selected = hash.clone();
             cx.emit(SelectCommit(hash));
-            cx.notify();
         }
+        cx.notify();
+    }
+
+    /// Rad 0 er working tree. En commit som ikke er i lista gir også rad 0.
+    fn row_of(&self, hash: &Option<String>) -> usize {
+        hash.as_ref().map_or(0, |h| {
+            self.commits
+                .iter()
+                .position(|c| &c.hash == h)
+                .map_or(0, |c| c + 1)
+        })
+    }
+
+    fn hash_at(&self, row: usize) -> Option<String> {
+        row.checked_sub(1).map(|c| self.commits[c].hash.clone())
     }
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -86,20 +110,14 @@ impl CommitList {
             return;
         };
         cx.stop_propagation();
-        // Rad 0 er working tree. En commit som er borte gir rad 0.
-        let row = self.cursor.as_ref().map_or(0, |h| {
-            self.commits
-                .iter()
-                .position(|c| &c.hash == h)
-                .map_or(0, |c| c + 1)
-        });
+        let row = self.row_of(&self.cursor);
         let row = match key {
-            ListKey::Down => (row + 1).min(self.commits.len()),
-            ListKey::Up => row.saturating_sub(1),
-            ListKey::Open => return self.select(self.cursor.clone(), cx),
+            ListKey::Down => step(row, true, self.commits.len() + 1),
+            ListKey::Up => step(row, false, self.commits.len() + 1),
+            ListKey::Open => return self.select(self.hash_at(row), cx),
         };
         self.scroll.scroll_to_item(row, ScrollStrategy::Top);
-        self.cursor = row.checked_sub(1).map(|c| self.commits[c].hash.clone());
+        self.cursor = self.hash_at(row);
         cx.notify();
     }
 
@@ -112,14 +130,17 @@ impl CommitList {
     ) -> impl IntoElement + use<> {
         let s = |v: f32| px(v * self.scale);
         let commit = i.checked_sub(1).map(|c| &self.commits[c]);
-        let hash = commit.map(|c| c.hash.clone());
+        let hash = self.hash_at(i);
         let (text, age) = match commit {
             Some(c) => (SharedString::from(c.subject.clone()), age(now - c.time)),
             None => (self.label.clone(), String::new()),
         };
-        let bg = self
-            .theme
-            .row_bg(hash == self.cursor, hash == self.selected, focused);
+        let bg = row_bg(
+            &self.theme,
+            hash == self.cursor,
+            hash == self.selected,
+            focused,
+        );
         div()
             .id(i)
             .h(s(COMMIT_ROW_HEIGHT))
@@ -142,7 +163,7 @@ impl CommitList {
     }
 
     /// Én linje gjennom alle radene, med en prikk per commit. Working tree er en ring.
-    /// `bg` er bakgrunnen til raden.
+    /// `bg` er bakgrunnen til raden, så ringen dekker linja uten å skille seg ut.
     fn graph(&self, i: usize, bg: Option<Hsla>) -> Div {
         let s = |v: f32| px(v * self.scale);
         let color = self.theme.commit_graph;

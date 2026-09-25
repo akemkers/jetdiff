@@ -139,7 +139,7 @@ impl SideEditor<'_> {
 
         window.with_content_mask(mask(side_bounds), |window| {
             window.paint_quad(fill(side_bounds, self.theme.editor_bg));
-            window.paint_quad(fill(gutter_bounds, self.theme.gutter_bg));
+            window.paint_quad(fill(gutter_bounds, self.theme.editor_bg));
             // New UI: 1px strek ved separatoren, males før diff-markørene så den skjules i endringer
             window.paint_quad(fill(
                 rect(g.gutter_x(gl.separator..gl.separator + 1.), top, bottom),

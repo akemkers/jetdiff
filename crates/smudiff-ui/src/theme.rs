@@ -70,14 +70,11 @@ pub struct UiTheme {
     pub dark: bool,
     pub editor_bg: Hsla,
     pub editor_fg: Hsla,
-    pub gutter_bg: Hsla,
-    pub divider_bg: Hsla,
     pub line_number: Hsla,
     pub line_number_caret_row: Hsla,
     pub row_highlight: Hsla,
     pub gutter_highlight: Hsla,
     pub indent_guide: Hsla,
-    /// `DIFF_SEPARATOR_WAVE`.
     pub separator_wave: Hsla,
     pub scrollbar_thumb: Hsla,
     pub tree_selection: Hsla,
@@ -96,13 +93,11 @@ pub struct UiTheme {
 }
 
 impl UiTheme {
-    fn new(theme: &Theme, dark: bool) -> Self {
+    fn new(theme: &Theme) -> Self {
         Self {
-            dark,
+            dark: theme.dark,
             editor_bg: hsla(theme.editor_bg),
             editor_fg: hsla(theme.editor_fg),
-            gutter_bg: hsla(theme.gutter_bg),
-            divider_bg: hsla(theme.divider_bg),
             line_number: hsla(theme.line_number),
             line_number_caret_row: hsla(theme.line_number_caret_row),
             row_highlight: hsla(theme.row_highlight),
@@ -127,27 +122,15 @@ impl UiTheme {
     }
 
     pub fn dark() -> Self {
-        Self::new(&Theme::dark(), true)
+        Self::new(&Theme::dark())
     }
 
     pub fn light() -> Self {
-        Self::new(&Theme::light(), false)
+        Self::new(&Theme::light())
     }
 
     pub fn mocha() -> Self {
-        Self::new(&Theme::mocha(), true)
-    }
-
-    /// Bakgrunnen til en rad i treet eller commit-lista. Markøren vises bare med fokus, og
-    /// det som er åpnet er svakere.
-    pub fn row_bg(&self, cursor: bool, open: bool, focused: bool) -> Option<Hsla> {
-        if focused && cursor {
-            Some(self.tree_selection)
-        } else if open {
-            Some(self.tree_selection_inactive)
-        } else {
-            None
-        }
+        Self::new(&Theme::mocha())
     }
 
     pub fn syntax(&self, token: Token) -> &UiSyntax {

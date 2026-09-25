@@ -82,4 +82,13 @@ mod tests {
         assert_eq!(touched(&old, &new, &paths), 3);
         assert_eq!(touched(&old, &old, &["target/x".into()]), 0);
     }
+
+    #[test]
+    fn teller_rename_via_gammel_sti() {
+        let renamed = [FileChange {
+            old_path: Some("a.rs".into()),
+            ..change("b.rs", Status::Renamed)
+        }];
+        assert_eq!(touched(&renamed, &renamed, &["a.rs".into()]), 1);
+    }
 }

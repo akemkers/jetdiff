@@ -1,7 +1,7 @@
 ; Først, så alt mer spesifikt vinner
 ["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
 [
-  "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "~" "<<" ">>" ">>>" "+=" "-=" "*=" "/=" "++" "--" "->" "::" "?"
+  "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "~" "<<" ">>" ">>>" "+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>=" ">>>=" "++" "--" "->" "::" "?"
 ] @operator
 
 (field_declaration declarator: (variable_declarator name: (identifier) @property))
@@ -9,6 +9,7 @@
 ((identifier) @constant
  (#match? @constant "^_*[A-Z][A-Z\\d_]+$"))
 (enum_constant name: (identifier) @constant)
+(ternary_expression ":" @operator)
 
 ; Etter konstantene, så `class URL` blir en type
 (type_identifier) @type

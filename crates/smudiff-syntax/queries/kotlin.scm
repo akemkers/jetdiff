@@ -1,7 +1,7 @@
 ; Først, så alt mer spesifikt vinner
 ["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
 [
-  "=" "==" "!=" "===" "!==" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "+=" "-=" "*=" "/=" "%=" "++" "--" "->" "::" ".." "?:" "!!"
+  "=" "==" "!=" "===" "!==" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "+=" "-=" "*=" "/=" "%=" "++" "--" "->" "::" ".." "?:" "?." "!!"
 ] @operator
 
 (class_parameter (simple_identifier) @property)
@@ -17,7 +17,7 @@
 
 (enum_entry (simple_identifier) @constant)
 ((simple_identifier) @constant
- (#match? @constant "^[A-Z][A-Z\\d_]+$"))
+ (#match? @constant "^_*[A-Z][A-Z\\d_]+$"))
 
 (function_declaration (simple_identifier) @function)
 

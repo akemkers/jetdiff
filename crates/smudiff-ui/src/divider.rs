@@ -51,7 +51,7 @@ impl Divider<'_> {
         let curve = |b: &mut PathBuilder, c: &Cubic| b.cubic_bezier_to(p(c.p3), p(c.p1), p(c.p2));
 
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
-            window.paint_quad(fill(bounds, self.theme.divider_bg));
+            window.paint_quad(fill(bounds, self.theme.editor_bg));
             for band in divider_bands(
                 self.diff,
                 self.folding,
