@@ -105,9 +105,6 @@ fn load(source: &Source) -> Result<(Content, String), String> {
     // Flere vinduer åpne samtidig må kunne skilles i tittelen
     let title = format!("{}: {title}", repo.name());
     let changes = repo.changes()?;
-    if changes.is_empty() {
-        return Err("ingen endringer".into());
-    }
     Ok((Content::Changes(repo, changes), title))
 }
 

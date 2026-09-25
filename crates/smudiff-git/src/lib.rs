@@ -62,6 +62,15 @@ impl Repo {
         })
     }
 
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Working tree kan endre seg mens den vises, en commit kan ikke.
+    pub fn is_work_tree(&self) -> bool {
+        self.right.is_none()
+    }
+
     /// Mappenavnet til repoet eller worktreet.
     pub fn name(&self) -> &str {
         self.root

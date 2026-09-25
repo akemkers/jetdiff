@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 gpui.workspace = true
+notify = "8"
 smudiff-changes = { path = "../smudiff-changes" }
 smudiff-core = { path = "../smudiff-core" }
 smudiff-git = { path = "../smudiff-git" }

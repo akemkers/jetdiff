@@ -10,6 +10,7 @@ mod message;
 mod side_editor;
 mod text;
 mod theme;
+mod watcher;
 
 pub use changes_view::ChangesView;
 pub use file_diff::{FileDiffView, NextContextRange, ResetZoom, ZoomIn, ZoomOut};

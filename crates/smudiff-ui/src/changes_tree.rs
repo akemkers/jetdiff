@@ -18,8 +18,8 @@ const ROW_HEIGHT: f32 = 22.;
 const INDENT: f32 = 16.;
 const ICON_SIZE: f32 = 16.;
 
-/// Valgt fil, indeks i endringslista. Treet og diffen observerer den.
-pub struct Selection(pub usize);
+/// Valgt fil, indeks i endringslista. `None` når lista er tom. Treet og diffen observerer den.
+pub struct Selection(pub Option<usize>);
 
 pub struct ChangesTree {
     changes: Rc<[FileChange]>,
@@ -62,12 +62,25 @@ impl ChangesTree {
         cx.notify();
     }
 
+    pub fn set_changes(&mut self, changes: Rc<[FileChange]>, cx: &mut Context<Self>) {
+        self.tree.rebuild(&changes);
+        self.rows = self.tree.rows().into();
+        self.changes = changes;
+        cx.notify();
+    }
+
+    pub fn first(&self) -> Option<usize> {
+        self.tree.first()
+    }
+
     pub fn step(&mut self, forward: bool, cx: &mut Context<Self>) {
-        let file = self.selection.read(cx).0;
+        let Some(file) = self.selection.read(cx).0 else {
+            return;
+        };
         let next = self.tree.step(file, forward);
         if next != file {
             self.selection.update(cx, |s, cx| {
-                s.0 = next;
+                s.0 = Some(next);
                 cx.notify();
             });
         }
@@ -75,7 +88,9 @@ impl ChangesTree {
 
     /// Valgt fil blir synlig, også når den er valgt med tastaturet i en lukket mappe.
     fn reveal(&mut self, cx: &mut Context<Self>) {
-        let file = self.selection.read(cx).0;
+        let Some(file) = self.selection.read(cx).0 else {
+            return;
+        };
         self.tree.reveal(file, &self.changes);
         self.rows = self.tree.rows().into();
         if let Some(i) = self.rows.iter().position(|r| r.kind == RowKind::File(file)) {
@@ -92,7 +107,7 @@ impl ChangesTree {
                 cx.notify();
             }
             &RowKind::File(file) => self.selection.update(cx, |s, cx| {
-                s.0 = file;
+                s.0 = Some(file);
                 cx.notify();
             }),
         }
@@ -109,7 +124,7 @@ impl ChangesTree {
     fn render_row(
         &self,
         i: usize,
-        selected: usize,
+        selected: Option<usize>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let row = &self.rows[i];
@@ -132,9 +147,10 @@ impl ChangesTree {
             .pl(s(8. + row.depth as f32 * INDENT))
             .whitespace_nowrap()
             .overflow_hidden()
-            .when(row.kind == RowKind::File(selected), |d| {
-                d.bg(theme.tree_selection)
-            })
+            .when(
+                selected.is_some_and(|f| row.kind == RowKind::File(f)),
+                |d| d.bg(theme.tree_selection),
+            )
             .on_click(cx.listener(move |this, _, _, cx| this.click(i, cx)));
         match &row.kind {
             RowKind::Dir {

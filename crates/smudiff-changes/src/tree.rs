@@ -79,6 +79,15 @@ impl ChangeTree {
         }
     }
 
+    /// Nye endringer. Sammenklappede mapper forblir sammenklappet.
+    pub fn rebuild(&mut self, changes: &[FileChange]) {
+        let collapsed = std::mem::take(&mut self.collapsed);
+        *self = Self {
+            collapsed,
+            ..Self::new(changes)
+        };
+    }
+
     pub fn rows(&self) -> Vec<Row> {
         let mut rows = Vec::new();
         self.push_rows(&self.root, 0, &mut rows);
@@ -267,6 +276,23 @@ mod tests {
         assert_eq!(show(&t, &c), ["a (2)"]);
         t.reveal(1, &c);
         assert_eq!(show(&t, &c).len(), 5);
+    }
+
+    #[test]
+    fn rebuild_beholder_sammenklapping() {
+        let c = changes(&["a/x.rs", "b/y.rs"]);
+        let mut t = ChangeTree::new(&c);
+        t.toggle("a");
+        let c = changes(&["a/x.rs", "a/z.rs", "b/y.rs"]);
+        t.rebuild(&c);
+        assert_eq!(show(&t, &c), ["a (2)", "b (1)", "  b/y.rs"]);
+    }
+
+    #[test]
+    fn tomt_tre() {
+        let t = ChangeTree::new(&[]);
+        assert_eq!(t.first(), None);
+        assert!(t.rows().is_empty());
     }
 
     #[test]

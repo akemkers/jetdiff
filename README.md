@@ -24,6 +24,8 @@ cargo run --release -p smudiff -- [<mappe> | <commit> | <venstre> <høyre>] [--l
 
 Commit og lokale endringer åpnes med et tre over endrede filer til venstre. Nye og slettede filer vises som én side. Binærfiler vises ikke.
 
+Lokale endringer lastes inn på nytt når filer endres. Valgt fil beholdes, og diffen starter på toppen hvis innholdet er endret.
+
 Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer.
 
 Syntaksfarger fra IntelliJ for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML og Markdown. Språket velges fra filendelsen, høyre side først.
