@@ -2,7 +2,7 @@
 
 GPU-akselerert diff-viewer med JetBrains-inspirert visning. Skrevet i Rust med GPUI. macOS først, Linux etter hvert.
 
-Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode. GUI-en viser én fil om gangen.
+Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode. GUI-en viser to filer, en commit eller lokale endringer, med et filtre som i commit-dialogen til IntelliJ.
 
 ## Krav
 
@@ -12,8 +12,14 @@ Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode.
 ## Kjøre
 
 ```
-cargo run --release -p smudiff -- <venstre> <høyre> [--light]
+cargo run --release -p smudiff -- [<commit> | <venstre> <høyre>] [--light]
 ```
+
+- Uten argumenter: lokale endringer mot HEAD, også nye filer git ikke kjenner
+- `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
+- `<venstre> <høyre>`: to filer
+
+Commit og lokale endringer åpnes med et tre over endrede filer til venstre. Nye og slettede filer vises som én side. Binærfiler vises ikke.
 
 Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer.
 
@@ -31,6 +37,7 @@ Et lite, vim-inspirert keymap for lesing. Tastelinja nederst viser de viktigste.
 
 | Tast | Gjør |
 | --- | --- |
+| `J` `K` | Neste og forrige fil i treet |
 | `h` `j` `k` `l`, piltaster | Flytt cursoren. `j`/`k` hopper over lukkede folds |
 | `0` `$` | Linjestart og linjeslutt |
 | `gg` `G` | Første og siste linje |
@@ -39,11 +46,13 @@ Et lite, vim-inspirert keymap for lesing. Tastelinja nederst viser de viktigste.
 | Tab | Bytt side |
 | `o` | Åpne fold ved cursoren ett nivå |
 | `f` | Åpne alle folds, eller lukk alle hvis ingen er lukket |
-| Cmd+Pluss Cmd+Minus Cmd+0 | Zoom inn, ut og tilbake til 13pt |
+| Cmd+Pluss Cmd+Minus Cmd+0 | Zoom inn, ut og tilbake til 16pt. Treet følger med |
 | Cmd+Alt+C | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding |
 | `q`, Cmd+Q, Cmd+W | Avslutt |
 
 Fonten er JetBrains Mono, bygd inn i appen (`crates/smudiff-ui/fonts/`, SIL Open Font License).
+
+Ikonene i treet (`crates/smudiff-ui/icons/`) er fra intellij-community (Apache 2.0), og Rust-ikonet er fra intellij-rust (MIT).
 
 ## Tester
 
@@ -73,6 +82,11 @@ Ny case: lag mappa med `a.txt` og `b.txt`, kjør `gen.sh`, og kjør `cargo test`
 
 - `crates/smudiff-core`: diff-algoritmen, portert fra IntelliJ
 - `crates/smudiff-syntax`: syntax highlighting med tree-sitter og egne queries
+- `crates/smudiff-view`: view-modell uten GUI (scroll, folding, cursor, geometri)
+- `crates/smudiff-changes`: endrede filer og tremodellen
+- `crates/smudiff-git`: endringer og filinnhold via `git`
+- `crates/smudiff-ui`: GPUI-visningen
+- `crates/smudiff`: binæren
 - `examples/`: filpar å prøve viewen på, ett per språk
 - `fixtures/`: testcaser med fasit
 - `tools/golden/`: Kotlin-generator som lager fasiten

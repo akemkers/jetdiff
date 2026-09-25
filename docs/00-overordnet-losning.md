@@ -16,40 +16,38 @@ GPU-akselerert diffviewer i Rust + GPUI, modellert etter JetBrains. Detaljene li
 ## Crates
 
 ```
-smudiff-core   ren logikk, ingen GUI. Testes med golden-tester.
-  lcs          Myers + Reindexer + patience-fallback (port fra IntelliJ)
-  by_line      whitespace-blind match, to-stegs smart diff, ChunkOptimizer
-  by_word      tokenizer, inner fragments, LineFragmentSplitter
-  model        LineFragment { left, right, inner: Option<Vec<DiffFragment>> }, type
+smudiff-core     ren logikk, ingen GUI. Testes med golden-tester.
+  lcs            Myers + Reindexer + patience-fallback (port fra IntelliJ)
+  by_line        whitespace-blind match, to-stegs smart diff, ChunkOptimizer
+  by_word        tokenizer, inner fragments, LineFragmentSplitter
 
-smudiff-view   view-modell, fortsatt uten GUI
-  rows         visuell radmodell per side: Line | Fold | Pad
-  scroll       master scroll_y, slave beregnes i samme frame (1/3-anker)
-  folding      4/8/16 linjer kontekst, felles tilstand for begge sider
-  nav          neste/forrige endring, neste fil
+smudiff-syntax   tree-sitter med egne queries, tokens tilsvarer IntelliJ sine DEFAULT_*
 
-smudiff-git    gix: commits, working tree, filinnhold, filstatus
+smudiff-view     view-modell, fortsatt uten GUI
+  model          FileDiff: blokker, linjer, syntaks per side
+  state          cursor, kommandoer, scroll og folding samlet
+  scroll         master scroll_y, slave beregnes i samme frame (1/3-anker)
+  folding        kontekstnivåer, felles tilstand for begge sider
+  geometry       gutter, tekst og scrollbar per side, én side alene for nye og slettede filer
+  keys           tastesekvenser til kommandoer
 
-smudiff-ui     GPUI
-  side_editor  tekst, gutter, bakgrunner, ord-markering, error stripe
-  divider      bezier-trakt og fold-koblinger
-  file_diff    to editorer + divider
-  commit_view  tre + lazy filblokker
-  theme        fargetabell fra JetBrains (light og dark)
+smudiff-changes  FileChange { path, old_path, status } og tremodellen: mapper først,
+                 slåtte enkeltbarn-mapper, ekspandert-tilstand
 
-smudiff        binær: CLI og git difftool
+smudiff-git      git-CLI: endringer for en commit eller working tree, og filinnhold
+
+smudiff-ui       GPUI
+  side_editor    tekst, gutter, bakgrunner, ord-markering, error stripe
+  divider        bezier-trakt og fold-koblinger
+  file_diff      to editorer + divider
+  changes_tree   filtreet med ikoner og status-farger
+  changes_view   treet + én fil, som commit-dialogen i IntelliJ
+  theme          fargetabell fra JetBrains (light og dark)
+
+smudiff          binær: CLI
 ```
 
-Planlagt rundt diff-viewen (fase 5):
-
-```
-smudiff-changes  ChangeSet: FileChange { path, old_path, status, left, right } + trait ChangeSource
-smudiff-git      ChangeSource for commit og working tree. Mappe mot mappe og CLI er egne kilder
-smudiff-tree     ren tremodell: mapper først, slåtte enkeltbarn-mapper, ekspandert-tilstand
-smudiff-ui       + ChangesTree
-```
-
-Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy og kontekstnivå. Treet skriver til `Selection` ved klikk, diff-viewen følger den, og F7 forbi siste endring skriver neste fil. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.
+Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy og kontekstnivå. Treet skriver til `Selection` ved klikk, og diff-viewen følger den. `J`/`K` i diffen sender et event som treet flytter valget for. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.
 
 Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, folding og geometri skal kunne testes uten vindu. `ui` skal bare tegne det `view` sier.
 
@@ -60,7 +58,8 @@ Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, foldin
 | Diff-kjerne | Porte IntelliJ sin Myers-kjerne (ca. 650 linjer) | Gir samme resultat som JetBrains og golden-tester mot IntelliJ. `imara-diff` kan være alternativ bak en trait |
 | Offsets | UTF-8 byte | IntelliJ bruker UTF-16, vi konverterer i golden-testene |
 | Side-by-side | Ikke-aligned med trakt | Trakten er poenget. 1/3-anker og heltallssteg i tomme blokker hindrer hakking |
-| Commit-view | Aligned (padding-rader) | Blokker stables i én ytre scroll, og trakt per blokk blir urolig. JetBrains gjør det samme |
+| Commit-view | Tre + én fil | Som commit-dialogen i IntelliJ. Beholder trakten og sync scroll |
+| Git | `git`-CLI | Samme resultat som `git diff`, med brukerens config og rename-deteksjon |
 | Syntax | tree-sitter, begge filer i sin helhet | Slettede linjer får riktig syntaks |
 | Tråder | Diff og highlight i bakgrunnen, vent maks ca. 200 ms før spinner | Ingen blinking ved raske diffs |
 | Shaders | GPUI `runtime_shaders` | Metal Toolchain mangler lokalt. Kan byttes når den er installert |
@@ -71,8 +70,8 @@ Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, foldin
 2. **Én fil, JetBrains-kvalitet.** Radmodell, sync scroll, trakt med riktig kurve (0.3/0.7), farger, ord-markering, gutter, error stripe. Dette er milepælen alt avhenger av.
 3. **Folding og navigasjon.** Kollapsede områder med bølge, neste/forrige endring med animasjon.
 4. **Syntax highlighting.**
-5. **Commit-view.** Tre med mapper og status-farger, lazy filblokker, sticky header. Så working tree og mappe-mot-mappe.
-6. **CLI og git difftool.**
+5. **Commit-view.** Tre med mapper, ikoner og status-farger, og én fil om gangen. Commit mot forelder og working tree mot HEAD.
+6. **Git difftool og mappe mot mappe.**
 
 ## Fra spiken (`spikes/gpui-trakt`, slettet, ligger i git-historikken)
 
