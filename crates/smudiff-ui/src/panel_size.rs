@@ -3,7 +3,7 @@
 
 use gpui::{ClickEvent, Context, Div, DragMoveEvent, EmptyView, Stateful, div, prelude::*, px};
 
-const MIN_WIDTH: f32 = 160.;
+const MIN_WIDTH: f32 = 320.;
 /// Automatisk bredde tar aldri mer enn dette av vinduet.
 const MAX_AUTO_FRACTION: f32 = 0.4;
 const MAX_FRACTION: f32 = 0.8;
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn bredde_innenfor_grensene() {
         let auto = PanelWidth::default();
-        assert_eq!(auto.resolve(300., 1000.), 300.);
+        assert_eq!(auto.resolve(350., 1000.), 350.);
         assert_eq!(auto.resolve(600., 1000.), 400.);
         assert_eq!(auto.resolve(50., 1000.), MIN_WIDTH);
         let manual = PanelWidth { manual: Some(700.) };
