@@ -71,10 +71,11 @@ pub struct Theme {
     pub divider_bg: Rgba,
     pub line_number: Rgba,
     pub line_number_caret_row: Rgba,
-    /// `CARET_COLOR`.
-    pub caret: Rgba,
-    /// `CARET_ROW_COLOR`.
-    pub caret_row: Rgba,
+    /// Markert linje. Gjennomsiktig og sterkere enn `CARET_ROW_COLOR`, siden den er
+    /// eneste markering og skal synes over diff-bakgrunnene.
+    pub row_highlight: Rgba,
+    /// Linjenummeret til markert linje. Gul, siden ingen diff-farge er gul.
+    pub gutter_highlight: Rgba,
     pub indent_guide: Rgba,
     /// `DIFF_SEPARATOR_WAVE`, streken over foldede områder.
     pub separator_wave: Rgba,
@@ -104,8 +105,8 @@ impl Theme {
             divider_bg: bg,
             line_number: rgb(0x4B5059),
             line_number_caret_row: rgb(0xA1A3AB),
-            caret: rgb(0xCED0D6),
-            caret_row: rgb(0x1F2024),
+            row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
+            gutter_highlight: rgb(0x8A6D2F),
             indent_guide: rgb(0x323438),
             separator_wave: rgb(0x555555),
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
@@ -146,9 +147,8 @@ impl Theme {
             divider_bg: bg,
             line_number: rgb(0xAEB3C2),
             line_number_caret_row: rgb(0x767A8A),
-            // Arvet fra Default-skjemaet, som har svart caret
-            caret: rgb(0x000000),
-            caret_row: rgb(0xF5F8FE),
+            row_highlight: [0x2E, 0x6B, 0xE6, 0x1A],
+            gutter_highlight: rgb(0xF5D98B),
             indent_guide: rgb(0xEBECF0),
             separator_wave: rgb(0xD0D0D0),
             scrollbar_thumb: [0x00, 0x00, 0x00, 0x33],

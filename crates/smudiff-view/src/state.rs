@@ -1,5 +1,5 @@
-//! Diffen som helhet: cursor, folding og scroll. Utfører `Command` og holder cursor og
-//! scroll i takt med scrolloff. `scroll` er målet, UI-et animerer dit selv.
+//! Diffen som helhet: markert linje, folding og scroll. Utfører `Command` og holder
+//! linja og scroll i takt med scrolloff. `scroll` er målet, UI-et animerer dit selv.
 
 use std::rc::Rc;
 
@@ -15,12 +15,15 @@ use crate::nav::{next_block, prev_block, target_for_block};
 use crate::scroll::{PositionKeeper, ScrollState};
 
 /// Vim sin `scrolloff`, så det alltid er kontekst rundt cursoren. IntelliJ har 0.
-const SCROLLOFF: usize = 5;
+const SCROLLOFF: usize = 8;
+
+/// `h` og `l` scroller så mange tegn.
+const SCROLL_COLUMNS: f32 = 4.;
 
 /// Liten margin mot flyttallsfeil når scroll står på en linjegrense.
 const EPS: f32 = 1e-3;
 
-/// Horisontal geometri fra UI-et, som kjenner tekstbredden. Bredde 0 slår av horisontal følging.
+/// Horisontal geometri fra UI-et, som kjenner tekstbredden.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Horizontal {
     pub text_width: f32,
@@ -105,10 +108,6 @@ impl DiffState {
         self.diff.line(side, line)
     }
 
-    fn cursor_text(&self) -> &str {
-        self.text(self.cursor.side, self.cursor.line)
-    }
-
     /// Gyldig linje utenfor kollapsede folds.
     fn clamp_line(&self, side: Side, line: usize) -> usize {
         let line = line.min(self.diff.line_count(side) - 1);
@@ -120,11 +119,8 @@ impl DiffState {
             .logical_to_visual(self.cursor.line)
     }
 
-    /// Ny logisk linje for cursoren med samme ønskede celle.
     fn set_line(&mut self, line: usize) {
-        let side = self.cursor.side;
-        let line = self.clamp_line(side, line);
-        self.cursor = self.cursor.with_line(line, self.text(side, line));
+        self.cursor.line = self.clamp_line(self.cursor.side, line);
     }
 
     fn set_visual(&mut self, visual: usize, vp: Viewport) {
@@ -198,37 +194,30 @@ impl DiffState {
             .scroll_to(&self.diff, &self.folding, side, y, vp);
     }
 
-    fn follow(&mut self, vp: Viewport, hx: Horizontal, allow_center: bool) {
+    fn follow(&mut self, vp: Viewport, allow_center: bool) {
         let y = self.follow_y(self.scroll.y(self.cursor.side), vp, allow_center);
         self.scroll_cursor_side_to(y, vp);
-        self.follow_x(hx);
     }
 
-    /// x for cursoren i celler. På en kollapset fold står den ved tekststart.
-    fn cursor_cells(&self) -> std::ops::Range<usize> {
-        let c = self.cursor;
-        if self.folding.fold_at_line(c.side, c.line).is_some() {
-            return 0..1;
-        }
-        columns::cell_range(self.cursor_text(), c.col)
-    }
-
-    /// Vim sin `sidescroll=1`: minste horisontale scroll som viser cursoren.
-    fn follow_x(&mut self, hx: Horizontal) {
-        if hx.text_width <= 0. {
-            return;
-        }
-        let cells = self.cursor_cells();
-        let x1 = cells.start as f32 * hx.char_width;
-        let x2 = cells.end as f32 * hx.char_width;
-        let mut x = self.scroll.x;
-        if x2 > x + hx.text_width {
-            x = x2 - hx.text_width;
-        }
-        if x1 < x {
-            x = x1;
-        }
+    fn scroll_x(&mut self, x: f32, hx: Horizontal) -> Outcome {
+        let before = self.scroll.x;
         self.scroll.scroll_x_to(x, hx.max_x);
+        if self.scroll.x == before {
+            return Outcome::default();
+        }
+        Outcome::instant()
+    }
+
+    /// Slutten av linja ett tegn inn fra høyre kant. En kollapset fold har ingen tekst.
+    fn scroll_to_end(&mut self, hx: Horizontal) -> Outcome {
+        let c = self.cursor;
+        let cells = if self.folding.fold_at_line(c.side, c.line).is_some() {
+            0
+        } else {
+            columns::display_width(self.text(c.side, c.line))
+        };
+        let x = (cells + 1) as f32 * hx.char_width - hx.text_width;
+        self.scroll_x(x.max(0.), hx)
     }
 
     /// Etter scroll uten cursor: flytt cursoren inn hvis scrolloff krever det.
@@ -246,26 +235,22 @@ impl DiffState {
     pub fn execute(&mut self, cmd: Command, vp: Viewport, hx: Horizontal) -> Outcome {
         use Command::*;
         match cmd {
-            MoveDown => self.move_visual(1, vp, hx),
-            MoveUp => self.move_visual(-1, vp, hx),
-            MoveLeft => self.move_col(-1, hx),
-            MoveRight => self.move_col(1, hx),
-            LineStart => self.set_col(0, hx),
-            LineEnd => {
-                self.cursor = self.cursor.to_end(self.cursor_text());
-                self.follow_x(hx);
-                Outcome::instant()
-            }
-            GoToTop => self.go_to_line(0, vp, hx),
+            MoveDown => self.move_visual(1, vp),
+            MoveUp => self.move_visual(-1, vp),
+            ScrollLeft => self.scroll_x(self.scroll.x - SCROLL_COLUMNS * hx.char_width, hx),
+            ScrollRight => self.scroll_x(self.scroll.x + SCROLL_COLUMNS * hx.char_width, hx),
+            ScrollToStart => self.scroll_x(0., hx),
+            ScrollToEnd => self.scroll_to_end(hx),
+            GoToTop => self.go_to_line(0, vp),
             GoToBottom => {
                 let last = self.diff.line_count(self.cursor.side) - 1;
-                self.go_to_line(last, vp, hx)
+                self.go_to_line(last, vp)
             }
-            HalfPageDown => self.half_page(1, vp, hx),
-            HalfPageUp => self.half_page(-1, vp, hx),
-            NextChange => self.change(true, vp, hx),
-            PrevChange => self.change(false, vp, hx),
-            SwitchSide => self.switch_side(vp, hx),
+            HalfPageDown => self.half_page(1, vp),
+            HalfPageUp => self.half_page(-1, vp),
+            NextChange => self.change(true, vp),
+            PrevChange => self.change(false, vp),
+            SwitchSide => self.switch_side(vp),
             FoldOpen => self.change_folding(vp, |s, f| f.expand_at(s.0, s.1)),
             ToggleFolds => self.change_folding(vp, |_, f| {
                 let any_closed = f.visible(Side::Left).next().is_some();
@@ -283,7 +268,7 @@ impl DiffState {
         }
     }
 
-    fn move_visual(&mut self, delta: isize, vp: Viewport, hx: Horizontal) -> Outcome {
+    fn move_visual(&mut self, delta: isize, vp: Viewport) -> Outcome {
         let cv = self.cursor_visual(vp);
         let target = cv.saturating_add_signed(delta);
         let before = self.cursor;
@@ -291,30 +276,18 @@ impl DiffState {
         if self.cursor == before {
             return Outcome::default();
         }
-        self.follow(vp, hx, true);
+        self.follow(vp, true);
         Outcome::instant()
     }
 
-    fn move_col(&mut self, delta: isize, hx: Horizontal) -> Outcome {
-        let col = columns::move_col(self.cursor_text(), self.cursor.col, delta);
-        self.set_col(col, hx)
-    }
-
-    fn set_col(&mut self, col: usize, hx: Horizontal) -> Outcome {
-        self.cursor = self.cursor.with_col(col, self.cursor_text());
-        self.follow_x(hx);
-        Outcome::instant()
-    }
-
-    /// `gg` og `G`. Kolonnen beholdes, som neovim sin default `nostartofline`.
-    fn go_to_line(&mut self, line: usize, vp: Viewport, hx: Horizontal) -> Outcome {
+    fn go_to_line(&mut self, line: usize, vp: Viewport) -> Outcome {
         self.set_line(line);
-        self.follow(vp, hx, true);
+        self.follow(vp, true);
         Outcome::animated()
     }
 
     /// `d` og `u`: scroll og cursor flyttes like mange linjer, vim sin `scroll`.
-    fn half_page(&mut self, dir: isize, vp: Viewport, hx: Horizontal) -> Outcome {
+    fn half_page(&mut self, dir: isize, vp: Viewport) -> Outcome {
         let n = (screen_lines(vp) / 2).max(1);
         let side = self.cursor.side;
         let sy = self.scroll.y(side);
@@ -322,13 +295,12 @@ impl DiffState {
         self.set_visual(cv.saturating_add_signed(dir * n as isize), vp);
         let y = self.follow_y(sy + dir as f32 * n as f32 * vp.line_height, vp, false);
         self.scroll_cursor_side_to(y, vp);
-        self.follow_x(hx);
         Outcome::animated()
     }
 
     /// `n` og `p` bruker IntelliJ sin navigasjon og landing, så cursoren til starten av
     /// endringen. Scroll justeres bare hvis landingen bryter scrolloff.
-    fn change(&mut self, next: bool, vp: Viewport, hx: Horizontal) -> Outcome {
+    fn change(&mut self, next: bool, vp: Viewport) -> Outcome {
         let side = self.cursor.side;
         let block = if next {
             next_block(&self.diff, side, self.cursor.line)
@@ -348,7 +320,6 @@ impl DiffState {
         if y != self.scroll.y(side) {
             self.scroll_cursor_side_to(y, vp);
         }
-        self.follow_x(hx);
         Outcome::animated()
     }
 
@@ -360,24 +331,19 @@ impl DiffState {
         self.clamp_line(other, line)
     }
 
-    /// `TwosideTextDiffViewer.transferPosition`: linja mappes, kolonnen følger i tegn.
+    /// `TwosideTextDiffViewer.transferPosition`, uten kolonne.
     pub fn transferred_cursor(&self) -> Cursor {
-        let c = self.cursor;
-        let other = c.side.other();
-        let line = self.transferred_line();
-        let chars = columns::char_index(self.cursor_text(), c.col);
-        let text = self.text(other, line);
-        Cursor::new(other, line).with_col(columns::col_for_char_index(text, chars), text)
+        Cursor::new(self.cursor.side.other(), self.transferred_line())
     }
 
     /// `MyFocusOppositePaneAction`: cursoren flyttes, siden blir master, og så
     /// `scrollToCaret(MAKE_VISIBLE)`.
-    fn switch_side(&mut self, vp: Viewport, hx: Horizontal) -> Outcome {
+    fn switch_side(&mut self, vp: Viewport) -> Outcome {
         if self.diff.single_side().is_some() {
             return Outcome::default();
         }
         self.cursor = self.transferred_cursor();
-        self.follow(vp, hx, false);
+        self.follow(vp, false);
         Outcome::animated()
     }
 
@@ -413,11 +379,10 @@ impl DiffState {
         self.push_cursor(vp)
     }
 
-    /// Klikk setter side, linje og kolonne uten å scrolle.
-    pub fn click(&mut self, side: Side, line: usize, col: usize) {
-        let line = self.clamp_line(side, line);
+    /// Klikk setter side og linje uten å scrolle.
+    pub fn click(&mut self, side: Side, line: usize) {
         self.master = side;
-        self.cursor = Cursor::new(side, line).with_col(col, self.text(side, line));
+        self.cursor = Cursor::new(side, self.clamp_line(side, line));
     }
 
     /// Ny viewport-høyde: klem master, regn slave på nytt og hold cursoren synlig.
@@ -532,16 +497,14 @@ mod tests {
     #[test]
     fn scrolloff_ved_j() {
         let mut s = plain();
-        for _ in 0..14 {
-            run(&mut s, MoveDown);
-        }
+        times(&mut s, MoveDown, 11);
         assert_eq!(top(&s), 0.);
-        // Linje 15 er fem fra bunnen av 20
+        // Linje 12 er åtte fra bunnen av 20
         run(&mut s, MoveDown);
         assert_eq!(top(&s), 10.);
         assert_scrolloff(&s);
         times(&mut s, MoveUp, 10);
-        assert_eq!(s.cursor.line, 5);
+        assert_eq!(s.cursor.line, 2);
         assert_eq!(top(&s), 0.);
     }
 
@@ -552,7 +515,7 @@ mod tests {
             line_height: LH,
         };
         assert_eq!(scrolloff(small), 2);
-        assert_eq!(scrolloff(VP), 5);
+        assert_eq!(scrolloff(VP), 8);
         assert_eq!(
             scrolloff(Viewport {
                 height: 5.,
@@ -583,8 +546,8 @@ mod tests {
     #[test]
     fn langt_hopp_sentrerer() {
         let mut s = plain();
-        s.click(R, 100, 0);
-        s.follow(VP, NO_X, true);
+        s.click(R, 100);
+        s.follow(VP, true);
         // 9 linjer over cursoren i et vindu på 20, som vim sin `scroll_cursor_halfway`
         assert_eq!(top(&s), 910.);
         assert_scrolloff(&s);
@@ -593,16 +556,16 @@ mod tests {
     #[test]
     fn halv_side_flytter_scroll_og_cursor_likt() {
         let mut s = plain();
-        times(&mut s, MoveDown, 5);
+        times(&mut s, MoveDown, 10);
         let out = run(&mut s, HalfPageDown);
         assert!(out.animate);
-        assert_eq!(s.cursor.line, 15);
+        assert_eq!(s.cursor.line, 20);
         assert_eq!(top(&s), 100.);
         run(&mut s, HalfPageDown);
-        assert_eq!((s.cursor.line, top(&s)), (25, 200.));
+        assert_eq!((s.cursor.line, top(&s)), (30, 200.));
         run(&mut s, HalfPageUp);
         run(&mut s, HalfPageUp);
-        assert_eq!((s.cursor.line, top(&s)), (5, 0.));
+        assert_eq!((s.cursor.line, top(&s)), (10, 0.));
         // Øverst kan ikke scroll gå lenger, men cursoren går
         run(&mut s, HalfPageUp);
         assert_eq!((s.cursor.line, top(&s)), (0, 0.));
@@ -616,7 +579,6 @@ mod tests {
         let out = run(&mut s, NextChange);
         assert!(out.animate);
         assert_eq!(s.cursor.line, 40);
-        assert_eq!(s.cursor.col, 0);
         assert_scrolloff(&s);
         run(&mut s, PrevChange);
         assert_eq!(s.cursor.line, 10);
@@ -630,10 +592,15 @@ mod tests {
 
     #[test]
     fn endring_lander_der_intellij_lander() {
+        // Høyt nok vindu til at landingen ikke bryter scrolloff
+        let vp = Viewport {
+            height: 400.,
+            line_height: LH,
+        };
         let mut s = three_changes(false);
-        s.init(VP);
-        run(&mut s, NextChange);
-        let t = target_for_block(&s.diff, &s.folding, 1, VP);
+        s.init(vp);
+        s.execute(NextChange, vp, NO_X);
+        let t = target_for_block(&s.diff, &s.folding, 1, vp);
         assert_eq!(s.scroll.y, t.scroll_y);
     }
 
@@ -646,34 +613,23 @@ mod tests {
     }
 
     #[test]
-    fn bytte_side_overforer_linje_og_kolonne() {
+    fn bytte_side_overforer_linja() {
         // Venstre har tre linjer mer i endringen
         let a = "x\nny1\nny2\nny3\nfelles æøå\ny\n";
         let b = "x\nfelles æøå\ny\n";
         let mut s = state(a, b, false);
-        s.click(L, 4, 9);
-        assert_eq!(s.cursor.col, 9);
+        s.click(L, 4);
         let out = run(&mut s, SwitchSide);
         assert!(out.animate);
         assert_eq!((s.cursor.side, s.cursor.line), (R, 1));
-        // Tegnindeks 8 ('æ' er 9..11 i bytes, men tegn 7) bevares
-        assert_eq!(s.cursor.col, 9);
         assert_eq!(s.master, R);
         // Linje i en blokk som er tom på høyre side går til linja etter
-        s.click(L, 2, 0);
+        s.click(L, 2);
         run(&mut s, SwitchSide);
         assert_eq!((s.cursor.side, s.cursor.line), (R, 1));
         // `transferLine` på starten av en tom blokk gir starten av blokken på andre siden
         run(&mut s, SwitchSide);
         assert_eq!((s.cursor.side, s.cursor.line), (L, 1));
-    }
-
-    #[test]
-    fn kolonne_klemmes_ved_bytte() {
-        let mut s = state("kort\nlang linje her\n", "kort\nlang\n", false);
-        s.click(L, 1, 12);
-        run(&mut s, SwitchSide);
-        assert_eq!((s.cursor.line, s.cursor.col), (1, 3));
     }
 
     #[test]
@@ -686,22 +642,20 @@ mod tests {
         run(&mut s, MoveUp);
         assert_eq!(s.cursor.line, 0);
         // Fra 14 til folden 15..36 og videre til 36
-        s.click(R, 14, 0);
+        s.click(R, 14);
         run(&mut s, MoveDown);
         assert_eq!(s.cursor.line, 15);
         run(&mut s, MoveDown);
         assert_eq!(s.cursor.line, 36);
-        assert_eq!(s.cursor_cells(), columns::cell_range("a36", 0));
-        s.click(R, 20, 2);
+        s.click(R, 20);
         // Klikk inne i en fold havner på starten av den
         assert_eq!(s.cursor.line, 15);
-        assert_eq!(s.cursor_cells(), 0..1);
     }
 
     #[test]
     fn fold_kommandoer_holder_cursoren() {
         let mut s = three_changes(true);
-        s.click(R, 45, 0);
+        s.click(R, 45);
         let y = top(&s);
         let out = run(&mut s, FoldOpen);
         assert!(out.folding_changed);
@@ -720,35 +674,13 @@ mod tests {
     }
 
     #[test]
-    fn tab_og_unicode_med_j_og_k() {
-        let a = "\tx\nabcdef\næøå🚀\n";
-        let mut s = state(a, a, false);
-        run(&mut s, MoveRight);
-        assert_eq!(s.cursor.col, 1);
-        assert_eq!(s.cursor.want, 4);
-        run(&mut s, MoveDown);
-        assert_eq!(s.cursor.col, 4);
-        run(&mut s, MoveDown);
-        assert_eq!(s.cursor.col, 6);
-        run(&mut s, LineEnd);
-        assert_eq!(s.cursor.col, 6);
-        run(&mut s, MoveUp);
-        assert_eq!(s.cursor.col, 5);
-        run(&mut s, LineStart);
-        run(&mut s, MoveUp);
-        assert_eq!(s.cursor.col, 0);
-        times(&mut s, MoveLeft, 5);
-        assert_eq!(s.cursor.col, 0);
-    }
-
-    #[test]
     fn musehjul_skyver_cursoren() {
         let mut s = plain();
-        times(&mut s, MoveDown, 10);
+        times(&mut s, MoveDown, 11);
         assert!(!s.wheel(L, 30., VP));
-        assert_eq!(s.cursor.line, 10);
+        assert_eq!(s.cursor.line, 11);
         assert!(s.wheel(L, 100., VP));
-        assert_eq!(s.cursor.line, 18);
+        assert_eq!(s.cursor.line, 21);
         assert_eq!(s.master, L);
         // Brøkdel av en linje fra trackpad
         s.wheel(R, 3.5, VP);
@@ -756,21 +688,28 @@ mod tests {
     }
 
     #[test]
-    fn horisontal_folging() {
+    fn sideveis_scroll() {
         let long = format!("{}\n", "x".repeat(200));
         let mut s = state(&long, &long, false);
         let hx = Horizontal {
             text_width: 100.,
             char_width: 5.,
-            max_x: 1000.,
+            max_x: 905.,
         };
-        s.execute(LineEnd, VP, hx);
-        assert_eq!(s.scroll.x, 900.);
-        for _ in 0..10 {
-            s.execute(MoveLeft, VP, hx);
-        }
-        assert_eq!(s.scroll.x, 900.);
-        s.execute(LineStart, VP, hx);
+        s.execute(ScrollRight, VP, hx);
+        assert_eq!(s.scroll.x, 20.);
+        s.execute(ScrollToEnd, VP, hx);
+        assert_eq!(s.scroll.x, 905.);
+        assert!(!s.execute(ScrollRight, VP, hx).changed);
+        s.execute(ScrollLeft, VP, hx);
+        assert_eq!(s.scroll.x, 885.);
+        s.execute(ScrollToStart, VP, hx);
+        assert_eq!(s.scroll.x, 0.);
+        assert!(!s.execute(ScrollLeft, VP, hx).changed);
+        // Linja på bunnen er tom, så `$` går helt til venstre
+        run(&mut s, GoToBottom);
+        s.execute(ScrollRight, VP, hx);
+        s.execute(ScrollToEnd, VP, hx);
         assert_eq!(s.scroll.x, 0.);
     }
 

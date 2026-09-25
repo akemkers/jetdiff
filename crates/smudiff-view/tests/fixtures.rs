@@ -5,7 +5,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use smudiff_view::columns;
 use smudiff_view::folding::CONTEXT_RANGE_MODES;
 use smudiff_view::nav::{next_block, prev_block, target_for_block};
 use smudiff_view::{
@@ -401,8 +400,7 @@ fn fold_operasjoner_holder_seg_innenfor() {
     }
 }
 
-/// Cursoren står på en gyldig linje og tegngrense, aldri skjult i en fold, og scroll er
-/// innenfor.
+/// Cursoren står på en gyldig linje, aldri skjult i en fold, og scroll er innenfor.
 fn assert_cursor_valid(name: &str, s: &DiffState, vp: Viewport, cmd: Command) {
     let c = s.cursor;
     let d = &s.diff;
@@ -411,12 +409,6 @@ fn assert_cursor_valid(name: &str, s: &DiffState, vp: Viewport, cmd: Command) {
         "{name} {cmd:?}: linje {}",
         c.line
     );
-    let text = d.line(c.side, c.line);
-    assert_eq!(
-        columns::clamp_col(text, c.col),
-        c.col,
-        "{name} {cmd:?}: kolonne"
-    );
     assert_eq!(
         s.folding.caret_after(c.side, c.line),
         c.line,
@@ -424,7 +416,6 @@ fn assert_cursor_valid(name: &str, s: &DiffState, vp: Viewport, cmd: Command) {
     );
     let t = s.transferred_cursor();
     assert!(t.line < d.line_count(t.side), "{name} {cmd:?}: overført");
-    assert_eq!(columns::clamp_col(d.line(t.side, t.line), t.col), t.col);
     for side in [L, R] {
         let layout = s.folding.layout(side, vp.line_height);
         let y = s.scroll.y(side);
@@ -433,6 +424,7 @@ fn assert_cursor_valid(name: &str, s: &DiffState, vp: Viewport, cmd: Command) {
             "{name} {cmd:?}"
         );
     }
+    assert!(s.scroll.x >= 0. && s.scroll.x <= 2000., "{name} {cmd:?}: x");
 }
 
 #[test]
@@ -441,10 +433,10 @@ fn cursor_holder_seg_gyldig() {
     let cmds = [
         MoveDown,
         MoveUp,
-        MoveLeft,
-        MoveRight,
-        LineStart,
-        LineEnd,
+        ScrollLeft,
+        ScrollRight,
+        ScrollToStart,
+        ScrollToEnd,
         GoToTop,
         GoToBottom,
         HalfPageDown,

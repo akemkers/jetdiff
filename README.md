@@ -33,18 +33,19 @@ cargo run --release -p smudiff -- examples/kotlin/a.kt examples/kotlin/b.kt
 
 ### Taster
 
-Et lite, vim-inspirert keymap for lesing. Tastelinja nederst viser de viktigste.
+Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert linje. Tastelinja nederst viser de viktigste.
 
 | Tast | Gjør |
 | --- | --- |
 | `J` `K` | Neste og forrige fil i treet |
-| `h` `j` `k` `l`, piltaster | Flytt cursoren. `j`/`k` hopper over lukkede folds |
-| `0` `$` | Linjestart og linjeslutt |
+| `j` `k`, pil opp og ned | Flytt markert linje. Hopper over lukkede folds |
+| `h` `l`, pil venstre og høyre | Scroll sideveis 4 tegn |
+| `0` `$` | Scroll til linjestart og til slutten av markert linje |
 | `gg` `G` | Første og siste linje |
 | `d` `u`, Ctrl+d Ctrl+u | Halv side ned og opp |
 | `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Neste og forrige endring |
 | Tab | Bytt side |
-| `o` | Åpne fold ved cursoren ett nivå |
+| `o` | Åpne fold ved markert linje ett nivå |
 | `f` | Åpne alle folds, eller lukk alle hvis ingen er lukket |
 | Cmd+Pluss Cmd+Minus Cmd+0 | Zoom inn, ut og tilbake til 16pt. Treet følger med |
 | Cmd+Alt+C | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding |
@@ -82,7 +83,7 @@ Ny case: lag mappa med `a.txt` og `b.txt`, kjør `gen.sh`, og kjør `cargo test`
 
 - `crates/smudiff-core`: diff-algoritmen, portert fra IntelliJ
 - `crates/smudiff-syntax`: syntax highlighting med tree-sitter og egne queries
-- `crates/smudiff-view`: view-modell uten GUI (scroll, folding, cursor, geometri)
+- `crates/smudiff-view`: view-modell uten GUI (scroll, folding, markert linje, geometri)
 - `crates/smudiff-changes`: endrede filer og tremodellen
 - `crates/smudiff-git`: endringer og filinnhold via `git`
 - `crates/smudiff-ui`: GPUI-visningen

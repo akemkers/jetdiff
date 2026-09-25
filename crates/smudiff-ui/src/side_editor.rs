@@ -5,7 +5,7 @@ use gpui::{
     App, Bounds, ContentMask, Hsla, Pixels, ShapedLine, SharedString, TextRun, Window, fill, point,
     px, quad, size,
 };
-use smudiff_view::columns::{self, ExpandedLine};
+use smudiff_view::columns::ExpandedLine;
 use smudiff_view::separator::{stroke_width, wave};
 use smudiff_view::{FileDiff, Folding, SideGeometry, StripeMarker, thumb_range};
 
@@ -77,17 +77,16 @@ pub struct SideEditor<'a> {
     pub height: f32,
     pub scroll_y: f32,
     pub scroll_x: f32,
-    pub caret: Caret,
+    pub caret: CaretRow,
     pub stripe: &'a StripeRects,
 }
 
-/// Cursoren slik denne siden tegner den.
+/// Den markerte linja slik denne siden tegner den.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Caret {
+pub struct CaretRow {
     pub line: usize,
-    pub col: usize,
-    /// Fylt blokk på aktiv side med fokus, ellers bare omriss som vim i et inaktivt vindu.
-    pub solid: bool,
+    /// Aktiv side med fokus får full farge, så man ser hvor Tab og `o` virker.
+    pub active: bool,
 }
 
 fn rect(x: std::ops::Range<f32>, y1: f32, y2: f32) -> Bounds<Pixels> {
@@ -147,12 +146,22 @@ impl SideEditor<'_> {
                 self.theme.indent_guide,
             ));
 
-            // Caret row under diff-bakgrunnene, som i editorens lagrekkefølge
+            self.paint_block_backgrounds(first, last, window);
+            // Over diff-bakgrunnene, ellers forsvinner den i endringer
             if (first..=last_line).contains(&self.caret.line) {
                 let y = screen_y(layout.line_top(self.caret.line));
-                window.paint_quad(fill(rect(g.text.clone(), y, y + lh), self.theme.caret_row));
+                let color = if self.caret.active {
+                    self.theme.row_highlight
+                } else {
+                    self.theme.row_highlight.opacity(0.4)
+                };
+                window.paint_quad(fill(rect(g.text.clone(), y, y + lh), color));
+                // Linjenummeret er lettest å finne igjen etter et hopp
+                if self.caret.active {
+                    let numbers = g.gutter_x(0.0..gl.separator);
+                    window.paint_quad(fill(rect(numbers, y, y + lh), self.theme.gutter_highlight));
+                }
             }
-            self.paint_block_backgrounds(first, last, window);
             self.paint_folds(first_visual..=last_visual, window);
 
             window.with_content_mask(mask(text_bounds), |window| {
@@ -181,10 +190,6 @@ impl SideEditor<'_> {
                         let _ = shaped.paint(origin, px(lh), window, cx);
                     }
                 }
-                if (first_visual..=last_visual).contains(&layout.logical_to_visual(self.caret.line))
-                {
-                    self.paint_caret(cache, text_x, window, cx);
-                }
             });
 
             window.with_content_mask(mask(gutter_bounds), |window| {
@@ -209,55 +214,6 @@ impl SideEditor<'_> {
 
         cache.trim(first..last_line + 1);
         widest
-    }
-
-    /// Blokk over tegnet. På en kollapset fold eller tom linje er den ett tegn bred ved
-    /// tekststart.
-    fn paint_caret(&self, cache: &mut SideCache, text_x: f32, window: &mut Window, cx: &mut App) {
-        let c = self.caret;
-        let side = self.geom.side;
-        let lh = self.style.line_height();
-        let layout = self.folding.layout(side, lh);
-        let y = self.top + layout.line_top(c.line) - self.scroll_y;
-        let folded = self.folding.fold_at_line(side, c.line).is_some();
-        let text = self.diff.line(side, c.line);
-        let next = columns::next_col(text, c.col);
-        let (x1, x2, glyph) = if folded || next <= c.col {
-            (text_x, text_x + self.style.char_width, None)
-        } else {
-            let entry = cache.get_or_insert_with(c.line, || self.shape(c.line, window));
-            let (a, b) = (
-                entry.expanded.display_index(c.col),
-                entry.expanded.display_index(next),
-            );
-            let x1 = text_x + entry.x_for_col(c.col);
-            let x2 = (text_x + entry.x_for_col(next)).max(x1 + 1.);
-            let glyph = entry.expanded.text[a..b].trim_end().to_owned();
-            (x1, x2, (!glyph.is_empty()).then_some(glyph))
-        };
-        let color = self.theme.caret;
-        if !c.solid {
-            for r in [
-                rect(x1..x2, y, y + 1.),
-                rect(x1..x2, y + lh - 1., y + lh),
-                rect(x1..x1 + 1., y, y + lh),
-                rect(x2 - 1.0..x2, y, y + lh),
-            ] {
-                window.paint_quad(fill(r, color));
-            }
-            return;
-        }
-        window.paint_quad(fill(rect(x1..x2, y, y + lh), color));
-        // Tegnet under males på nytt i bakgrunnsfargen, som en blokk-caret i vim
-        if let Some(glyph) = glyph {
-            let text = SharedString::from(glyph);
-            let runs = [run(text.len(), self.style, self.theme.editor_bg)];
-            let shaped = window
-                .text_system()
-                .shape_line(text, self.style.font_size, &runs, None);
-            let origin = point(px(x1), px(y + self.style.text_dy));
-            let _ = shaped.paint(origin, px(lh), window, cx);
-        }
     }
 
     /// `DiffLineSeparatorRenderer`: bølge over gutter og tekst, med fasen fra divideren.

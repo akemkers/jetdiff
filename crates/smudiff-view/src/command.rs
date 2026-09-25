@@ -4,10 +4,12 @@
 pub enum Command {
     MoveDown,
     MoveUp,
-    MoveLeft,
-    MoveRight,
-    LineStart,
-    LineEnd,
+    ScrollLeft,
+    ScrollRight,
+    /// Helt til venstre.
+    ScrollToStart,
+    /// Slutten av den markerte linja til høyre kant.
+    ScrollToEnd,
     GoToTop,
     GoToBottom,
     HalfPageDown,

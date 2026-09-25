@@ -103,12 +103,12 @@ fn command(key: Key) -> Option<Command> {
             _ => return None,
         },
         KeyCode::Char(c) => match c {
-            '0' => LineStart,
-            '$' => LineEnd,
+            '0' => ScrollToStart,
+            '$' => ScrollToEnd,
             'j' => MoveDown,
             'k' => MoveUp,
-            'h' => MoveLeft,
-            'l' => MoveRight,
+            'h' => ScrollLeft,
+            'l' => ScrollRight,
             'd' => HalfPageDown,
             'u' => HalfPageUp,
             'n' => NextChange,
@@ -124,8 +124,8 @@ fn command(key: Key) -> Option<Command> {
         KeyCode::Tab => SwitchSide,
         KeyCode::Down => MoveDown,
         KeyCode::Up => MoveUp,
-        KeyCode::Left => MoveLeft,
-        KeyCode::Right => MoveRight,
+        KeyCode::Left => ScrollLeft,
+        KeyCode::Right => ScrollRight,
         // F7 og Shift+F7 er IntelliJ sine `NextDiff` og `PreviousDiff`
         KeyCode::F(7) if key.shift => PrevChange,
         KeyCode::F(7) => NextChange,
@@ -165,10 +165,10 @@ mod tests {
     fn enkle_taster() {
         assert_eq!(last(&chars("j")), c(MoveDown));
         assert_eq!(last(&chars("k")), c(MoveUp));
-        assert_eq!(last(&chars("h")), c(MoveLeft));
-        assert_eq!(last(&chars("l")), c(MoveRight));
-        assert_eq!(last(&chars("0")), c(LineStart));
-        assert_eq!(last(&chars("$")), c(LineEnd));
+        assert_eq!(last(&chars("h")), c(ScrollLeft));
+        assert_eq!(last(&chars("l")), c(ScrollRight));
+        assert_eq!(last(&chars("0")), c(ScrollToStart));
+        assert_eq!(last(&chars("$")), c(ScrollToEnd));
         assert_eq!(last(&chars("d")), c(HalfPageDown));
         assert_eq!(last(&chars("u")), c(HalfPageUp));
         assert_eq!(last(&chars("n")), c(NextChange));
@@ -217,8 +217,8 @@ mod tests {
         assert_eq!(last(&[k(KeyCode::F(7)).shift()]), c(PrevChange));
         assert_eq!(last(&[k(KeyCode::Down)]), c(MoveDown));
         assert_eq!(last(&[k(KeyCode::Up)]), c(MoveUp));
-        assert_eq!(last(&[k(KeyCode::Left)]), c(MoveLeft));
-        assert_eq!(last(&[k(KeyCode::Right)]), c(MoveRight));
+        assert_eq!(last(&[k(KeyCode::Left)]), c(ScrollLeft));
+        assert_eq!(last(&[k(KeyCode::Right)]), c(ScrollRight));
         assert_eq!(run(&[k(KeyCode::F(5))]), [Parsed::Ignored]);
     }
 }

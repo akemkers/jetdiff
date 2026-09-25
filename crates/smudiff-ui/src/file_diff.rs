@@ -11,15 +11,15 @@ use gpui::{
     canvas, div, prelude::*, px,
 };
 use smudiff_core::side::Side;
-use smudiff_view::columns::{ExpandedLine, display_width};
+use smudiff_view::columns::display_width;
 use smudiff_view::metrics::{FONT_SIZE, zoomed};
 use smudiff_view::{
     Command, DiffState, FileDiff, FoldId, FoldSettings, Folding, Horizontal, Key, KeyCode,
-    KeyParser, Parsed, ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport, columns,
+    KeyParser, Parsed, ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport,
     stripe_markers,
 };
 
-use crate::side_editor::{Caret, SideCache, SideEditor, StripeRects};
+use crate::side_editor::{CaretRow, SideCache, SideEditor, StripeRects};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -31,8 +31,9 @@ const NAV_ANIMATION_MS: f32 = 170.;
 /// Høyden på tastelinja nederst.
 const HELP_HEIGHT: f32 = 24.;
 
-const HELP: [(&str, &str); 8] = [
+const HELP: [(&str, &str); 9] = [
     ("j k", "opp/ned"),
+    ("h l", "sideveis"),
     ("d u", "scroll side"),
     ("n p", "hopp til endring"),
     ("o", "åpne fold"),
@@ -333,8 +334,8 @@ impl FileDiffView {
         }
     }
 
-    /// Side, logisk linje og x i teksten under musa, `None` i divideren.
-    fn hit(&self, position: Point<Pixels>) -> Option<(Side, usize, f32)> {
+    /// Side og logisk linje under musa, `None` i divideren.
+    fn hit(&self, position: Point<Pixels>) -> Option<(Side, usize)> {
         let (vp, bounds, style) = (
             self.viewport()?,
             self.shared.bounds.get()?,
@@ -348,26 +349,12 @@ impl FileDiffView {
         let layout = self.state.folding.layout(side, vp.line_height);
         let y = f32::from(position.y - bounds.origin.y) + self.shown.y(side);
         let line = layout.y_to_logical_line(y).min(layout.line_count() - 1);
-        let text_x = x - geoms[idx(side)].text_x + self.shown.x;
-        Some((side, line, text_x))
+        Some((side, line))
     }
 
     fn fold_at(&self, position: Point<Pixels>) -> Option<FoldId> {
-        let (side, line, _) = self.hit(position)?;
+        let (side, line) = self.hit(position)?;
         self.state.folding.fold_at_line(side, line)
-    }
-
-    /// Kolonnen under x. Shapet linje gir eksakt treff, ellers regnes det i celler.
-    fn col_at(&self, side: Side, line: usize, x: f32) -> usize {
-        let text = self.state.diff.line(side, line);
-        let x = x.max(0.);
-        let caches = self.shared.caches.borrow();
-        if let Some(shaped) = caches[idx(side)].get(line).and_then(|e| e.shaped.as_ref()) {
-            let index = shaped.closest_index_for_x(px(x));
-            return ExpandedLine::new(text).col_for_display_index(index);
-        }
-        let cw = self.style.as_ref().map_or(1., |s| s.char_width);
-        columns::col_for_cell(text, (x / cw) as usize)
     }
 
     /// `FoldingModelSupport.MyMouseListener`: hover gjelder blokken på begge sider.
@@ -427,17 +414,16 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// Klikk gir fokus og flytter cursoren dit. Klikk på en fold åpner neste nivå på
+    /// Klikk gir fokus og markerer linja. Klikk på en fold åpner neste nivå på
     /// begge sider (`DiffLineSeparatorRenderer.doAction`).
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
         self.keys.reset();
-        let Some((side, line, x)) = self.hit(ev.position) else {
+        let Some((side, line)) = self.hit(ev.position) else {
             return;
         };
         self.stop_animation();
-        let col = self.col_at(side, line, x);
-        self.state.click(side, line, col);
+        self.state.click(side, line);
         if self.state.folding.fold_at_line(side, line).is_some() {
             self.execute(Command::FoldOpen, window, cx);
             // Musa står fortsatt på linja, som nå kan være neste nivå
@@ -563,17 +549,16 @@ impl Render for FileDiffView {
         let markers = self.markers.clone();
         let shared = self.shared.clone();
 
-        // Aktiv side får fylt blokk. Den andre viser overført posisjon som omriss, så man
-        // ser hvor Tab lander. Begge får caret row, IntelliJ har det bare på aktiv side.
+        // Den andre siden viser overført linje svakere, så man ser hvor Tab lander.
+        // IntelliJ har caret row bare på aktiv side.
         let focused = self.focus.is_focused(window) && window.is_window_active();
         let cursor = self.state.cursor;
         let other = self.state.transferred_cursor();
         let carets = SIDES.map(|s| {
             let c = if s == cursor.side { cursor } else { other };
-            Caret {
+            CaretRow {
                 line: c.line,
-                col: c.col,
-                solid: focused && s == cursor.side,
+                active: focused && s == cursor.side,
             }
         });
 

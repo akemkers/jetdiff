@@ -25,7 +25,7 @@ smudiff-syntax   tree-sitter med egne queries, tokens tilsvarer IntelliJ sine DE
 
 smudiff-view     view-modell, fortsatt uten GUI
   model          FileDiff: blokker, linjer, syntaks per side
-  state          cursor, kommandoer, scroll og folding samlet
+  state          markert linje, kommandoer, scroll og folding samlet
   scroll         master scroll_y, slave beregnes i samme frame (1/3-anker)
   folding        kontekstnivåer, felles tilstand for begge sider
   geometry       gutter, tekst og scrollbar per side, én side alene for nye og slettede filer

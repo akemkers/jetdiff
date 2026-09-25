@@ -28,10 +28,6 @@ impl<K: PartialEq, V> LineCache<K, V> {
         }
     }
 
-    pub fn get(&self, line: usize) -> Option<&V> {
-        self.lines.get(&line)
-    }
-
     pub fn get_or_insert_with(&mut self, line: usize, make: impl FnOnce() -> V) -> &V {
         self.lines.entry(line).or_insert_with(make)
     }
