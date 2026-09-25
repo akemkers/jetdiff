@@ -1,4 +1,4 @@
-# smudiff
+# jetdiff
 
 GPU-akselerert diff-viewer med JetBrains-inspirert visning. Skrevet i Rust med GPUI. macOS først, Linux etter hvert.
 
@@ -12,7 +12,7 @@ Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode.
 ## Kjøre
 
 ```
-cargo run --release -p smudiff -- [<mappe> | <commit> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
+cargo run --release -p jetdiff -- [<mappe> | <commit> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
 ```
 
 - Uten argumenter: lokale endringer, også nye filer git ikke kjenner. På en branch er det mot der den gikk ut fra default-branchen (`main`), så commits underveis er med. På main er det mot HEAD
@@ -21,7 +21,7 @@ cargo run --release -p smudiff -- [<mappe> | <commit> | <venstre> <høyre>] [--t
 - `<venstre> <høyre>`: to filer
 - `--theme`: `catppuccin-mocha` er standard. `jetbrains-dark` og `jetbrains-light` er IntelliJ sine Islands-temaer
 
-`cargo install --path crates/smudiff` legger `smudiff` på PATH. Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
+`cargo install --path crates/jetdiff` legger `jetdiff` på PATH. Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
 Commit og lokale endringer åpnes med et tre over endrede filer til venstre. Nye og slettede filer vises som én side. Binærfiler vises ikke. Treet er så bredt som innholdet trenger. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
 
@@ -36,7 +36,7 @@ Syntaksfarger fra IntelliJ for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go
 Eksempler per språk ligger i `examples/`:
 
 ```
-cargo run --release -p smudiff -- examples/kotlin/a.kt examples/kotlin/b.kt
+cargo run --release -p jetdiff -- examples/kotlin/a.kt examples/kotlin/b.kt
 ```
 
 ### Taster
@@ -61,9 +61,9 @@ Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert l
 | Cmd+Alt+C | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding |
 | `q`, Cmd+Q, Cmd+W | Avslutt |
 
-Fonten er JetBrains Mono, bygd inn i appen (`crates/smudiff-ui/fonts/`, SIL Open Font License).
+Fonten er JetBrains Mono, bygd inn i appen (`crates/jetdiff-ui/fonts/`, SIL Open Font License).
 
-Ikonene i treet (`crates/smudiff-ui/icons/`) er fra intellij-community (Apache 2.0), og Rust-ikonet er fra intellij-rust (MIT).
+Ikonene i treet (`crates/jetdiff-ui/icons/`) er fra intellij-community (Apache 2.0), og Rust-ikonet er fra intellij-rust (MIT).
 
 ## Tester
 
@@ -71,12 +71,12 @@ Ikonene i treet (`crates/smudiff-ui/icons/`) er fra intellij-community (Apache 2
 cargo test
 ```
 
-Kjører enhetstester og golden-testen i `crates/smudiff-core/tests/golden.rs`. Den sammenligner resultatet med `fixtures/*/expected.json`.
+Kjører enhetstester og golden-testen i `crates/jetdiff-core/tests/golden.rs`. Den sammenligner resultatet med `fixtures/*/expected.json`.
 
 Mot et annet sett med fixturer:
 
 ```
-SMUDIFF_FIXTURES=/sti/til/fixturer cargo test --test golden
+JETDIFF_FIXTURES=/sti/til/fixturer cargo test --test golden
 ```
 
 ## Fixturer
@@ -91,13 +91,13 @@ Ny case: lag mappa med `a.txt` og `b.txt`, kjør `gen.sh`, og kjør `cargo test`
 
 ## Struktur
 
-- `crates/smudiff-core`: diff-algoritmen, portert fra IntelliJ
-- `crates/smudiff-syntax`: syntax highlighting med tree-sitter og egne queries
-- `crates/smudiff-view`: view-modell uten GUI (scroll, folding, markert linje, geometri)
-- `crates/smudiff-changes`: endrede filer og tremodellen
-- `crates/smudiff-git`: endringer og filinnhold via `git`
-- `crates/smudiff-ui`: GPUI-visningen
-- `crates/smudiff`: binæren
+- `crates/jetdiff-core`: diff-algoritmen, portert fra IntelliJ
+- `crates/jetdiff-syntax`: syntax highlighting med tree-sitter og egne queries
+- `crates/jetdiff-view`: view-modell uten GUI (scroll, folding, markert linje, geometri)
+- `crates/jetdiff-changes`: endrede filer og tremodellen
+- `crates/jetdiff-git`: endringer og filinnhold via `git`
+- `crates/jetdiff-ui`: GPUI-visningen
+- `crates/jetdiff`: binæren
 - `examples/`: filpar å prøve viewen på, ett per språk
 - `fixtures/`: testcaser med fasit
 - `tools/golden/`: Kotlin-generator som lager fasiten

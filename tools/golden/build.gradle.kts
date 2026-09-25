@@ -36,7 +36,7 @@ kotlin {
 }
 
 application {
-    mainClass.set("smudiff.golden.MainKt")
+    mainClass.set("jetdiff.golden.MainKt")
     // Slaa paa assert i IntelliJ-koden
     applicationDefaultJvmArgs = listOf("-ea")
 }

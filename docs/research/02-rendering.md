@@ -270,7 +270,7 @@ Tile tegnes hvert 16. px (`draw`, linje 240-271), y = `lineTop + vOffset`.
 - Gutter: `shiftX = step` (linje 148, 343-345). Venstre gutter er speilet.
 - Tekst: `shiftX = -period - (gutterWidth % period) - period + step + hScroll` (linje 184-195),
   dvs. kontinuerlig fra gutter inn i tekst, forankret til viewport (flytter seg ikke ved h-scroll).
-- Forenklet for smudiff: la `d` = avstand fra dividerkanten (speilet på venstre side).
+- Forenklet for jetdiff: la `d` = avstand fra dividerkanten (speilet på venstre side).
   `y(d) = tile((d + 12) mod 16)`. Ved dividerkanten er bølgen i center og stiger utover.
 
 ### 3.4 Connector over divideren (`drawConnectorLine`, linje 60-126)
@@ -405,7 +405,7 @@ error stripe         = stripe
 - Alignment-modus (av som standard) bruker `withAlignedHeight` (`DiffDividerDrawUtil.java:510-538`)
   og tegner ingen 2px-linjer. Ikke relevant før vi støtter inlays for justering.
 
-## 8. Oppskrift for smudiff (per frame)
+## 8. Oppskrift for jetdiff (per frame)
 
 ```
 for side in [L, R]:

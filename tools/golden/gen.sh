@@ -20,4 +20,4 @@ if [[ ${#cases[@]} -eq 0 ]]; then
   exit 1
 fi
 
-"$here/build/install/smudiff-golden/bin/smudiff-golden" "${cases[@]}"
+"$here/build/install/jetdiff-golden/bin/jetdiff-golden" "${cases[@]}"

@@ -1,1 +1,1 @@
-rootProject.name = "smudiff-golden"
+rootProject.name = "jetdiff-golden"

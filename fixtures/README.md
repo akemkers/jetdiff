@@ -1,6 +1,6 @@
 # Golden-fixtures
 
-Fasit fra IntelliJ sin diff-algoritme, generert av `tools/golden`. Rust-testene i `smudiff-core` sammenligner mot disse.
+Fasit fra IntelliJ sin diff-algoritme, generert av `tools/golden`. Rust-testene i `jetdiff-core` sammenligner mot disse.
 
 Hver case er en mappe:
 

@@ -393,7 +393,7 @@ I combined-modus velger seleksjon bare en blokk (scroll), ingen ny request.
 
 ---
 
-## Anbefalinger for smudiff (GPUI)
+## Anbefalinger for jetdiff (GPUI)
 
 1. **Én scroll-modell per viewer.** Lagre `scroll_y` for master, beregn slave
    i samme frame fra `transfer_visual_line`. Ingen event-ping-pong, så

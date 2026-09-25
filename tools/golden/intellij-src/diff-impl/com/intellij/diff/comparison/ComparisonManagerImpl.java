@@ -1,7 +1,7 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 //
 // Trimmed copy of platform/diff-impl/src/com/intellij/diff/comparison/ComparisonManagerImpl.java
-// (intellij-community@7af191d46d84acf6e30e077df05af9a4c9fe9005) for the smudiff golden generator.
+// (intellij-community@7af191d46d84acf6e30e077df05af9a4c9fe9005) for the jetdiff golden generator.
 // Only the two-side line/word paths and processBlocks are kept. Changes vs. the original:
 //  - ProgressIndicator -> CancellationChecker.EMPTY (ByLine/ByWord wrappers call *Rt directly)
 //  - Registry.is("diff.by.word.deprioritize.line.differences") -> constant false (IDE default,

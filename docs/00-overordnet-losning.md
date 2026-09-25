@@ -1,4 +1,4 @@
-# 00 - Overordnet løsning for smudiff
+# 00 - Overordnet løsning for jetdiff
 
 GPU-akselerert diffviewer i Rust + GPUI, modellert etter JetBrains. Detaljene ligger i `research/`:
 
@@ -16,14 +16,14 @@ GPU-akselerert diffviewer i Rust + GPUI, modellert etter JetBrains. Detaljene li
 ## Crates
 
 ```
-smudiff-core     ren logikk, ingen GUI. Testes med golden-tester.
+jetdiff-core     ren logikk, ingen GUI. Testes med golden-tester.
   lcs            Myers + Reindexer + patience-fallback (port fra IntelliJ)
   by_line        whitespace-blind match, to-stegs smart diff, ChunkOptimizer
   by_word        tokenizer, inner fragments, LineFragmentSplitter
 
-smudiff-syntax   tree-sitter med egne queries, tokens tilsvarer IntelliJ sine DEFAULT_*
+jetdiff-syntax   tree-sitter med egne queries, tokens tilsvarer IntelliJ sine DEFAULT_*
 
-smudiff-view     view-modell, fortsatt uten GUI
+jetdiff-view     view-modell, fortsatt uten GUI
   model          FileDiff: blokker, linjer, syntaks per side
   state          markert linje, kommandoer, scroll og folding samlet
   scroll         master scroll_y, slave beregnes i samme frame (1/3-anker)
@@ -31,12 +31,12 @@ smudiff-view     view-modell, fortsatt uten GUI
   geometry       gutter, tekst og scrollbar per side, én side alene for nye og slettede filer
   keys           tastesekvenser til kommandoer
 
-smudiff-changes  FileChange { path, old_path, status } og tremodellen: mapper først,
+jetdiff-changes  FileChange { path, old_path, status } og tremodellen: mapper først,
                  slåtte enkeltbarn-mapper, ekspandert-tilstand
 
-smudiff-git      git-CLI: endringer for en commit eller working tree, og filinnhold
+jetdiff-git      git-CLI: endringer for en commit eller working tree, og filinnhold
 
-smudiff-ui       GPUI
+jetdiff-ui       GPUI
   side_editor    tekst, gutter, bakgrunner, ord-markering, error stripe
   divider        bezier-trakt og fold-koblinger
   file_diff      to editorer + divider
@@ -44,7 +44,7 @@ smudiff-ui       GPUI
   changes_view   treet + én fil, som commit-dialogen i IntelliJ
   theme          fargetabell fra JetBrains (light og dark)
 
-smudiff          binær: CLI
+jetdiff          binær: CLI
 ```
 
 Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy og kontekstnivå. Treet skriver til `Selection` ved klikk, og diff-viewen følger den. `J`/`K` og Tab i diffen sender et event som treet flytter valget for. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.

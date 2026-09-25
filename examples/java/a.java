@@ -1,4 +1,4 @@
-package no.smudiff.eksempel;
+package no.jetdiff.eksempel;
 
 import java.util.ArrayList;
 import java.util.List;

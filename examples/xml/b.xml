@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>no.smudiff</groupId>
+    <groupId>no.jetdiff</groupId>
     <artifactId>kurs</artifactId>
     <version>1.1.0</version>
     <description>Kurser &amp; ordre</description>
