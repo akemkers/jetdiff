@@ -15,8 +15,9 @@ use crate::list::{
 };
 use crate::theme::UiTheme;
 
-/// Litt luftigere enn treet, så grafen får plass.
-const COMMIT_ROW_HEIGHT: f32 = ROW_HEIGHT + 4.;
+/// Plass til meldingen med alderen under.
+const COMMIT_ROW_HEIGHT: f32 = 40.;
+const AGE_SIZE: f32 = 11.;
 const LANE_WIDTH: f32 = 16.;
 const LINE_WIDTH: f32 = 2.;
 const DOT_SIZE: f32 = 8.;
@@ -132,8 +133,11 @@ impl CommitList {
         let commit = i.checked_sub(1).map(|c| &self.commits[c]);
         let hash = self.hash_at(i);
         let (text, age) = match commit {
-            Some(c) => (SharedString::from(c.subject.clone()), age(now - c.time)),
-            None => (self.label.clone(), String::new()),
+            Some(c) => (
+                SharedString::from(c.subject.clone()),
+                Some(age(now - c.time)),
+            ),
+            None => (self.label.clone(), None),
         };
         let bg = row_bg(
             &self.theme,
@@ -152,12 +156,21 @@ impl CommitList {
             .whitespace_nowrap()
             .when_some(bg, |d, bg| d.bg(bg))
             .child(self.graph(i, bg))
-            .child(div().flex_1().min_w_0().truncate().child(text))
             .child(
                 div()
-                    .flex_none()
-                    .text_color(self.theme.line_number)
-                    .child(age),
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child(div().truncate().child(text))
+                    .when_some(age, |d, age| {
+                        d.child(
+                            div()
+                                .text_size(s(AGE_SIZE))
+                                .text_color(self.theme.line_number)
+                                .child(age),
+                        )
+                    }),
             )
             .on_click(cx.listener(move |this, _, _, cx| this.select(hash.clone(), cx)))
     }
