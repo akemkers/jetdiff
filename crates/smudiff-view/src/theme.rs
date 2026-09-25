@@ -1,7 +1,7 @@
 //! Farger fra IntelliJ sine default-temaer i New UI: "Islands Dark" og "Islands Light"
 //! (`LafManagerImpl.DefaultNewUiThemeStrategy`). Dark bruker editor-skjemaet
 //! `IslandSchemeDark.xml` med Darcula som forelder. Light bruker `expUI_lightScheme.xml` med
-//! Default som forelder.
+//! Default som forelder. I tillegg Catppuccin Mocha.
 
 use smudiff_syntax::Token;
 
@@ -131,6 +131,9 @@ impl Theme {
                 Token::Comment => style(0x7A7E85),
                 Token::DocComment => italic(0x5F826B),
                 Token::Function => style(0x56A8F5),
+                Token::FunctionCall | Token::Type | Token::Punctuation | Token::Operator => {
+                    style(0xBCBEC4)
+                }
                 Token::Constant => italic(0xC77DBB),
                 Token::Property => style(0xC77DBB),
                 Token::Metadata => style(0xB3AE60),
@@ -176,6 +179,9 @@ impl Theme {
                 Token::Number => style(0x1750EB),
                 Token::Comment | Token::DocComment => italic(0x8C8C8C),
                 Token::Function => style(0x00627A),
+                Token::FunctionCall | Token::Type | Token::Punctuation | Token::Operator => {
+                    style(0x080808)
+                }
                 Token::Constant => italic(0x871094),
                 Token::Property => style(0x871094),
                 Token::Metadata => style(0x9E880D),
@@ -184,6 +190,59 @@ impl Theme {
                 Token::Link => style(0x006DCC),
                 Token::Strong => bold(0x080808),
                 Token::Emphasis => italic(0x080808),
+            }),
+        }
+    }
+
+    /// Catppuccin Mocha (no italics) fra `catppuccin/jetbrains` (`editor.tera`,
+    /// `ui.theme.tera`). Blandede farger er regnet ut på forhånd, som
+    /// `farge | mix(color=base, amount=a)`.
+    pub fn mocha() -> Self {
+        let base = rgb(0x1E1E2E);
+        let text = 0xCDD6F4;
+        Self {
+            editor_bg: base,
+            editor_fg: rgb(text),
+            gutter_bg: base,
+            divider_bg: base,
+            line_number: rgb(0x6C7086),
+            line_number_caret_row: rgb(0xB4BEFE),
+            row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
+            // Yellow med 0.5
+            gutter_highlight: rgb(0x8C806E),
+            indent_guide: rgb(0x313244),
+            // Arvet fra Darcula
+            separator_wave: rgb(0x555555),
+            scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
+            tree_selection: rgb(0x353748),
+            message_bg: rgb(0xA6E3A1),
+            warning_bg: rgb(0xF9E2AF),
+            message_fg: base,
+            file_added: rgb(0xA6E3A1),
+            file_deleted: rgb(0x585B70),
+            file_modified: rgb(0x89B4FA),
+            // Green, red og blue med 0.25 for bakgrunn og 0.2 for stripe
+            inserted: DiffColors::new(rgb(0x404F4B), rgb(0x394545), base),
+            deleted: DiffColors::new(rgb(0x53394C), rgb(0x493446), base),
+            modified: DiffColors::new(rgb(0x394461), rgb(0x333C57), base),
+            syntax: Token::ALL.map(|t| match t {
+                Token::Keyword => style(0xCBA6F7),
+                Token::String => style(0xA6E3A1),
+                Token::Escape => style(0xF5C2E7),
+                Token::Number | Token::Constant => style(0xFAB387),
+                Token::Comment | Token::DocComment => style(0x9399B2),
+                Token::Function | Token::FunctionCall => style(0x89B4FA),
+                Token::Type => style(0xF9E2AF),
+                Token::Property => style(text),
+                Token::Metadata => style(0xF9E2AF),
+                Token::Tag => style(0x94E2D5),
+                Token::Attribute => style(0xF9E2AF),
+                Token::Heading => bold(0xF38BA8),
+                Token::Link => style(0xB4BEFE),
+                Token::Strong => bold(0xF38BA8),
+                Token::Emphasis => style(0xF38BA8),
+                Token::Punctuation => style(0x9399B2),
+                Token::Operator => style(0x89DCEB),
             }),
         }
     }

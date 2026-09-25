@@ -130,6 +130,10 @@ impl UiTheme {
         Self::new(&Theme::light(), false)
     }
 
+    pub fn mocha() -> Self {
+        Self::new(&Theme::mocha(), true)
+    }
+
     pub fn syntax(&self, token: Token) -> &UiSyntax {
         &self.syntax[token as usize]
     }

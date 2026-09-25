@@ -1,9 +1,27 @@
 ; Generelle mønstre først. tree-sitter-highlight lar det siste treffet på en node vinne.
 
+; Først, så alt mer spesifikt vinner
+["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
+[
+  "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "<<" ">>" "+=" "-=" "*=" "/=" "%=" "->" "=>" "::" ".." "..=" "?"
+] @operator
+
 (field_identifier) @property
+
+; Stor forbokstav er en type eller enum-variant, som `UiTheme::dark` og `Some`
+((identifier) @type
+ (#match? @type "^[A-Z]"))
 
 ((identifier) @constant
  (#match? @constant "^[A-Z][A-Z\\d_]+$"))
+
+(type_identifier) @type
+
+(call_expression function: (field_expression field: (field_identifier) @function_call))
+((call_expression function: (scoped_identifier name: (identifier) @function_call))
+ (#match? @function_call "^[a-z_]"))
+((call_expression function: (identifier) @function_call)
+ (#match? @function_call "^[a-z_]"))
 
 (function_item name: (identifier) @function)
 (function_signature_item name: (identifier) @function)
@@ -13,6 +31,9 @@
 (block_comment) @comment
 (line_comment (doc_comment)) @doc_comment
 (block_comment (doc_comment)) @doc_comment
+; Markøren i `///` er egne `/`-noder
+(outer_doc_comment_marker _ @doc_comment)
+(inner_doc_comment_marker _ @doc_comment)
 
 [
   "as" "async" "await" "break" "const" "continue" "default" "dyn" "else" "enum" "extern" "fn"

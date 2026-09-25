@@ -1,4 +1,4 @@
-//! smudiff [<mappe> | <commit> | <venstre> <høyre>] [--light]
+//! smudiff [<mappe> | <commit> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
 //!
 //! Uten argumenter vises lokale endringer, på en branch mot der den gikk ut fra main.
 //! En mappe viser lokale endringer der. Med én commit vises den mot forelderen.
@@ -27,15 +27,27 @@ enum Source {
 
 struct Args {
     source: Source,
-    light: bool,
+    theme: UiTheme,
 }
 
 fn parse_args() -> Result<Args, String> {
-    let mut light = false;
+    let mut theme = UiTheme::mocha();
     let mut paths = Vec::new();
-    for arg in std::env::args().skip(1) {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--light" => light = true,
+            "--theme" => {
+                theme = match args.next().as_deref() {
+                    Some("catppuccin-mocha") => UiTheme::mocha(),
+                    Some("jetbrains-dark") => UiTheme::dark(),
+                    Some("jetbrains-light") => UiTheme::light(),
+                    _ => {
+                        return Err(
+                            "--theme må være catppuccin-mocha, jetbrains-dark eller jetbrains-light".into(),
+                        );
+                    }
+                }
+            }
             s if s.starts_with("--") => return Err(format!("ukjent flagg: {s}")),
             _ => paths.push(arg),
         }
@@ -48,12 +60,12 @@ fn parse_args() -> Result<Args, String> {
             Err(paths) if paths.is_empty() => Source::WorkTree(".".into()),
             Err(_) => {
                 return Err(
-                    "bruk: smudiff [<mappe> | <commit> | <venstre> <høyre>] [--light]".into(),
+                    "bruk: smudiff [<mappe> | <commit> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]".into(),
                 );
             }
         },
     };
-    Ok(Args { source, light })
+    Ok(Args { source, theme })
 }
 
 fn read(path: &str) -> Result<String, String> {
@@ -159,11 +171,7 @@ fn main() -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let theme = if args.light {
-        UiTheme::light()
-    } else {
-        UiTheme::dark()
-    };
+    let theme = args.theme;
 
     Application::new()
         .with_assets(Assets)

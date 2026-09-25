@@ -5,3 +5,4 @@
   "protected" "public" "type" "readonly" "override" "satisfies"
 ] @keyword
 (predefined_type) @keyword
+(type_identifier) @type

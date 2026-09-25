@@ -1,7 +1,19 @@
+; Først, så alt mer spesifikt vinner
+["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
+[
+  "=" "==" "!=" "===" "!==" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "+=" "-=" "*=" "/=" "%=" "++" "--" "->" "::" ".." "?:" "!!"
+] @operator
+
 (class_parameter (simple_identifier) @property)
 (class_body (property_declaration (variable_declaration (simple_identifier) @property)))
 (navigation_suffix (simple_identifier) @property)
-(call_expression (navigation_expression (navigation_suffix (simple_identifier) @plain) .))
+(call_expression (navigation_expression (navigation_suffix (simple_identifier) @function_call) .))
+(call_expression (simple_identifier) @function_call)
+; Stor forbokstav er en konstruktør, som IntelliJ farger som klassen
+((call_expression (simple_identifier) @type)
+ (#match? @type "^[A-Z]"))
+
+(type_identifier) @type
 
 (enum_entry (simple_identifier) @constant)
 ((simple_identifier) @constant
@@ -31,4 +43,9 @@
 ] @number
 
 (annotation) @metadata
+; Ellers blir navnet farget som en type
+(annotation [
+  (user_type (type_identifier) @metadata)
+  (constructor_invocation (user_type (type_identifier) @metadata))
+])
 (file_annotation) @metadata

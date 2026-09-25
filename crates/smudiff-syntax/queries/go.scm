@@ -1,5 +1,14 @@
+; Først, så alt mer spesifikt vinner
+["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
+[
+  "=" ":=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "<<" ">>" "&^" "+=" "-=" "++" "--" "<-" "..."
+] @operator
+
 (field_identifier) @property
-(call_expression function: (selector_expression field: (field_identifier) @plain))
+(call_expression function: (identifier) @function_call)
+(call_expression function: (selector_expression field: (field_identifier) @function_call))
+
+(type_identifier) @type
 
 (function_declaration name: (identifier) @function)
 (method_declaration name: (field_identifier) @function)

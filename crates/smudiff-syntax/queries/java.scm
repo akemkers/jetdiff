@@ -1,8 +1,24 @@
+; Først, så alt mer spesifikt vinner
+["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
+[
+  "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "~" "<<" ">>" ">>>" "+=" "-=" "*=" "/=" "++" "--" "->" "::" "?"
+] @operator
+
 (field_declaration declarator: (variable_declarator name: (identifier) @property))
 (field_access field: (identifier) @property)
 ((identifier) @constant
  (#match? @constant "^_*[A-Z][A-Z\\d_]+$"))
 (enum_constant name: (identifier) @constant)
+
+; Etter konstantene, så `class URL` blir en type
+(type_identifier) @type
+(class_declaration name: (identifier) @type)
+(interface_declaration name: (identifier) @type)
+(enum_declaration name: (identifier) @type)
+(record_declaration name: (identifier) @type)
+(annotation_type_declaration name: (identifier) @type)
+
+(method_invocation name: (identifier) @function_call)
 
 (method_declaration name: (identifier) @function)
 (constructor_declaration name: (identifier) @function)

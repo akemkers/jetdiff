@@ -68,6 +68,10 @@ pub enum Token {
     Comment,
     DocComment,
     Function,
+    /// `DEFAULT_FUNCTION_CALL`.
+    FunctionCall,
+    /// Klasse- og typenavn, `DEFAULT_CLASS_NAME` og `DEFAULT_CLASS_REFERENCE`.
+    Type,
     Constant,
     Property,
     Metadata,
@@ -77,10 +81,14 @@ pub enum Token {
     Link,
     Strong,
     Emphasis,
+    /// `DEFAULT_PARENTHS`, `DEFAULT_BRACES`, `DEFAULT_COMMA` og lignende.
+    Punctuation,
+    /// `DEFAULT_OPERATION_SIGN`.
+    Operator,
 }
 
 impl Token {
-    pub const ALL: [Token; 16] = [
+    pub const ALL: [Token; 20] = [
         Token::Keyword,
         Token::String,
         Token::Escape,
@@ -88,6 +96,8 @@ impl Token {
         Token::Comment,
         Token::DocComment,
         Token::Function,
+        Token::FunctionCall,
+        Token::Type,
         Token::Constant,
         Token::Property,
         Token::Metadata,
@@ -97,6 +107,8 @@ impl Token {
         Token::Link,
         Token::Strong,
         Token::Emphasis,
+        Token::Punctuation,
+        Token::Operator,
     ];
 }
 
@@ -107,7 +119,7 @@ pub struct Span {
 }
 
 /// Capture-navnene i `queries/`. `plain` nullstiller foreldren, som `${}` i en streng.
-const NAMES: [(&str, Option<Token>); 17] = [
+const NAMES: [(&str, Option<Token>); 21] = [
     ("keyword", Some(Token::Keyword)),
     ("string", Some(Token::String)),
     ("escape", Some(Token::Escape)),
@@ -115,6 +127,8 @@ const NAMES: [(&str, Option<Token>); 17] = [
     ("comment", Some(Token::Comment)),
     ("doc_comment", Some(Token::DocComment)),
     ("function", Some(Token::Function)),
+    ("function_call", Some(Token::FunctionCall)),
+    ("type", Some(Token::Type)),
     ("constant", Some(Token::Constant)),
     ("property", Some(Token::Property)),
     ("metadata", Some(Token::Metadata)),
@@ -124,6 +138,8 @@ const NAMES: [(&str, Option<Token>); 17] = [
     ("link", Some(Token::Link)),
     ("strong", Some(Token::Strong)),
     ("emphasis", Some(Token::Emphasis)),
+    ("punctuation", Some(Token::Punctuation)),
+    ("operator", Some(Token::Operator)),
     ("plain", None),
 ];
 
@@ -330,10 +346,16 @@ mod tests {
                 ("\"hei $", String),
                 ("MAX", Constant),
                 ("z", Property),
+                ("Int", Type),
             ],
         );
         let got = tokens(Language::Kotlin, text);
-        assert!(!got.iter().any(|&(t, _)| t == "Int" || t == "x"), "{got:?}");
+        assert!(!got.iter().any(|&(t, _)| t == "x"), "{got:?}");
+        has(
+            Language::Kotlin,
+            "data class A(val b: C?)",
+            &[("A", Type), ("C", Type)],
+        );
     }
 
     #[test]
@@ -353,13 +375,12 @@ mod tests {
                 ("this", Keyword),
                 ("n", Property),
                 ("1", Number),
+                ("String", Type),
             ],
         );
         let got = tokens(Language::Java, text);
-        assert!(
-            !got.iter().any(|&(t, _)| t == "String" || t == "s"),
-            "{got:?}"
-        );
+        assert!(!got.iter().any(|&(t, _)| t == "s"), "{got:?}");
+        has(Language::Java, "class URL {}", &[("URL", Type)]);
     }
 
     #[test]
@@ -380,14 +401,48 @@ mod tests {
     }
 
     #[test]
-    fn kall_er_vanlig_tekst() {
-        // IntelliJ farger bare deklarasjonen
-        let got = tokens(Language::Go, "package main\nfunc f() { g(); a.h() }\n");
-        assert!(got.contains(&("f", Token::Function)), "{got:?}");
-        assert!(!got.iter().any(|&(t, _)| t == "g" || t == "h"), "{got:?}");
-        let got = tokens(Language::TypeScript, "function f() { a.b(); }");
-        assert!(got.contains(&("f", Token::Function)), "{got:?}");
-        assert!(!got.iter().any(|&(t, _)| t == "b"), "{got:?}");
+    fn kall() {
+        use Token::*;
+        has(
+            Language::Go,
+            "package main\nfunc f() { g(); a.h() }\n",
+            &[("f", Function), ("g", FunctionCall), ("h", FunctionCall)],
+        );
+        has(
+            Language::TypeScript,
+            "function f() { g(); a.b(); }",
+            &[("f", Function), ("g", FunctionCall), ("b", FunctionCall)],
+        );
+        has(
+            Language::Kotlin,
+            "val a = g(A(), b.c())",
+            &[("g", FunctionCall), ("A", Type), ("c", FunctionCall)],
+        );
+        has(
+            Language::Java,
+            "class A { void f() { g(); b.c(); } }",
+            &[("g", FunctionCall), ("c", FunctionCall)],
+        );
+        let text =
+            "fn f() { let a = UiTheme::dark(); g(b.c()); std::env::args(); Some(A::B(MAX)); }";
+        has(
+            Language::Rust,
+            text,
+            &[
+                ("UiTheme", Type),
+                ("dark", FunctionCall),
+                ("g", FunctionCall),
+                ("c", FunctionCall),
+                ("args", FunctionCall),
+                ("::", Operator),
+                (".", Punctuation),
+                ("Some", Type),
+                ("B", Type),
+                ("MAX", Constant),
+            ],
+        );
+        let got = tokens(Language::Rust, text);
+        assert!(!got.iter().any(|&(t, _)| t == "std"), "{got:?}");
     }
 
     #[test]
