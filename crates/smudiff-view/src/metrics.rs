@@ -2,8 +2,8 @@
 //! `FontMetrics.getHeight()` fra Java og ganger med linjeavstanden
 //! (`FontPreferences.DEFAULT_LINE_SPACING = 1.2`), rundet opp.
 
-/// `FontPreferences.DEFAULT_FONT_SIZE` med JetBrains Mono.
-pub const FONT_SIZE: f32 = 13.;
+/// IntelliJ har 13 (`FontPreferences.DEFAULT_FONT_SIZE`), men 16 er lettere å lese.
+pub const FONT_SIZE: f32 = 16.;
 
 /// `editor.gutter.linenumber.font.size.delta`: linjenumrene er 1pt mindre enn teksten.
 pub const LINE_NUMBER_FONT_DELTA: f32 = 1.;
@@ -52,8 +52,8 @@ mod tests {
 
     #[test]
     fn zoom_klemmes() {
-        assert_eq!(zoomed(FONT_SIZE, 1.), 14.);
-        assert_eq!(zoomed(FONT_SIZE, -1.), 12.);
+        assert_eq!(zoomed(FONT_SIZE, 1.), 17.);
+        assert_eq!(zoomed(FONT_SIZE, -1.), 15.);
         assert_eq!(zoomed(MAX_FONT_SIZE, 1.), MAX_FONT_SIZE);
         assert_eq!(zoomed(MIN_FONT_SIZE, -1.), MIN_FONT_SIZE);
     }

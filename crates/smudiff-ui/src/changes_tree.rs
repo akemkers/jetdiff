@@ -182,7 +182,7 @@ impl Render for ChangesTree {
             .border_r_1()
             .border_color(theme.indent_guide)
             .font_family(self.family)
-            .text_size(s(13.))
+            .text_size(s(14.))
             .text_color(theme.editor_fg)
             .child(
                 uniform_list(

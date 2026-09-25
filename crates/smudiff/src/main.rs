@@ -113,7 +113,7 @@ fn open<V: Render + Focusable>(
     let bounds = Bounds::centered(None, size(px(1400.), px(900.)), cx);
     cx.open_window(
         WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_bounds: Some(WindowBounds::Maximized(bounds)),
             titlebar: Some(gpui::TitlebarOptions {
                 title: Some(title.into()),
                 ..Default::default()
