@@ -1,18 +1,25 @@
 # jetdiff
 
-GPU-akselerert diff-viewer med JetBrains-inspirert visning. Skrevet i Rust med GPUI. macOS først, Linux etter hvert.
+En rask diff-viewer for macOS, med diffen fra JetBrains-IDE-ene. Rendres på GPU-en med [GPUI](https://www.gpui.rs).
 
-Status: diff-kjernen porteres fra IntelliJ og testes mot IntelliJ sin egen kode. GUI-en viser to filer, en commit eller lokale endringer, med et filtre som i commit-dialogen til IntelliJ.
+Den viser lokale endringer, en commit eller to filer side om side, med trakt mellom sidene, ord-markering, folding av uendrede linjer og syntaksfarger. Diff-algoritmen er portert fra IntelliJ og gir samme resultat. Alt er for lesing, ingenting kan redigeres.
 
-## Krav
+![Lokale endringer med filtre og commits](docs/screenshots/endringer.png)
 
-- Rust (edition 2024, stable)
-- For golden-generatoren: JDK 25 og Gradle 9.x
+![To filer side om side](docs/screenshots/filer.png)
 
-## Kjøre
+## Installere
 
 ```
-cargo run --release -p jetdiff -- [<mappe> | <commit> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
+cargo install --path crates/jetdiff
+```
+
+Det legger `jetdiff` på PATH. Krever Rust stable.
+
+## Bruk
+
+```
+jetdiff [<mappe> | <commit> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
 ```
 
 - Uten argumenter: lokale endringer, også nye filer git ikke kjenner. På en branch er det mot der den gikk ut fra default-branchen (`main`), så commits underveis er med. På main er det mot HEAD
@@ -21,85 +28,90 @@ cargo run --release -p jetdiff -- [<mappe> | <commit> | <venstre> <høyre>] [--t
 - `<venstre> <høyre>`: to filer
 - `--theme`: `catppuccin-mocha` er standard. `jetbrains-dark` og `jetbrains-light` er IntelliJ sine Islands-temaer
 
-`cargo install --path crates/jetdiff` legger `jetdiff` på PATH. Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
+Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
-Commit og lokale endringer åpnes med et tre over endrede filer til venstre. Nye og slettede filer vises som én side. Binærfiler vises ikke. Treet er så bredt som innholdet trenger. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
+Til venstre er et tre over endrede filer. Nye og slettede filer vises som én side, binærfiler vises ikke. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
 
-For lokale endringer ligger commitene under treet: branchens commits, eller de siste når branchen ikke har egne (som på main). Maks 50. Klikk på en commit for å se den, og på raden øverst for å gå tilbake. Skillelinja kan dras. Klikk på «Filer» eller «Commits» for å klappe seksjonen sammen.
+For lokale endringer ligger commitene under treet: branchens commits, eller de siste når branchen ikke har egne (som på main). Maks 50. Klikk på en commit for å se den, og på raden øverst for å gå tilbake. Klikk på «Filer» eller «Commits» for å klappe seksjonen sammen.
 
 Lokale endringer lastes inn på nytt når filer endres. Valgt fil beholdes, og diffen starter på toppen hvis innholdet er endret.
 
 Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer.
 
-Syntaksfarger fra IntelliJ for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML og Markdown. Språket velges fra filendelsen, høyre side først.
-
-Eksempler per språk ligger i `examples/`:
-
-```
-cargo run --release -p jetdiff -- examples/kotlin/a.kt examples/kotlin/b.kt
-```
+Syntaksfarger for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML og Markdown. Språket velges fra filendelsen.
 
 ### Taster
 
 Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert linje. Tastelinja nederst viser de viktigste.
 
-| Tast | Gjør |
-| --- | --- |
-| `J` `K`, Tab Shift+Tab | Neste og forrige fil i treet |
-| Ctrl+h Ctrl+j Ctrl+k Ctrl+l | Bytt mellom diffen, treet og commitene. Der flytter `j` `k` og pilene, og Enter eller `l` åpner |
-| `b` | Skjul eller vis venstre panel |
-| `j` `k`, pil opp og ned | Flytt markert linje. Hopper over lukkede folds |
-| `h` `l`, pil venstre og høyre | Scroll sideveis 4 tegn |
-| `0` `$` | Scroll til linjestart og til slutten av markert linje |
-| `gg` `G` | Første og siste linje |
-| `d` `u`, Ctrl+d Ctrl+u | Halv side ned og opp |
-| `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Neste og forrige endring |
-| `H` `L` | Til venstre og høyre side |
-| `o` | Åpne fold ved markert linje ett nivå |
-| `f` | Åpne alle folds, eller lukk alle hvis ingen er lukket |
-| `y` | Kopier `fil:linje` for markert linje. Linja er i nyeste versjon, også fra venstre side |
-| Cmd+Pluss Cmd+Minus Cmd+0 | Zoom inn, ut og tilbake til 16pt. Treet følger med |
-| Cmd+Alt+C | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding |
-| `q`, Cmd+Q, Cmd+W | Avslutt |
+| Tast                                | Gjør                                                                                            |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `J` `K`, Tab Shift+Tab              | Neste og forrige fil i treet                                                                    |
+| Ctrl+h Ctrl+j Ctrl+k Ctrl+l         | Bytt mellom diffen, treet og commitene. Der flytter `j` `k` og pilene, og Enter eller `l` åpner |
+| `b`                                 | Skjul eller vis venstre panel                                                                   |
+| `j` `k`, pil opp og ned             | Flytt markert linje. Hopper over lukkede folds                                                  |
+| `h` `l`, pil venstre og høyre       | Scroll sideveis 4 tegn                                                                          |
+| `0` `$`                             | Scroll til linjestart og til slutten av markert linje                                           |
+| `gg` `G`                            | Første og siste linje                                                                           |
+| `d` `u`, Ctrl+d Ctrl+u              | Halv side ned og opp                                                                            |
+| `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Neste og forrige endring                                                                        |
+| `H` `L`                             | Til venstre og høyre side                                                                       |
+| `o`                                 | Åpne fold ved markert linje ett nivå                                                            |
+| `f`                                 | Åpne alle folds, eller lukk alle hvis ingen er lukket                                           |
+| `y`                                 | Kopier `fil:linje` for markert linje. Linja er i nyeste versjon, også fra venstre side          |
+| Cmd+Pluss Cmd+Minus Cmd+0           | Zoom inn, ut og tilbake til 16pt. Treet følger med                                              |
+| Cmd+Alt+C                           | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding                                            |
+| `q`, Cmd+Q, Cmd+W                   | Avslutt                                                                                         |
 
-Fonten er JetBrains Mono, bygd inn i appen (`crates/jetdiff-ui/fonts/`, SIL Open Font License).
+## Utvikling
 
-Ikonene i treet (`crates/jetdiff-ui/icons/`) er fra intellij-community (Apache 2.0), og Rust-ikonet er fra intellij-rust (MIT).
+Krav:
 
-## Tester
+- Rust (edition 2024, stable)
+- For golden-generatoren: JDK 25 og Gradle 9.x
 
 ```
+cargo run --release -p jetdiff -- examples/kotlin/a.kt examples/kotlin/b.kt
 cargo test
 ```
 
-Kjører enhetstester og golden-testen i `crates/jetdiff-core/tests/golden.rs`. Den sammenligner resultatet med `fixtures/*/expected.json`.
+`examples/` har et filpar per språk å prøve viewen på.
 
-Mot et annet sett med fixturer:
+GPUI bygges med `runtime_shaders`, så Metal-shaderne kompileres ved oppstart og Xcode sin Metal Toolchain trengs ikke.
 
+Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI. All logikk for scroll, folding og geometri ligger i `jetdiff-view` og testes uten vindu.
+
+```mermaid
+graph TD
+    jetdiff --> ui[jetdiff-ui]
+    jetdiff --> view[jetdiff-view]
+    jetdiff --> git[jetdiff-git]
+    jetdiff --> changes[jetdiff-changes]
+    ui --> view
+    ui --> git
+    ui --> changes
+    ui --> core[jetdiff-core]
+    view --> core
+    view --> syntax[jetdiff-syntax]
+    git --> changes
 ```
-JETDIFF_FIXTURES=/sti/til/fixturer cargo test --test golden
-```
 
-## Fixturer
+| Crate                                           | Ansvar                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------- |
+| [`jetdiff`](crates/jetdiff)                     | Binæren: argumenter, vindu og tastebindinger                  |
+| [`jetdiff-ui`](crates/jetdiff-ui)               | GPUI-visningen                                                |
+| [`jetdiff-view`](crates/jetdiff-view)           | Visningsmodell uten GUI: scroll, folding, markert linje, taster |
+| [`jetdiff-core`](crates/jetdiff-core)           | Diff-algoritmen, portert fra IntelliJ                         |
+| [`jetdiff-syntax`](crates/jetdiff-syntax)       | Syntaksfarger med tree-sitter                                 |
+| [`jetdiff-git`](crates/jetdiff-git)             | Endringer og filinnhold fra `git`                             |
+| [`jetdiff-changes`](crates/jetdiff-changes)     | Endrede filer og treet de vises i                             |
 
-Hver case er en mappe `fixtures/<navn>/` med `a.txt` og `b.txt`. Fasiten `expected.json` lages av IntelliJ sin diff-kode:
+Øvrige mapper:
 
-```
-tools/golden/gen.sh
-```
+- `fixtures/`: testcaser for diff-algoritmen, med fasit fra IntelliJ. Se [`fixtures/README.md`](fixtures/README.md)
+- `tools/golden/`: Kotlin-generatoren som lager fasiten. Se [`tools/golden/README.md`](tools/golden/README.md)
+- `docs/`: overordnet løsning og research fra IntelliJ-koden
 
-Ny case: lag mappa med `a.txt` og `b.txt`, kjør `gen.sh`, og kjør `cargo test`. Format i `fixtures/README.md`, generatoren er beskrevet i `tools/golden/README.md`.
+Commit-meldinger er på norsk i imperativ, f.eks. «Legg til b for å skjule venstre panel».
 
-## Struktur
-
-- `crates/jetdiff-core`: diff-algoritmen, portert fra IntelliJ
-- `crates/jetdiff-syntax`: syntax highlighting med tree-sitter og egne queries
-- `crates/jetdiff-view`: view-modell uten GUI (scroll, folding, markert linje, geometri)
-- `crates/jetdiff-changes`: endrede filer og tremodellen
-- `crates/jetdiff-git`: endringer og filinnhold via `git`
-- `crates/jetdiff-ui`: GPUI-visningen
-- `crates/jetdiff`: binæren
-- `examples/`: filpar å prøve viewen på, ett per språk
-- `fixtures/`: testcaser med fasit
-- `tools/golden/`: Kotlin-generator som lager fasiten
-- `docs/`: overordnet løsning og research
+Fonten er JetBrains Mono (SIL Open Font License). Ikonene er fra intellij-community (Apache 2.0) og intellij-rust (MIT).
