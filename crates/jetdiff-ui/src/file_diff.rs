@@ -46,7 +46,11 @@ const HELP: [(&str, &str); 10] = [
 ];
 
 /// Vises først når diffen er en del av et filtre.
-const FILE_HELP: [(&str, &str); 2] = [("J K", "neste/forrige fil"), ("C-hjkl", "bytt panel")];
+const FILE_HELP: [(&str, &str); 3] = [
+    ("J K", "neste/forrige fil"),
+    ("C-hjkl", "bytt panel"),
+    ("b", "skjul panel"),
+];
 
 /// Linjer utenfor viewporten som beholdes shapet per side.
 const CACHE_CAPACITY: usize = 2000;

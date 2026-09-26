@@ -22,7 +22,10 @@ use crate::theme::UiTheme;
 use crate::watcher::Watcher;
 
 // Vim sine vindustaster. Treet og commitene er til venstre, diffen til høyre.
-actions!(jetdiff, [FocusLeft, FocusDown, FocusUp, FocusRight]);
+actions!(
+    jetdiff,
+    [FocusLeft, FocusDown, FocusUp, FocusRight, ToggleSidePanel]
+);
 
 /// Det som hentes fra git i bakgrunnen.
 struct Loaded {
@@ -49,6 +52,7 @@ pub struct ChangesView {
     theme: UiTheme,
     font_family: &'static str,
     scale: f32,
+    panel_open: bool,
     /// Seksjonene i sidepanelet kan klappes sammen til bare overskriften.
     files_open: bool,
     commits_open: bool,
@@ -130,6 +134,7 @@ impl ChangesView {
             theme,
             font_family,
             scale: 1.,
+            panel_open: true,
             files_open: true,
             commits_open: true,
             width: PanelWidth::default(),
@@ -268,9 +273,25 @@ impl ChangesView {
 
     /// Treet og commit-lista, bare de som er åpne.
     fn open_panes(&self, cx: &App) -> (Option<FocusHandle>, Option<FocusHandle>) {
+        if !self.panel_open {
+            return (None, None);
+        }
         let tree = self.files_open.then(|| self.tree.focus_handle(cx));
         let commits = self.commits.as_ref().filter(|_| self.commits_open);
         (tree, commits.map(|c| c.focus_handle(cx)))
+    }
+
+    fn toggle_side_panel(
+        &mut self,
+        _: &ToggleSidePanel,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.panel_open = !self.panel_open;
+        if !self.panel_open {
+            window.focus(&self.diff.focus_handle(cx));
+        }
+        cx.notify();
     }
 
     fn focus_left(&mut self, _: &FocusLeft, window: &mut Window, cx: &mut Context<Self>) {
@@ -403,6 +424,7 @@ impl Render for ChangesView {
             .on_action(cx.listener(Self::focus_right))
             .on_action(cx.listener(Self::focus_down))
             .on_action(cx.listener(Self::focus_up))
+            .on_action(cx.listener(Self::toggle_side_panel))
             // Zoom virker også når treet eller commitene har fokus
             .on_action(cx.listener(|this, a: &ZoomIn, w, cx| {
                 this.diff.update(cx, |d, cx| d.zoom_in(a, w, cx))
@@ -413,7 +435,7 @@ impl Render for ChangesView {
             .on_action(cx.listener(|this, a: &ResetZoom, w, cx| {
                 this.diff.update(cx, |d, cx| d.reset_zoom(a, w, cx))
             }))
-            .child(self.side_panel(window, cx))
+            .when(self.panel_open, |d| d.child(self.side_panel(window, cx)))
             .child(div().flex_1().min_w_0().h_full().child(self.diff.clone()))
     }
 }

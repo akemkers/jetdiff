@@ -13,7 +13,7 @@ use gpui::{
 use jetdiff_git::Repo;
 use jetdiff_ui::{
     Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, NextContextRange,
-    ResetZoom, UiTheme, ZoomIn, ZoomOut, load_font,
+    ResetZoom, ToggleSidePanel, UiTheme, ZoomIn, ZoomOut, load_font,
 };
 use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 
@@ -98,6 +98,7 @@ fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-j", FocusDown, None),
         KeyBinding::new("ctrl-k", FocusUp, None),
         KeyBinding::new("ctrl-l", FocusRight, None),
+        KeyBinding::new("b", ToggleSidePanel, None),
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-w", Quit, None),
     ]);

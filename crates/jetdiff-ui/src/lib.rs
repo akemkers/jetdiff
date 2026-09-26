@@ -15,7 +15,7 @@ mod text;
 mod theme;
 mod watcher;
 
-pub use changes_view::{ChangesView, FocusDown, FocusLeft, FocusRight, FocusUp};
+pub use changes_view::{ChangesView, FocusDown, FocusLeft, FocusRight, FocusUp, ToggleSidePanel};
 pub use file_diff::{FileDiffView, NextContextRange, ResetZoom, ZoomIn, ZoomOut};
 pub use icons::Assets;
 pub use text::load_font;
