@@ -49,6 +49,10 @@ impl Watcher {
         let git_dir = root.join(".git");
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let Ok(event) = res else { return };
+            // inotify melder lesing, og vår egen lesing ville gitt en ny reload
+            if event.kind.is_access() {
+                return;
+            }
             let paths: Vec<_> = event
                 .paths
                 .into_iter()
