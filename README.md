@@ -59,6 +59,7 @@ Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert l
 | `o`                                 | Åpne fold ved markert linje ett nivå                                                            |
 | `f`                                 | Åpne alle folds, eller lukk alle hvis ingen er lukket                                           |
 | `y`                                 | Kopier `fil:linje` for markert linje. Linja er i nyeste versjon, også fra venstre side          |
+| `r`                                 | Rull tilbake endringen på markert linje til venstre side, etter Enter. Bare lokale endringer    |
 | Cmd/Ctrl+Pluss, Minus, 0            | Zoom inn, ut og tilbake til 14pt. Treet følger med                                              |
 | Cmd/Ctrl+Alt+C                      | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding                                            |
 | `q`, Cmd/Ctrl+Q, Cmd/Ctrl+W         | Avslutt                                                                                         |

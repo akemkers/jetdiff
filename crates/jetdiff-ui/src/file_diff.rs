@@ -2,13 +2,14 @@
 //! ligger det som trenger GPUI: taster, mus, animasjon mot målet og zoom.
 
 use std::cell::{Cell, RefCell};
+use std::ops::Range;
 use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
     Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
     Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render,
-    ScrollWheelEvent, SharedString, Window, actions, canvas, div, prelude::*, px,
+    ScrollWheelEvent, SharedString, Window, actions, canvas, div, prelude::*, px, relative,
 };
 use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
@@ -46,8 +47,9 @@ const HELP: [(&str, &str); 10] = [
 ];
 
 /// Vises først når diffen er en del av et filtre.
-const FILE_HELP: [(&str, &str); 3] = [
+const FILE_HELP: [(&str, &str); 4] = [
     ("J K", "neste/forrige fil"),
+    ("r", "rull tilbake endring"),
     ("C-hjkl", "bytt panel"),
     ("b", "skjul panel"),
 ];
@@ -64,6 +66,14 @@ fn idx(side: Side) -> usize {
 /// `J`/`K`. Den som eier filtreet bytter fil.
 pub struct StepFile {
     pub forward: bool,
+}
+
+/// Brukeren vil rulle tilbake en endring. Sendes til den som kan skrive fila.
+pub struct Rollback {
+    /// Høyre side slik den vises, for å oppdage om fila er endret siden.
+    pub before: String,
+    /// Linjene i endringen, per side.
+    pub lines: [Range<usize>; 2],
 }
 
 /// Ny fontstørrelse etter zoom, så resten av vinduet kan følge med.
@@ -100,6 +110,10 @@ pub struct FileDiffView {
     /// Lengste linje i tegn, regnet én gang. Gir maks horisontal scroll uten å shape alt.
     max_cols: usize,
     file_keys: bool,
+    /// Høyre side er en fil i working tree, så endringer kan rulles tilbake.
+    can_rollback: bool,
+    /// Venter på bekreftelse av rollback. Enter bekrefter, alt annet avbryter.
+    confirm: Option<Rollback>,
     /// Venstre og høyre sti for `y`. Tom når det ikke finnes noen fil.
     paths: [String; 2],
     /// Eies av den som lager diffen, men tegnes over tastelinja her.
@@ -182,6 +196,8 @@ impl FileDiffView {
             viewport_height: 0.,
             markers: Rc::new([Vec::new(), Vec::new()]),
             file_keys: false,
+            can_rollback: false,
+            confirm: None,
             paths,
             message,
             shared: Rc::new(Shared {
@@ -199,8 +215,13 @@ impl FileDiffView {
         self
     }
 
+    pub fn set_can_rollback(&mut self, can_rollback: bool) {
+        self.can_rollback = can_rollback;
+    }
+
     /// Ny fil i samme visning. Zoom beholdes, cursor og scroll starter på nytt.
     pub fn set_diff(&mut self, diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) {
+        self.confirm = None;
         self.paths = paths;
         self.max_cols = max_cols(&diff);
         self.state = diff_state(diff);
@@ -210,6 +231,25 @@ impl FileDiffView {
         self.initialized = false;
         *self.shared.caches.borrow_mut() = new_caches();
         self.shared.widest.set(0.);
+        self.update_markers();
+        cx.notify();
+    }
+
+    /// Samme fil med nytt innhold, etter rollback eller lagring. Cursor og scroll beholdes.
+    pub fn update_diff(&mut self, diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) {
+        let Some(vp) = self.viewport().filter(|_| self.initialized) else {
+            self.set_diff(diff, paths, cx);
+            return;
+        };
+        self.paths = paths;
+        self.max_cols = max_cols(&diff);
+        self.stop_animation();
+        self.state.replace_diff(Rc::new(diff), vp);
+        *self.shared.caches.borrow_mut() = new_caches();
+        self.shared.widest.set(0.);
+        let max_x = self.max_scroll_x();
+        self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
+        self.shown = self.state.scroll;
         self.update_markers();
         cx.notify();
     }
@@ -286,6 +326,10 @@ impl FileDiffView {
                 });
                 return;
             }
+            Command::Rollback => {
+                self.rollback(cx);
+                return;
+            }
             Command::CopyLocation => {
                 let c = self.state.location();
                 let path = &self.paths[idx(c.side)];
@@ -344,6 +388,29 @@ impl FileDiffView {
         cx.notify();
     }
 
+    /// Sjekker at endringen kan rulles tilbake og åpner dialogen. `on_key_down` sender
+    /// `Rollback` på Enter.
+    fn rollback(&mut self, cx: &mut Context<Self>) {
+        let diff = &self.state.diff;
+        if !self.can_rollback {
+            self.show_message("Bare lokale endringer kan rulles tilbake", cx);
+            return;
+        }
+        if diff.single_side().is_some() {
+            self.show_message("Hele fila er ny eller slettet", cx);
+            return;
+        }
+        let Some(block) = self.state.cursor_block() else {
+            self.show_message("Ingen endring på linja", cx);
+            return;
+        };
+        self.confirm = Some(Rollback {
+            before: diff.text(Side::Right).to_owned(),
+            lines: diff.blocks()[block].lines.clone(),
+        });
+        cx.notify();
+    }
+
     fn show_message(&self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
         let text = text.into();
         self.message
@@ -385,6 +452,16 @@ impl FileDiffView {
     }
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // Mens rollback venter på svar, går ingen taster til diffen
+        if let Some(rollback) = self.confirm.take() {
+            let k = &ev.keystroke;
+            if k.key == "enter" && !k.modifiers.modified() {
+                cx.emit(rollback);
+            }
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
         match self.keys.feed(to_key(&ev.keystroke)) {
             Parsed::Command(cmd) => {
                 self.execute(cmd, window, cx);
@@ -481,6 +558,7 @@ impl FileDiffView {
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
         self.keys.reset();
+        self.confirm = None;
         let Some((side, line)) = self.hit(ev.position) else {
             return;
         };
@@ -583,6 +661,7 @@ fn snap(y: f32, scale: f32) -> f32 {
 
 impl EventEmitter<StepFile> for FileDiffView {}
 impl EventEmitter<Zoomed> for FileDiffView {}
+impl EventEmitter<Rollback> for FileDiffView {}
 
 impl Focusable for FileDiffView {
     fn focus_handle(&self, _: &gpui::App) -> FocusHandle {
@@ -659,8 +738,40 @@ impl Render for FileDiffView {
             .flex_none()
             .child(help)
             .child(self.message.clone());
+        let confirm = self.confirm.is_some().then(|| {
+            div()
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_start()
+                .justify_center()
+                .pt(relative(0.2))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.))
+                        .px(px(16.))
+                        .py(px(12.))
+                        .bg(theme.editor_bg)
+                        .border_1()
+                        .border_color(theme.line_number)
+                        .rounded(px(6.))
+                        .shadow_lg()
+                        .font_family(self.font_family)
+                        .text_size(px(13.))
+                        .text_color(theme.editor_fg)
+                        .child("Rull tilbake endringen?")
+                        .child(
+                            div()
+                                .text_color(theme.line_number)
+                                .child("[Enter] yes / [Esc] no"),
+                        ),
+                )
+        });
 
         div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -741,6 +852,7 @@ impl Render for FileDiffView {
                 .w_full(),
             )
             .child(footer)
+            .children(confirm)
     }
 }
 

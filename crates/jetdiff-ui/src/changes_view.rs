@@ -14,7 +14,7 @@ use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
-use crate::file_diff::{FileDiffView, ResetZoom, StepFile, ZoomIn, ZoomOut, Zoomed};
+use crate::file_diff::{FileDiffView, ResetZoom, Rollback, StepFile, ZoomIn, ZoomOut, Zoomed};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::message::{Level, Message};
 use crate::panel_size::{PanelHeight, PanelWidth};
@@ -98,6 +98,7 @@ impl ChangesView {
             cx.subscribe(&diff, |this, _, e: &Zoomed, cx| {
                 this.zoomed(e.font_size, cx)
             }),
+            cx.subscribe(&diff, |this, _, e: &Rollback, cx| this.rollback(e, cx)),
         ];
 
         let (mut commits, mut watcher) = (None, None);
@@ -154,6 +155,22 @@ impl ChangesView {
         self.tree.update(cx, |t, cx| t.set_scale(scale, cx));
         if let Some(commits) = &self.commits {
             commits.update(cx, |c, cx| c.set_scale(scale, cx));
+        }
+    }
+
+    /// Oppdaterer diffen og lista med en gang, uten å vente på watcheren.
+    fn rollback(&mut self, e: &Rollback, cx: &mut Context<Self>) {
+        let Some((change, Ok([left, _]))) = self.shown.clone() else {
+            return;
+        };
+        match self.repo.rollback(&change, e.lines.clone(), &e.before) {
+            Ok(after) => {
+                self.show(change, Ok([left, after]), cx);
+                self.changed(Vec::new(), cx);
+            }
+            Err(text) => self
+                .message
+                .update(cx, |m, cx| m.show(text, Level::Warning, cx)),
         }
     }
 
@@ -256,10 +273,24 @@ impl ChangesView {
             return;
         };
         let content = self.repo.read(&change);
+        self.show(change, content, cx);
+    }
+
+    /// Er det samme fil som før, med nytt innhold, beholdes cursor og scroll.
+    fn show(
+        &mut self,
+        change: FileChange,
+        content: Result<[String; 2], String>,
+        cx: &mut Context<Self>,
+    ) {
         let shown = Some((change.clone(), content.clone()));
         if shown == self.shown {
             return;
         }
+        let same_file = self
+            .shown
+            .as_ref()
+            .is_some_and(|(c, _)| c.path == change.path);
         self.shown = shown;
         let (diff, notice) = build_diff(&change, content);
         self.message.update(cx, |m, cx| match notice {
@@ -267,7 +298,16 @@ impl ChangesView {
             None => m.unpin(cx),
         });
         let paths = [change.left_path().to_owned(), change.path.clone()];
-        self.diff.update(cx, |v, cx| v.set_diff(diff, paths, cx));
+        // Bare working tree kan skrives til, ikke en commit
+        let can_rollback = self.repo.is_work_tree();
+        self.diff.update(cx, |v, cx| {
+            v.set_can_rollback(can_rollback);
+            if same_file {
+                v.update_diff(diff, paths, cx)
+            } else {
+                v.set_diff(diff, paths, cx)
+            }
+        });
         cx.notify();
     }
 

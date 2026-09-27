@@ -264,7 +264,7 @@ impl DiffState {
                 })
             }
             // Eies av UI-et. Etter zoom kalles `rescale`.
-            NextFile | PrevFile | CopyLocation | ZoomIn | ZoomOut | ResetZoom | Quit => {
+            NextFile | PrevFile | CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom | Quit => {
                 Outcome::default()
             }
         }
@@ -336,6 +336,29 @@ impl DiffState {
     /// `TwosideTextDiffViewer.transferPosition`, uten kolonne.
     pub fn transferred_cursor(&self) -> Cursor {
         Cursor::new(self.cursor.side.other(), self.transferred_line())
+    }
+
+    /// Blokken cursoren står i. `None` på en kollapset fold.
+    pub fn cursor_block(&self) -> Option<usize> {
+        let c = self.cursor;
+        if self.folding.fold_at_line(c.side, c.line).is_some() {
+            return None;
+        }
+        self.diff.block_at(c.side, c.line)
+    }
+
+    /// Samme fil med nytt innhold. Cursor, scroll og kontekstnivå beholdes så langt det går.
+    pub fn replace_diff(&mut self, diff: Rc<FileDiff>, vp: Viewport) {
+        let settings = self.folding.settings();
+        self.folding = Rc::new(Folding::new(&diff, settings));
+        self.diff = diff;
+        let side = self.diff.single_side().unwrap_or(self.cursor.side);
+        self.cursor = Cursor::new(side, self.clamp_line(side, self.cursor.line));
+        self.master = side;
+        let y = self.scroll.y(side);
+        self.scroll.y[idx(side)] = self.layout(side, vp).clamp_scroll(y, vp.height);
+        self.scroll.sync_from(&self.diff, &self.folding, side, vp);
+        self.follow(vp, false);
     }
 
     /// Markert linje i nyeste versjon. Slettede filer har bare venstre side.
@@ -762,5 +785,25 @@ mod tests {
         let (min, max) = s.cursor_range(top(&s), small);
         let cv = s.cursor_visual(small);
         assert!(min <= cv && cv <= max);
+    }
+
+    #[test]
+    fn rull_tilbake_beholder_cursor_og_scroll() {
+        let mut s = three_changes(false);
+        run(&mut s, NextChange);
+        run(&mut s, NextChange);
+        assert_eq!(s.cursor, Cursor::new(R, 40));
+        assert_eq!(s.cursor_block(), Some(1));
+        let y = top(&s);
+        let a = s.diff.text(L).to_owned();
+        let text = s.diff.text(R).replace("x40\n", "a40\n");
+        s.replace_diff(
+            Rc::new(FileDiff::new(&a, &text, ComparisonPolicy::Default).unwrap()),
+            VP,
+        );
+        assert_eq!(s.diff.blocks().len(), 2);
+        assert_eq!(s.cursor, Cursor::new(R, 40));
+        assert_eq!(top(&s), y);
+        assert_eq!(s.cursor_block(), None);
     }
 }

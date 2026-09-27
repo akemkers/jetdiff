@@ -125,6 +125,21 @@ impl FileDiff {
         &self.blocks
     }
 
+    /// Blokken linja ligger i. Slettede linjer finnes bare på venstre side og nye linjer bare
+    /// på høyre. På den andre siden gjelder linja rett under der de mangler.
+    pub fn block_at(&self, side: Side, line: usize) -> Option<usize> {
+        self.side(side)
+            .line_block
+            .get(line)
+            .copied()
+            .flatten()
+            .or_else(|| {
+                self.blocks
+                    .iter()
+                    .position(|b| b.lines(side).is_empty() && b.lines(side).start == line)
+            })
+    }
+
     pub fn mapping(&self) -> &LineMapping {
         &self.mapping
     }
@@ -343,6 +358,18 @@ mod tests {
         assert_eq!(d.blocks()[0].diff_type, DiffType::Deleted);
         let d = diff("a\nb\n", "a\nc\n");
         assert_eq!(d.blocks()[0].diff_type, DiffType::Modified);
+    }
+
+    #[test]
+    fn blokk_ved_linje() {
+        let d = diff("a\nb\nc\n", "a\nx\nc\n");
+        assert_eq!(d.block_at(Side::Right, 1), Some(0));
+        assert_eq!(d.block_at(Side::Right, 0), None);
+        // Slettet linje: tom på høyre side, treffes på linja etter
+        let d = diff("a\nx\nb\n", "a\nb\n");
+        assert_eq!(d.block_at(Side::Left, 1), Some(0));
+        assert_eq!(d.block_at(Side::Right, 1), Some(0));
+        assert_eq!(d.block_at(Side::Right, 0), None);
     }
 
     #[test]

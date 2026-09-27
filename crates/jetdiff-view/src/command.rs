@@ -30,6 +30,8 @@ pub enum Command {
     NextContextRange,
     /// `fil:linje` for markert linje til utklippstavla.
     CopyLocation,
+    /// Rull tilbake endringen på markert linje til venstre side, i fila på disk.
+    Rollback,
     ZoomIn,
     ZoomOut,
     ResetZoom,

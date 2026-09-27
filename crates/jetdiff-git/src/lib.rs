@@ -1,6 +1,7 @@
 //! Endringer og filinnhold fra git. Kaller `git` så resultatet blir det samme som i
 //! `git diff`, med brukerens config og rename-deteksjon.
 
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -153,8 +154,46 @@ impl Repo {
         Ok([left, right])
     }
 
+    /// Ruller tilbake én endring i working tree: linjene `lines[1]` erstattes med `lines[0]`
+    /// fra venstre side. Nekter hvis fila ikke lenger er `before`, det diffen viser.
+    /// Byttes som bytes, så encoding og linjeskift ikke endres.
+    pub fn rollback(
+        &self,
+        change: &FileChange,
+        lines: [Range<usize>; 2],
+        before: &str,
+    ) -> Result<String, String> {
+        let path = &change.path;
+        if !self.is_work_tree() {
+            return Err("en commit kan ikke endres".into());
+        }
+        let full = self.root.join(path);
+        let disk = std::fs::read(&full).map_err(|e| format!("{path}: {e}"))?;
+        if String::from_utf8_lossy(&disk) != before {
+            return Err(format!("{path} er endret på disk"));
+        }
+        let left = match change.status {
+            Status::Added => Vec::new(),
+            _ => self.blob_bytes(&self.left, change.left_path())?,
+        };
+        let after = replace_with_left(&left, &disk, lines)
+            .ok_or_else(|| format!("{path}: linjene finnes ikke"))?;
+        std::fs::write(&full, &after).map_err(|e| format!("{path}: {e}"))?;
+        Ok(String::from_utf8_lossy(&after).into_owned())
+    }
+
     fn blob(&self, rev: &str, path: &str) -> Result<String, String> {
-        git(&self.root, &["cat-file", "blob", &format!("{rev}:{path}")])
+        let bytes = self.blob_bytes(rev, path)?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    /// Fila slik den ligger på disk etter checkout, med linjeskift fra `autocrlf` og
+    /// `.gitattributes`. Ellers er hver linje endret i en fil med CRLF på disk.
+    fn blob_bytes(&self, rev: &str, path: &str) -> Result<Vec<u8>, String> {
+        git_bytes(
+            &self.root,
+            &["cat-file", "--filters", &format!("{rev}:{path}")],
+        )
     }
 }
 
@@ -198,8 +237,25 @@ fn empty_tree(root: &Path) -> Result<String, String> {
     Ok(out.trim_end().to_owned())
 }
 
+/// Bytter linjene `lines[1]` i `right` med linjene `lines[0]` fra `left`. `None` hvis
+/// linjene ikke finnes.
+fn replace_with_left(left: &[u8], right: &[u8], lines: [Range<usize>; 2]) -> Option<Vec<u8>> {
+    let left: Vec<&[u8]> = left.split(|&b| b == b'\n').collect();
+    let right: Vec<&[u8]> = right.split(|&b| b == b'\n').collect();
+    let [l, r] = lines;
+    let before = right.get(..r.start)?;
+    let replacement = left.get(l)?;
+    let after = right.get(r.end..)?;
+    Some([before, replacement, after].concat().join(&b'\n'))
+}
+
 /// Binærfiler og feil encoding vises med erstatningstegn i stedet for å feile.
 fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let out = git_bytes(dir, args)?;
+    Ok(String::from_utf8_lossy(&out).into_owned())
+}
+
+fn git_bytes(dir: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(dir)
@@ -210,7 +266,7 @@ fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
         let err = String::from_utf8_lossy(&out.stderr);
         return Err(err.trim_end().to_owned());
     }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    Ok(out.stdout)
 }
 
 /// `R100\0gammel\0ny\0M\0sti\0`. Type-endring og konflikt vises som endret.
@@ -379,6 +435,82 @@ mod tests {
             ]
         );
         assert_eq!(repo.read(&changes[0]).unwrap(), ["gammel\n", "ny\n"]);
+    }
+
+    #[test]
+    fn bytt_linjer() {
+        let replace = |l: &str, r: &str, lines: [Range<usize>; 2]| {
+            String::from_utf8(replace_with_left(l.as_bytes(), r.as_bytes(), lines).unwrap())
+                .unwrap()
+        };
+        // Områdene er det `FileDiff` gir for disse parene
+        assert_eq!(replace("a\nb\nc\n", "a\nx\nc\n", [1..2, 1..2]), "a\nb\nc\n");
+        assert_eq!(replace("a\nb\n", "a\nx\nb\n", [1..1, 1..2]), "a\nb\n");
+        assert_eq!(replace("a\nx\nb\n", "a\nb\n", [1..2, 1..1]), "a\nx\nb\n");
+        let (l, r) = ("a\nb\nc\nd\n", "x\nb\nc\ny\n");
+        assert_eq!(replace(l, r, [0..1, 0..1]), "a\nb\nc\ny\n");
+        assert_eq!(replace(l, r, [3..4, 3..4]), "x\nb\nc\nd\n");
+        // Slutten av fila, med og uten linjeskift
+        assert_eq!(replace("a\nb", "a\nb\nc", [2..2, 2..3]), "a\nb");
+        assert_eq!(replace("a\nb\nc", "a\nb", [2..3, 2..2]), "a\nb\nc");
+        assert_eq!(replace("a\nb", "a\nb\n", [2..2, 2..3]), "a\nb");
+        assert_eq!(
+            replace("a\r\nb\r\n", "a\r\nx\r\n", [1..2, 1..2]),
+            "a\r\nb\r\n"
+        );
+        assert_eq!(replace_with_left(b"a", b"a", [0..1, 1..2]), None);
+    }
+
+    #[test]
+    fn ruller_tilbake_bare_uendret_fil() {
+        let r = TempRepo::new("rollback");
+        r.write("a.rs", "a\nb\n");
+        r.commit();
+        r.write("a.rs", "a\nx\n");
+        let repo = Repo::work_tree(&r.0).unwrap();
+        let change = repo.changes().unwrap().remove(0);
+        assert_eq!(
+            repo.rollback(&change, [1..2, 1..2], "annet\n"),
+            Err("a.rs er endret på disk".into())
+        );
+        assert_eq!(
+            repo.rollback(&change, [1..2, 1..2], "a\nx\n"),
+            Ok("a\nb\n".into())
+        );
+        assert_eq!(std::fs::read_to_string(r.0.join("a.rs")).unwrap(), "a\nb\n");
+        let head = r.git(&["rev-parse", "HEAD"]);
+        let commit = Repo::commit(&r.0, head.trim_end()).unwrap();
+        assert!(commit.rollback(&change, [1..2, 1..2], "a\nb\n").is_err());
+    }
+
+    #[test]
+    fn latin1_beholder_bytene() {
+        let r = TempRepo::new("latin1");
+        std::fs::write(r.0.join("a.txt"), b"bl\xe5b\xe6r\nr\xf8d\n").unwrap();
+        r.commit();
+        std::fs::write(r.0.join("a.txt"), b"bl\xe5b\xe6r\nr\xf8dgr\xf8t\n").unwrap();
+        let repo = Repo::work_tree(&r.0).unwrap();
+        let change = repo.changes().unwrap().remove(0);
+        let [_, before] = repo.read(&change).unwrap();
+        repo.rollback(&change, [1..2, 1..2], &before).unwrap();
+        assert_eq!(
+            std::fs::read(r.0.join("a.txt")).unwrap(),
+            b"bl\xe5b\xe6r\nr\xf8d\n"
+        );
+    }
+
+    #[test]
+    fn venstre_side_med_autocrlf() {
+        let r = TempRepo::new("autocrlf");
+        r.write(".gitattributes", "*.txt eol=crlf\n");
+        r.write("a.txt", "a\nb\n");
+        r.commit();
+        r.write("a.txt", "a\r\nx\r\n");
+        let repo = Repo::work_tree(&r.0).unwrap();
+        let change = repo.changes().unwrap().remove(0);
+        assert_eq!(repo.read(&change).unwrap()[0], "a\r\nb\r\n");
+        repo.rollback(&change, [1..2, 1..2], "a\r\nx\r\n").unwrap();
+        assert_eq!(std::fs::read(r.0.join("a.txt")).unwrap(), b"a\r\nb\r\n");
     }
 
     #[test]
