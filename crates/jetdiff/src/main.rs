@@ -87,20 +87,21 @@ fn read(path: &str) -> Result<String, String> {
 fn bind_keys(cx: &mut App) {
     // Resten av tastene går gjennom vim-parseren i `FileDiffView`
     cx.bind_keys([
-        // GPUI matcher på tegnet som skrives: Cmd+Pluss er `+` på norsk og `=` på US
-        KeyBinding::new("cmd-+", ZoomIn, None),
-        KeyBinding::new("cmd-=", ZoomIn, None),
-        KeyBinding::new("cmd--", ZoomOut, None),
-        KeyBinding::new("cmd-0", ResetZoom, None),
+        // `secondary` er Cmd på macOS og Ctrl ellers. GPUI matcher på tegnet som skrives,
+        // så Pluss er `+` på norsk og `=` på US
+        KeyBinding::new("secondary-+", ZoomIn, None),
+        KeyBinding::new("secondary-=", ZoomIn, None),
+        KeyBinding::new("secondary--", ZoomOut, None),
+        KeyBinding::new("secondary-0", ResetZoom, None),
         // IntelliJ har ingen snarvei, bare en meny i verktøylinja
-        KeyBinding::new("cmd-alt-c", NextContextRange, None),
+        KeyBinding::new("secondary-alt-c", NextContextRange, None),
         KeyBinding::new("ctrl-h", FocusLeft, None),
         KeyBinding::new("ctrl-j", FocusDown, None),
         KeyBinding::new("ctrl-k", FocusUp, None),
         KeyBinding::new("ctrl-l", FocusRight, None),
         KeyBinding::new("b", ToggleSidePanel, None),
-        KeyBinding::new("cmd-q", Quit, None),
-        KeyBinding::new("cmd-w", Quit, None),
+        KeyBinding::new("secondary-q", Quit, None),
+        KeyBinding::new("secondary-w", Quit, None),
     ]);
     cx.on_action(|_: &Quit, cx| cx.quit());
 }
