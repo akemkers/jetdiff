@@ -6,6 +6,8 @@ Syntaksfarger med tree-sitter.
 
 Fargene skal ligne IntelliJ. Tokenene tilsvarer derfor IntelliJ sine `DEFAULT_*`-nøkler (`Keyword`, `String`, `Function` osv.), og temaet i `jetdiff-view` gir dem farge.
 
+Rust har egne nøkler i Rust-pluginen (`org.rust.STRUCT`, `ENUM_VARIANT` osv.), og mange av dem har farge der `DEFAULT_*` er vanlig tekst. De har egne tokens. Uten typeinfo gjettes de fra navnet: stor forbokstav er en struct, og bare enumene fra prelude blir enum.
+
 Hele filen highlightes, ikke bare synlige linjer. Da får også slettede linjer og linjer inni en fold riktig syntaks.
 
 ## Bruk

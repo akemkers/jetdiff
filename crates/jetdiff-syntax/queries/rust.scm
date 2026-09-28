@@ -1,29 +1,80 @@
 ; Først, så alt mer spesifikt vinner
 ["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
 [
-  "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "<<" ">>" "+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>=" "->" "=>" "::" ".." "..=" "?"
+  "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "<<" ">>" "+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>=" "->" "=>" "::" ".." "..="
 ] @operator
+"?" @q_operator
 
 (field_identifier) @property
 
-; Stor forbokstav er en type eller enum-variant, som `UiTheme::dark` og `Some`
-((identifier) @type
- (#match? @type "^[A-Z]"))
+; Uten typeinfo gjettes stor forbokstav som struct, også traits
+((identifier) @struct
+ (#match? @struct "^[A-Z]"))
+(type_identifier) @struct
 
 ((identifier) @constant
  (#match? @constant "^_*[A-Z][A-Z\\d_]+$"))
 
-(type_identifier) @type
+; Bare enumene fra prelude kan skilles fra structs
+([(identifier) (type_identifier)] @enum
+ (#any-of? @enum "Option" "Result" "Ordering" "Cow"))
+(enum_item name: (type_identifier) @enum)
 
-(call_expression function: (field_expression field: (field_identifier) @function_call))
-((call_expression function: (scoped_identifier name: (identifier) @function_call))
- (#match? @function_call "^[a-z_]"))
-((call_expression function: (identifier) @function_call)
- (#match? @function_call "^[a-z_]"))
+((identifier) @enum_variant
+ (#any-of? @enum_variant "Some" "None" "Ok" "Err"))
+(enum_variant name: (identifier) @enum_variant)
+; `Type::Variant`, som `Status::Added`. Stor forbokstav på begge ledd skiller det fra
+; `Type::function` og `Type::CONSTANT`
+((scoped_identifier
+  path: [(identifier) @struct (scoped_identifier name: (identifier) @struct)]
+  name: (identifier) @enum_variant)
+ (#match? @struct "^[A-Z]")
+ (#match? @enum_variant "^[A-Z]")
+ (#not-match? @enum_variant "^_*[A-Z][A-Z\\d_]+$"))
+; `Type::Variant { .. }`. Ellers er `Type::Name` i en type en tilhørende type, som `Self::Item`
+((struct_expression
+  name: (scoped_type_identifier
+    path: (identifier) @struct
+    name: (type_identifier) @enum_variant))
+ (#match? @struct "^[A-Z]"))
+((struct_pattern
+  type: (scoped_type_identifier
+    path: (identifier) @struct
+    name: (type_identifier) @enum_variant))
+ (#match? @struct "^[A-Z]"))
+
+; Første ledd i en use-sti er en crate. Queries kan ikke matche rekursivt, så dybden skrives ut
+(use_declaration argument: (scoped_identifier path: (identifier) @crate))
+(use_declaration argument: (scoped_identifier path: (scoped_identifier path: (identifier) @crate)))
+(use_declaration argument: (scoped_identifier path: (scoped_identifier path: (scoped_identifier path: (identifier) @crate))))
+(use_declaration argument: (scoped_use_list path: (identifier) @crate))
+(use_declaration argument: (scoped_use_list path: (scoped_identifier path: (identifier) @crate)))
+(use_declaration argument: (scoped_use_list path: (scoped_identifier path: (scoped_identifier path: (identifier) @crate))))
+(use_declaration argument: (use_wildcard (identifier) @crate))
+(use_declaration argument: (use_wildcard (scoped_identifier path: (identifier) @crate)))
+(use_declaration argument: (use_wildcard (scoped_identifier path: (scoped_identifier path: (identifier) @crate))))
+(extern_crate_declaration name: (identifier) @crate)
+; Utenfor use er første ledd som regel en modul, som `thread::scope`
+((scoped_identifier path: (identifier) @crate)
+ (#any-of? @crate "std" "core" "alloc"))
+
+; Rust farger kall som deklarasjoner
+((call_expression function: (identifier) @function)
+ (#match? @function "^[a-z_]"))
+((call_expression function: (scoped_identifier name: (identifier) @function))
+ (#match? @function "^[a-z_]"))
+(call_expression function: (field_expression field: (field_identifier) @function))
+((generic_function function: (identifier) @function)
+ (#match? @function "^[a-z_]"))
+((generic_function function: (scoped_identifier name: (identifier) @function))
+ (#match? @function "^[a-z_]"))
+(generic_function function: (field_expression field: (field_identifier) @function))
 
 (function_item name: (identifier) @function)
 (function_signature_item name: (identifier) @function)
-(macro_invocation macro: (identifier) @function "!" @function)
+(macro_invocation macro: (identifier) @macro "!" @macro)
+(macro_invocation macro: (scoped_identifier name: (identifier) @macro) "!" @macro)
+(macro_definition name: (identifier) @macro)
 
 (line_comment) @comment
 (block_comment) @comment
@@ -40,7 +91,13 @@
 ] @keyword
 (crate) @keyword
 (super) @keyword
-(self) @keyword
+(self) @self
+; I en sti er `self` et nøkkelord, som `use self::a`
+(scoped_identifier path: (self) @keyword)
+(scoped_use_list path: (self) @keyword)
+(use_list (self) @keyword)
+([(identifier) (type_identifier)] @keyword
+ (#eq? @keyword "Self"))
 (mutable_specifier) @keyword
 (primitive_type) @keyword
 (boolean_literal) @keyword

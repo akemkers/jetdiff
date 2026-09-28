@@ -148,6 +148,14 @@ impl Theme {
                 Token::Strong => bold(fg),
                 Token::Emphasis => italic(fg),
                 Token::Punctuation | Token::Operator => style(fg),
+                // `RustDark.xml` i Rust-pluginen, som Islands Dark arver
+                Token::Struct => style(0xA6BB77),
+                Token::Enum => italic(0xA6BB77),
+                Token::EnumVariant => italic(0x8CC8D4),
+                Token::Crate => style(0x8D91DC),
+                Token::Macro => style(0xD5A563),
+                Token::SelfValue => style(0xE59EAE),
+                Token::QOperator => bold(0xD8A460),
             }),
         }
     }
@@ -197,6 +205,14 @@ impl Theme {
                 Token::Strong => bold(fg),
                 Token::Emphasis => italic(fg),
                 Token::Punctuation | Token::Operator => style(fg),
+                // `RustDefault.xml` i Rust-pluginen
+                Token::Struct => style(0xA04908),
+                Token::Enum => italic(0xA04908),
+                Token::EnumVariant => italic(0x0E7FC5),
+                Token::Crate => style(0x835DDA),
+                Token::Macro => style(0xC27203),
+                Token::SelfValue => style(0x1C5DFE),
+                Token::QOperator => bold(0x1C5DFE),
             }),
         }
     }
@@ -269,7 +285,12 @@ impl Theme {
                 Token::Strong => bold(RED),
                 Token::Emphasis => style(RED),
                 Token::Punctuation => style(OVERLAY2),
-                Token::Operator => style(SKY),
+                Token::Operator | Token::QOperator => style(SKY),
+                // Skjemaet har ingen Rust-nøkler, så som før
+                Token::Struct | Token::Enum | Token::EnumVariant => style(YELLOW),
+                Token::Crate => style(TEXT),
+                Token::Macro => style(BLUE),
+                Token::SelfValue => style(MAUVE),
             }),
         }
     }

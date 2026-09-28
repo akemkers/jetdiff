@@ -84,10 +84,20 @@ pub enum Token {
     Punctuation,
     /// `DEFAULT_OPERATION_SIGN`.
     Operator,
+    /// Rust har egne nøkler med farge der `DEFAULT_*` er vanlig tekst, som `org.rust.STRUCT`.
+    Struct,
+    Enum,
+    EnumVariant,
+    Crate,
+    Macro,
+    /// `self` som verdi, `org.rust.SELF_EXPRESSION` og `SELF_PARAMETER`.
+    SelfValue,
+    /// `?`, `org.rust.Q_OPERATOR`.
+    QOperator,
 }
 
 impl Token {
-    pub const ALL: [Token; 20] = [
+    pub const ALL: [Token; 27] = [
         Token::Keyword,
         Token::String,
         Token::Escape,
@@ -108,6 +118,13 @@ impl Token {
         Token::Emphasis,
         Token::Punctuation,
         Token::Operator,
+        Token::Struct,
+        Token::Enum,
+        Token::EnumVariant,
+        Token::Crate,
+        Token::Macro,
+        Token::SelfValue,
+        Token::QOperator,
     ];
 }
 
@@ -120,7 +137,7 @@ pub struct Span {
 /// Capture-navnene i `queries/`. `plain` nullstiller foreldren, som `${}` i en streng.
 /// Ved flere treff på samme node vinner det siste mønsteret, og captures på barn legger seg
 /// inni foreldren.
-const NAMES: [(&str, Option<Token>); 21] = [
+const NAMES: [(&str, Option<Token>); 28] = [
     ("keyword", Some(Token::Keyword)),
     ("string", Some(Token::String)),
     ("escape", Some(Token::Escape)),
@@ -141,6 +158,13 @@ const NAMES: [(&str, Option<Token>); 21] = [
     ("emphasis", Some(Token::Emphasis)),
     ("punctuation", Some(Token::Punctuation)),
     ("operator", Some(Token::Operator)),
+    ("struct", Some(Token::Struct)),
+    ("enum", Some(Token::Enum)),
+    ("enum_variant", Some(Token::EnumVariant)),
+    ("crate", Some(Token::Crate)),
+    ("macro", Some(Token::Macro)),
+    ("self", Some(Token::SelfValue)),
+    ("q_operator", Some(Token::QOperator)),
     ("plain", None),
 ];
 
@@ -360,15 +384,50 @@ mod tests {
             Language::Rust,
             text,
             &[
-                ("UiTheme", Type),
+                ("UiTheme", Struct),
                 ("::", Operator),
                 ("{", Punctuation),
-                ("Some", Type),
-                ("B", Type),
+                ("Some", EnumVariant),
+                ("B", EnumVariant),
                 ("MAX", Constant),
+                ("std", Crate),
             ],
         );
-        lacks(Language::Rust, text, &["std"]);
+        lacks(Language::Rust, text, &["env"]);
+    }
+
+    #[test]
+    fn rust_som_rustrover() {
+        use Token::*;
+        let text = "use std::path::{Path, PathBuf};\nuse jetdiff_changes::Status;\n\
+            fn f(dir: &Path) -> Result<Self, String> {\n\
+            let a = thread::scope(|s| s.spawn(|| verify(dir)));\n\
+            let b = a.join().unwrap()?;\n\
+            match b { Status::Added => println!(), Token::Foo { .. } => {} }\n\
+            self.root\n}\n";
+        has(
+            Language::Rust,
+            text,
+            &[
+                ("std", Crate),
+                ("jetdiff_changes", Crate),
+                ("PathBuf", Struct),
+                ("Status", Struct),
+                ("Result", Enum),
+                ("Self", Keyword),
+                ("String", Struct),
+                ("scope", Function),
+                ("spawn", Function),
+                ("verify", Function),
+                ("unwrap", Function),
+                ("?", QOperator),
+                ("Added", EnumVariant),
+                ("Foo", EnumVariant),
+                ("println!", Macro),
+                ("self", SelfValue),
+            ],
+        );
+        lacks(Language::Rust, text, &["path", "thread", "dir", "a"]);
     }
 
     #[test]
@@ -509,11 +568,12 @@ mod tests {
         has(
             Language::Rust,
             "fn f() { UiTheme::dark(); g(b.c()); std::env::args(); }",
+            // Rust farger kall som deklarasjoner
             &[
-                ("dark", FunctionCall),
-                ("g", FunctionCall),
-                ("c", FunctionCall),
-                ("args", FunctionCall),
+                ("dark", Function),
+                ("g", Function),
+                ("c", Function),
+                ("args", Function),
             ],
         );
         has(
