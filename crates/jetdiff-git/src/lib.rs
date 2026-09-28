@@ -4,6 +4,8 @@
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
+use std::thread;
 
 use jetdiff_changes::{FileChange, Status};
 
@@ -52,8 +54,14 @@ impl Repo {
     /// Working tree med filer git ikke sporer ennå. På en branch er det mot der den gikk ut
     /// fra default-branchen, så commits på branchen er med. Ellers mot HEAD.
     pub fn work_tree(dir: &Path) -> Result<Self, String> {
-        let root = toplevel(dir)?;
-        let Some(head) = verify(&root, "HEAD") else {
+        // Hvert git-kall koster en prosess, så de uavhengige kjøres samtidig
+        let (root, head, branch) = thread::scope(|s| {
+            let head = s.spawn(|| verify(dir, "HEAD"));
+            let branch = s.spawn(|| default_branch(dir));
+            (toplevel(dir), head.join().unwrap(), branch.join().unwrap())
+        });
+        let root = root?;
+        let Some(head) = head else {
             let left = empty_tree(&root)?;
             return Ok(Self {
                 root,
@@ -63,7 +71,7 @@ impl Repo {
                 history: None,
             });
         };
-        let fork = default_branch(&root).and_then(|b| {
+        let fork = branch.and_then(|b| {
             let out = git(&root, &["merge-base", "HEAD", &b]).ok()?;
             Some((b, out.trim_end().to_owned()))
         });
@@ -121,13 +129,17 @@ impl Repo {
     pub fn changes(&self) -> Result<Vec<FileChange>, String> {
         let mut args = vec!["diff", "--name-status", "-z", "-M", &self.left];
         args.extend(self.right.as_deref());
-        let mut changes = parse_name_status(&git(&self.root, &args)?);
-        if self.right.is_none() {
-            let untracked = git(
-                &self.root,
-                &["ls-files", "-z", "--others", "--exclude-standard"],
-            )?;
-            changes.extend(untracked.split_terminator('\0').map(|p| FileChange {
+        let untracked = ["ls-files", "-z", "--others", "--exclude-standard"];
+        let (diff, untracked) = thread::scope(|s| {
+            let untracked = self
+                .right
+                .is_none()
+                .then(|| s.spawn(|| git(&self.root, &untracked)));
+            (git(&self.root, &args), untracked.map(|t| t.join().unwrap()))
+        });
+        let mut changes = parse_name_status(&diff?);
+        if let Some(untracked) = untracked {
+            changes.extend(untracked?.split_terminator('\0').map(|p| FileChange {
                 path: p.to_owned(),
                 old_path: None,
                 status: Status::Added,
@@ -255,8 +267,24 @@ fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out).into_owned())
 }
 
+/// `/usr/bin/git` på macOS er en shim som gjør hvert kall flere ganger tregere, så vi
+/// slår opp den ekte binæren én gang.
+fn git_bin() -> &'static Path {
+    static BIN: OnceLock<PathBuf> = OnceLock::new();
+    BIN.get_or_init(|| {
+        Command::new("git")
+            .arg("--exec-path")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| Path::new(String::from_utf8_lossy(&o.stdout).trim_end()).join("git"))
+            .filter(|p| p.exists())
+            .unwrap_or_else(|| "git".into())
+    })
+}
+
 fn git_bytes(dir: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
-    let out = Command::new("git")
+    let out = Command::new(git_bin())
         .arg("-C")
         .arg(dir)
         .args(args)
