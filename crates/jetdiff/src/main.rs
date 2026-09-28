@@ -149,7 +149,12 @@ fn open<V: Render + Focusable>(
     title: String,
     build: impl FnOnce(&mut Context<V>) -> V + 'static,
 ) {
-    let bounds = Bounds::centered(None, size(px(1400.), px(900.)), cx);
+    // Nær skjermstørrelsen, så zoom-animasjonen på macOS blir kort
+    let screen = cx.primary_display().map(|d| d.bounds().size);
+    let start = screen.map_or(size(px(1400.), px(900.)), |s| {
+        size(s.width * 0.95, s.height * 0.95)
+    });
+    let bounds = Bounds::centered(None, start, cx);
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Maximized(bounds)),
