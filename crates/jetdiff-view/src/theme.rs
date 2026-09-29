@@ -148,14 +148,14 @@ impl Theme {
                 Token::Strong => bold(fg),
                 Token::Emphasis => italic(fg),
                 Token::Punctuation | Token::Operator => style(fg),
-                // `RustDark.xml` i Rust-pluginen, som Islands Dark arver
-                Token::Struct => style(0xA6BB77),
-                Token::Enum => italic(0xA6BB77),
-                Token::EnumVariant => italic(0x8CC8D4),
+                // Islands Dark arver Darcula, så Rust-pluginen bruker `RustDarcula.xml`
+                Token::Struct => style(0x86985D),
+                Token::Enum => italic(0x86985D),
+                Token::EnumVariant => italic(0x6DA1AB),
                 Token::Crate => style(0x8D91DC),
-                Token::Macro => style(0xD5A563),
-                Token::SelfValue => style(0xE59EAE),
-                Token::QOperator => bold(0xD8A460),
+                Token::Macro => style(0x4EADE5),
+                Token::SelfValue => style(0xD98EB3),
+                Token::QOperator => bold(0xCC7832),
             }),
         }
     }
