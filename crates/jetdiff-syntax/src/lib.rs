@@ -499,6 +499,9 @@ mod tests {
             "data class A(val b: C?)",
             &[("A", Type), ("C", Type)],
         );
+        let text = "fun f() { return visible }";
+        has(Language::Kotlin, text, &[("return", Keyword)]);
+        lacks(Language::Kotlin, text, &["visible"]);
     }
 
     #[test]
