@@ -21,6 +21,32 @@ pub struct Commit {
     pub time: i64,
 }
 
+/// En lenke som `https://github.com/eier/repo/pull/12`.
+#[derive(Debug, PartialEq, Eq)]
+pub struct PullRequest {
+    pub url: String,
+    /// `eier/repo`.
+    pub slug: String,
+    pub number: u32,
+}
+
+impl PullRequest {
+    /// Godtar også lenker til en fane eller kommentar i PR-en.
+    pub fn parse(url: &str) -> Option<Self> {
+        let rest = url.strip_prefix("https://github.com/")?;
+        let mut parts = rest.split(['/', '#', '?']);
+        let (owner, repo) = (parts.next()?, parts.next()?);
+        if owner.is_empty() || repo.is_empty() || parts.next()? != "pull" {
+            return None;
+        }
+        Some(Self {
+            url: url.to_owned(),
+            slug: format!("{owner}/{repo}"),
+            number: parts.next()?.parse().ok()?,
+        })
+    }
+}
+
 pub struct Repo {
     root: PathBuf,
     /// Venstre side. Det tomme treet hvis det ikke finnes noen forelder.
@@ -45,6 +71,59 @@ impl Repo {
         Ok(Self {
             root,
             left,
+            right: Some(right),
+            base: None,
+            history: None,
+        })
+    }
+
+    /// PR-en mot der den gikk ut fra base-branchen, som på GitHub. Hentes fra `origin`, så
+    /// repoet i `dir` må være det PR-en hører til.
+    pub fn pull_request(dir: &Path, pr: &PullRequest) -> Result<Self, String> {
+        let root = toplevel(dir).map_err(|_| "står ikke i et git-repo".to_owned())?;
+        let origin = git(&root, &["remote", "get-url", "origin"])
+            .map_err(|_| "repoet har ingen origin".to_owned())?;
+        let origin = origin.trim_end();
+        if !github_slug(origin).is_some_and(|s| s.eq_ignore_ascii_case(&pr.slug)) {
+            return Err(format!("PR-en hører til {}, ikke {origin}", pr.slug));
+        }
+        let fields = ".baseRefName + \" \" + .headRefOid";
+        let view = [
+            "pr",
+            "view",
+            &pr.url,
+            "--json",
+            "baseRefName,headRefOid",
+            "--jq",
+            fields,
+        ];
+        // Alle branchene hentes, så fetch ikke trenger base-branchen fra gh og kan gå samtidig
+        let head_ref = format!("pull/{}/head", pr.number);
+        let branches = "+refs/heads/*:refs/remotes/origin/*";
+        let fetch = [
+            "fetch",
+            "--quiet",
+            "--no-write-fetch-head",
+            "origin",
+            &head_ref,
+            branches,
+        ];
+        let (info, fetched) = thread::scope(|s| {
+            let info = s.spawn(|| gh(&root, &view));
+            let fetched = git(&root, &fetch);
+            (info.join().unwrap(), fetched)
+        });
+        let info = info?;
+        fetched?;
+        let (base, head) = info
+            .trim_end()
+            .split_once(' ')
+            .ok_or_else(|| format!("uventet svar fra gh: {info}"))?;
+        let right = verify(&root, head).ok_or_else(|| format!("fant ikke {head} etter fetch"))?;
+        let fork = git(&root, &["merge-base", &format!("origin/{base}"), &right])?;
+        Ok(Self {
+            root,
+            left: fork.trim_end().to_owned(),
             right: Some(right),
             base: None,
             history: None,
@@ -243,6 +322,13 @@ fn default_branch(root: &Path) -> Option<String> {
         .find(|b| verify(root, b).is_some())
 }
 
+/// `eier/repo` fra en SSH- eller HTTPS-remote på GitHub.
+fn github_slug(remote: &str) -> Option<&str> {
+    let (_, rest) = remote.split_once("github.com")?;
+    let rest = rest.strip_prefix([':', '/'])?;
+    Some(rest.trim_end_matches('/').trim_end_matches(".git"))
+}
+
 /// Hashen avhenger av om repoet bruker SHA-1 eller SHA-256.
 fn empty_tree(root: &Path) -> Result<String, String> {
     let out = git(root, &["hash-object", "-t", "tree", "/dev/null"])?;
@@ -284,12 +370,21 @@ fn git_bin() -> &'static Path {
 }
 
 fn git_bytes(dir: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
-    let out = Command::new(git_bin())
-        .arg("-C")
-        .arg(dir)
-        .args(args)
+    let mut cmd = Command::new(git_bin());
+    cmd.arg("-C").arg(dir).args(args);
+    run(cmd, "git")
+}
+
+fn gh(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let mut cmd = Command::new("gh");
+    cmd.current_dir(dir).args(args);
+    Ok(String::from_utf8_lossy(&run(cmd, "gh")?).into_owned())
+}
+
+fn run(mut cmd: Command, name: &str) -> Result<Vec<u8>, String> {
+    let out = cmd
         .output()
-        .map_err(|e| format!("kunne ikke kjøre git: {e}"))?;
+        .map_err(|e| format!("kunne ikke kjøre {name}: {e}"))?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
         return Err(err.trim_end().to_owned());
@@ -629,6 +724,40 @@ mod tests {
                 commit("abc", 1_700_000_000, "en: a\x1fb"),
                 commit("def", 1, "to")
             ]
+        );
+    }
+
+    #[test]
+    fn parser_pr_lenke() {
+        let pr = PullRequest::parse("https://github.com/eier/repo/pull/12/files#diff-1").unwrap();
+        assert_eq!((pr.slug.as_str(), pr.number), ("eier/repo", 12));
+        assert!(PullRequest::parse("https://github.com/eier/repo/issues/12").is_none());
+        assert!(PullRequest::parse("https://github.com/eier/repo/pull/").is_none());
+        assert!(PullRequest::parse("https://gitlab.com/eier/repo/pull/12").is_none());
+    }
+
+    #[test]
+    fn slug_fra_remote() {
+        for remote in [
+            "git@github.com:eier/repo.git",
+            "ssh://git@github.com/eier/repo.git",
+            "https://github.com/eier/repo",
+        ] {
+            assert_eq!(github_slug(remote), Some("eier/repo"), "{remote}");
+        }
+        assert_eq!(github_slug("git@gitlab.com:eier/repo.git"), None);
+    }
+
+    #[test]
+    fn pr_fra_annet_repo_gir_feil() {
+        let r = TempRepo::new("pr");
+        let pr = PullRequest::parse("https://github.com/eier/repo/pull/1").unwrap();
+        let err = |r: &TempRepo| Repo::pull_request(&r.0, &pr).err().unwrap();
+        assert_eq!(err(&r), "repoet har ingen origin");
+        r.git(&["remote", "add", "origin", "git@github.com:eier/annet.git"]);
+        assert_eq!(
+            err(&r),
+            "PR-en hører til eier/repo, ikke git@github.com:eier/annet.git"
         );
     }
 
