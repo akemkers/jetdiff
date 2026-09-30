@@ -20,6 +20,7 @@ use jetdiff_view::{
     stripe_markers,
 };
 
+use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
 use crate::message::{Level, Message};
 use crate::side_editor::{CaretRow, SideCache, SideEditor, StripeRects};
 use crate::text::TextStyle;
@@ -29,30 +30,6 @@ actions!(jetdiff, [NextContextRange, ZoomIn, ZoomOut, ResetZoom]);
 
 /// Varighet på animert hopp til endring.
 const NAV_ANIMATION_MS: f32 = 170.;
-
-/// Høyden på tastelinja nederst.
-const HELP_HEIGHT: f32 = 24.;
-
-const HELP: [(&str, &str); 10] = [
-    ("j k", "opp/ned"),
-    ("h l", "sideveis"),
-    ("d u", "scroll side"),
-    ("n p", "hopp til endring"),
-    ("o", "åpne fold"),
-    ("f", "toggle folds"),
-    ("y", "kopier fil:linje"),
-    ("H L", "venstre/høyre side"),
-    ("gg G", "topp og bunn"),
-    ("q", "avslutt"),
-];
-
-/// Vises først når diffen er en del av et filtre.
-const FILE_HELP: [(&str, &str); 4] = [
-    ("J K", "neste/forrige fil"),
-    ("r", "rull tilbake endring"),
-    ("C-hjkl", "bytt panel"),
-    ("b", "skjul panel"),
-];
 
 /// Linjer utenfor viewporten som beholdes shapet per side.
 const CACHE_CAPACITY: usize = 2000;
@@ -109,6 +86,7 @@ pub struct FileDiffView {
     can_rollback: bool,
     /// Venter på bekreftelse av rollback. Enter bekrefter, alt annet avbryter.
     confirm: Option<Rollback>,
+    help: bool,
     /// Venstre og høyre sti for `y`. Tom når det ikke finnes noen fil.
     paths: [String; 2],
     /// Eies av den som lager diffen, men tegnes over tastelinja her.
@@ -192,6 +170,7 @@ impl FileDiffView {
             file_keys: false,
             can_rollback: false,
             confirm: None,
+            help: false,
             paths,
             message,
             shared: Rc::new(Shared {
@@ -392,6 +371,25 @@ impl FileDiffView {
             before: diff.text(Side::Right).to_owned(),
             lines: diff.blocks()[block].lines.clone(),
         });
+        self.help = false;
+        cx.notify();
+    }
+
+    /// Kommer som action, så `?` virker også når treet har fokus. Avbryter rollback, som
+    /// ellers ikke ser tasten.
+    pub(crate) fn toggle_help(&mut self, _: &ToggleHelp, _: &mut Window, cx: &mut Context<Self>) {
+        self.help = !self.help;
+        self.confirm = None;
+        cx.notify();
+    }
+
+    /// Esc går videre når hjelpen ikke vises, så rollback-dialogen får den.
+    pub(crate) fn hide_help(&mut self, _: &HideHelp, _: &mut Window, cx: &mut Context<Self>) {
+        if !self.help {
+            cx.propagate();
+            return;
+        }
+        self.help = false;
         cx.notify();
     }
 
@@ -543,6 +541,7 @@ impl FileDiffView {
         window.focus(&self.focus);
         self.keys.reset();
         self.confirm = None;
+        self.help = false;
         let Some((side, line)) = self.hit(ev.position) else {
             return;
         };
@@ -656,10 +655,13 @@ impl Render for FileDiffView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_style(window);
         // Tastelinja kan bryte over flere linjer, så høyden kommer fra forrige layout
-        let height = self.shared.bounds.get().map_or(
-            f32::from(window.viewport_size().height) - HELP_HEIGHT,
-            |b| f32::from(b.size.height),
-        );
+        let height = self
+            .shared
+            .bounds
+            .get()
+            .map_or(f32::from(window.viewport_size().height) - BAR_HEIGHT, |b| {
+                f32::from(b.size.height)
+            });
         self.resize(height);
         self.step(window);
 
@@ -686,40 +688,16 @@ impl Render for FileDiffView {
             }
         });
 
-        let single = self.state.diff.single_side().is_some();
-        let help = div()
-            .flex()
-            .flex_none()
-            .flex_wrap()
-            .min_h(px(HELP_HEIGHT))
-            .px(px(10.))
-            .py(px(4.))
-            .gap_x(px(16.))
-            .gap_y(px(2.))
-            .items_center()
-            .bg(theme.editor_bg)
-            .font_family(self.font_family)
-            .text_size(px(12.))
-            .text_color(theme.line_number)
-            .children(
-                self.file_keys
-                    .then_some(&FILE_HELP)
-                    .into_iter()
-                    .flatten()
-                    .chain(&HELP)
-                    .filter(|(keys, _)| !(single && *keys == "H L"))
-                    .map(|(keys, what)| {
-                        div()
-                            .flex()
-                            .gap(px(6.))
-                            .child(div().text_color(theme.editor_fg).child(*keys))
-                            .child(*what)
-                    }),
-            );
+        let help = KeyHelp {
+            files: self.file_keys,
+            split: self.state.diff.single_side().is_none(),
+            theme,
+            font_family: self.font_family,
+        };
         let footer = div()
             .relative()
             .flex_none()
-            .child(help)
+            .child(help.bar())
             .child(self.message.clone());
         let confirm = self.confirm.is_some().then(|| {
             div()
@@ -765,6 +743,8 @@ impl Render for FileDiffView {
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))
             .on_action(cx.listener(Self::reset_zoom))
+            .on_action(cx.listener(Self::toggle_help))
+            .on_action(cx.listener(Self::hide_help))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
@@ -835,6 +815,7 @@ impl Render for FileDiffView {
                 .w_full(),
             )
             .child(footer)
+            .when(self.help, |d| d.child(help.popup()))
             .children(confirm)
     }
 }

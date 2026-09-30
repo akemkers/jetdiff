@@ -17,8 +17,9 @@ use gpui::{
 };
 use jetdiff_git::{PullRequest, Repo};
 use jetdiff_ui::{
-    Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, NextContextRange,
-    NextFile, PrevFile, ResetZoom, ToggleSidePanel, UiTheme, ZoomIn, ZoomOut, load_font,
+    Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp,
+    NextFile, PrevFile, ResetZoom, ToggleHelp, ToggleSidePanel, UiTheme, ZoomIn, ZoomOut,
+    load_font,
 };
 use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 
@@ -104,8 +105,6 @@ fn bind_keys(cx: &mut App) {
         KeyBinding::new("secondary-=", ZoomIn, None),
         KeyBinding::new("secondary--", ZoomOut, None),
         KeyBinding::new("secondary-0", ResetZoom, None),
-        // IntelliJ har ingen snarvei, bare en meny i verktøylinja
-        KeyBinding::new("secondary-alt-c", NextContextRange, None),
         KeyBinding::new("ctrl-h", FocusLeft, None),
         KeyBinding::new("ctrl-j", FocusDown, None),
         KeyBinding::new("ctrl-k", FocusUp, None),
@@ -115,6 +114,8 @@ fn bind_keys(cx: &mut App) {
         KeyBinding::new("J", NextFile, None),
         KeyBinding::new("shift-tab", PrevFile, None),
         KeyBinding::new("K", PrevFile, None),
+        KeyBinding::new("?", ToggleHelp, None),
+        KeyBinding::new("escape", HideHelp, None),
         KeyBinding::new("q", Quit, None),
         KeyBinding::new("secondary-q", Quit, None),
         KeyBinding::new("secondary-w", Quit, None),

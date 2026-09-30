@@ -38,11 +38,13 @@ graph TD
     watcher -- filer endret --> cv
     fdv --> se[SideEditor x2]
     fdv --> div[divider]
+    fdv --> help[KeyHelp]
     fdv --> msg[(Message)]
 ```
 
 - `changes_view`: treet og commitene til venstre, diffen til høyre. Henter fra git og laster på nytt når filer endres
-- `file_diff`: to `SideEditor` med divider mellom, taster og tastelinja
+- `file_diff`: to `SideEditor` med divider mellom, og tastene
+- `help`: tastelinja og popupen med alle tastene
 - `side_editor`: tekst, gutter, bakgrunner, ord-markering og error stripe
 - `divider`: tegner trakten og fold-koblingene
 - `changes_tree`, `commit_list`: listene i sidepanelet

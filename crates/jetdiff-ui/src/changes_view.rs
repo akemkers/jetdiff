@@ -15,6 +15,7 @@ use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
 use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
+use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::message::{Level, Message};
 use crate::panel_size::{PanelHeight, PanelWidth};
@@ -476,7 +477,7 @@ impl Render for ChangesView {
             .on_action(cx.listener(|this, _: &PrevFile, _, cx| {
                 this.tree.update(cx, |t, cx| t.step(false, cx))
             }))
-            // Zoom virker også når treet eller commitene har fokus
+            // Zoom og hjelpen virker også når treet eller commitene har fokus
             .on_action(cx.listener(|this, a: &ZoomIn, w, cx| {
                 this.diff.update(cx, |d, cx| d.zoom_in(a, w, cx))
             }))
@@ -485,6 +486,12 @@ impl Render for ChangesView {
             }))
             .on_action(cx.listener(|this, a: &ResetZoom, w, cx| {
                 this.diff.update(cx, |d, cx| d.reset_zoom(a, w, cx))
+            }))
+            .on_action(cx.listener(|this, a: &ToggleHelp, w, cx| {
+                this.diff.update(cx, |d, cx| d.toggle_help(a, w, cx))
+            }))
+            .on_action(cx.listener(|this, a: &HideHelp, w, cx| {
+                this.diff.update(cx, |d, cx| d.hide_help(a, w, cx))
             }))
             .when(self.panel_open, |d| d.child(self.side_panel(window, cx)))
             .child(div().flex_1().min_w_0().h_full().child(self.diff.clone()))

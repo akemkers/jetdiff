@@ -43,7 +43,7 @@ Syntaksfarger for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML,
 
 ### Taster
 
-Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert linje. Tastelinja nederst viser de viktigste.
+Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert linje. Tastelinja nederst viser de viktigste, og `?` viser alle.
 
 | Tast                                | Gjør                                                                                            |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -62,7 +62,7 @@ Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert l
 | `y`                                 | Kopier `fil:linje` for markert linje. Linja er i nyeste versjon, også fra venstre side          |
 | `r`                                 | Rull tilbake endringen på markert linje til venstre side, etter Enter. Bare lokale endringer    |
 | Cmd/Ctrl+Pluss, Minus, 0            | Zoom inn, ut og tilbake til 14pt. Treet følger med                                              |
-| Cmd/Ctrl+Alt+C                      | Bytt kontekst: 1, 2, 4, 8 linjer eller ingen folding                                            |
+| `?`                                 | Vis eller skjul alle tastene. Esc lukker også                                                   |
 | `q`, Cmd/Ctrl+Q, Cmd/Ctrl+W         | Avslutt                                                                                         |
 
 ## Utvikling
