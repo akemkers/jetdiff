@@ -10,7 +10,6 @@ pub enum KeyCode {
     /// Tegnet tasten gir med shift og alt. Med ctrl er det grunntasten.
     Char(char),
     Esc,
-    Tab,
     Up,
     Down,
     Left,
@@ -119,16 +118,11 @@ fn command(key: Key) -> Option<Command> {
             'f' => ToggleFolds,
             'y' => CopyLocation,
             'r' => Rollback,
-            'q' => Quit,
             'G' => GoToBottom,
-            'J' => NextFile,
-            'K' => PrevFile,
             'H' => FocusSide(Side::Left),
             'L' => FocusSide(Side::Right),
             _ => return None,
         },
-        KeyCode::Tab if key.shift => PrevFile,
-        KeyCode::Tab => NextFile,
         KeyCode::Down => MoveDown,
         KeyCode::Up => MoveUp,
         KeyCode::Left => ScrollLeft,
@@ -184,15 +178,10 @@ mod tests {
         assert_eq!(last(&chars("f")), c(ToggleFolds));
         assert_eq!(last(&chars("y")), c(CopyLocation));
         assert_eq!(last(&chars("r")), c(Rollback));
-        assert_eq!(last(&chars("q")), c(Quit));
         assert_eq!(last(&chars("G")), c(GoToBottom));
-        assert_eq!(last(&chars("J")), c(NextFile));
-        assert_eq!(last(&chars("K")), c(PrevFile));
         assert_eq!(last(&chars("H")), c(FocusSide(Side::Left)));
         assert_eq!(last(&chars("L")), c(FocusSide(Side::Right)));
         assert_eq!(last(&chars("gg")), c(GoToTop));
-        assert_eq!(last(&[Key::new(KeyCode::Tab)]), c(NextFile));
-        assert_eq!(last(&[Key::new(KeyCode::Tab).shift()]), c(PrevFile));
     }
 
     #[test]

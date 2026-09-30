@@ -34,7 +34,6 @@ graph TD
     cv --> watcher[Watcher]
     tree -- skriver --> sel[(Selection)]
     sel -- observeres --> cv
-    fdv -- StepFile --> cv
     commits -- SelectCommit --> cv
     watcher -- filer endret --> cv
     fdv --> se[SideEditor x2]

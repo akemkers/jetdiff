@@ -264,9 +264,7 @@ impl DiffState {
                 })
             }
             // Eies av UI-et. Etter zoom kalles `rescale`.
-            NextFile | PrevFile | CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom | Quit => {
-                Outcome::default()
-            }
+            CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
         }
     }
 

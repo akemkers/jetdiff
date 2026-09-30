@@ -18,9 +18,6 @@ pub enum Command {
     HalfPageUp,
     NextChange,
     PrevChange,
-    /// Neste fil i treet. Gjør ingenting når bare én fil vises.
-    NextFile,
-    PrevFile,
     /// Gjør ingenting når bare én side vises, eller siden alt er aktiv.
     FocusSide(Side),
     /// Ett nivå, som `ExpandRegionAction`.
@@ -35,5 +32,4 @@ pub enum Command {
     ZoomIn,
     ZoomOut,
     ResetZoom,
-    Quit,
 }

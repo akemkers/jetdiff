@@ -14,17 +14,25 @@ use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
-use crate::file_diff::{FileDiffView, ResetZoom, Rollback, StepFile, ZoomIn, ZoomOut, Zoomed};
+use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::message::{Level, Message};
 use crate::panel_size::{PanelHeight, PanelWidth};
 use crate::theme::UiTheme;
 use crate::watcher::Watcher;
 
-// Vim sine vindustaster. Treet og commitene er til venstre, diffen til høyre.
+// Vim sine vindustaster og filbytte. Treet og commitene er til venstre, diffen til høyre.
 actions!(
     jetdiff,
-    [FocusLeft, FocusDown, FocusUp, FocusRight, ToggleSidePanel]
+    [
+        FocusLeft,
+        FocusDown,
+        FocusUp,
+        FocusRight,
+        ToggleSidePanel,
+        NextFile,
+        PrevFile
+    ]
 );
 
 /// Det som hentes fra git i bakgrunnen.
@@ -92,9 +100,6 @@ impl ChangesView {
         });
         let mut subscriptions = vec![
             cx.observe(&selection, |this, _, cx| this.load(cx)),
-            cx.subscribe(&diff, |this, _, e: &StepFile, cx| {
-                this.tree.update(cx, |t, cx| t.step(e.forward, cx))
-            }),
             cx.subscribe(&diff, |this, _, e: &Zoomed, cx| {
                 this.zoomed(e.font_size, cx)
             }),
@@ -465,6 +470,12 @@ impl Render for ChangesView {
             .on_action(cx.listener(Self::focus_down))
             .on_action(cx.listener(Self::focus_up))
             .on_action(cx.listener(Self::toggle_side_panel))
+            .on_action(cx.listener(|this, _: &NextFile, _, cx| {
+                this.tree.update(cx, |t, cx| t.step(true, cx))
+            }))
+            .on_action(cx.listener(|this, _: &PrevFile, _, cx| {
+                this.tree.update(cx, |t, cx| t.step(false, cx))
+            }))
             // Zoom virker også når treet eller commitene har fokus
             .on_action(cx.listener(|this, a: &ZoomIn, w, cx| {
                 this.diff.update(cx, |d, cx| d.zoom_in(a, w, cx))

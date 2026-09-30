@@ -63,11 +63,6 @@ fn idx(side: Side) -> usize {
     side.select(0, 1)
 }
 
-/// `J`/`K`. Den som eier filtreet bytter fil.
-pub struct StepFile {
-    pub forward: bool,
-}
-
 /// Brukeren vil rulle tilbake en endring. Sendes til den som kan skrive fila.
 pub struct Rollback {
     /// Høyre side slik den vises, for å oppdage om fila er endret siden.
@@ -135,7 +130,6 @@ fn to_key(k: &Keystroke) -> Key {
     };
     let code = match k.key.as_str() {
         "escape" => KeyCode::Esc,
-        "tab" => KeyCode::Tab,
         "up" => KeyCode::Up,
         "down" => KeyCode::Down,
         "left" => KeyCode::Left,
@@ -316,16 +310,6 @@ impl FileDiffView {
             Command::ZoomIn => Some(zoomed(self.font_size, 1.)),
             Command::ZoomOut => Some(zoomed(self.font_size, -1.)),
             Command::ResetZoom => Some(FONT_SIZE),
-            Command::Quit => {
-                cx.quit();
-                return;
-            }
-            Command::NextFile | Command::PrevFile => {
-                cx.emit(StepFile {
-                    forward: cmd == Command::NextFile,
-                });
-                return;
-            }
             Command::Rollback => {
                 self.rollback(cx);
                 return;
@@ -659,7 +643,6 @@ fn snap(y: f32, scale: f32) -> f32 {
     (y * scale).round() / scale
 }
 
-impl EventEmitter<StepFile> for FileDiffView {}
 impl EventEmitter<Zoomed> for FileDiffView {}
 impl EventEmitter<Rollback> for FileDiffView {}
 
@@ -897,7 +880,7 @@ mod tests {
             to_key(&stroke("f", Some("f"), none)).code,
             KeyCode::Char('f')
         );
-        assert_eq!(to_key(&stroke("tab", None, none)).code, KeyCode::Tab);
+        assert_eq!(to_key(&stroke("tab", None, none)).code, KeyCode::Other);
         assert_eq!(to_key(&stroke("home", None, none)).code, KeyCode::Other);
         let cmd = to_key(&stroke(
             "=",
