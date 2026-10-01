@@ -24,7 +24,6 @@ pub enum Command {
     FoldOpen,
     /// Åpner alle hvis noen er lukket, ellers lukkes alle.
     ToggleFolds,
-    NextContextRange,
     /// `fil:linje` for markert linje til utklippstavla.
     CopyLocation,
     /// Rull tilbake endringen på markert linje til venstre side, i fila på disk.

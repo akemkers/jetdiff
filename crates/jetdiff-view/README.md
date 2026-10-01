@@ -12,12 +12,12 @@ Det meste av det som gjør diffen i IntelliJ god, er logikk og ikke tegning. Sid
 
 ```rust
 use jetdiff_view::{
-    ComparisonPolicy, DiffState, FileDiff, FoldSettings, Folding, KeyParser, Language, Parsed,
+    ComparisonPolicy, DiffState, FileDiff, Folding, KeyParser, Language, Parsed,
 };
 
 let mut diff = FileDiff::new(left, right, ComparisonPolicy::Default)?;
 diff.highlight_syntax(Language::Rust);
-let folding = Folding::new(&diff, FoldSettings::default());
+let folding = Folding::new(&diff);
 
 let mut state = DiffState::new(diff.into(), folding.into());
 state.init(viewport);
@@ -48,7 +48,7 @@ graph TD
 - `model`: blokker, linjer og syntaks per side
 - `state`: samler markert linje, folding og scroll, og utfører `Command`
 - `scroll`: master-siden scroller, den andre regnes ut i samme frame
-- `folding`: kontekstnivåer, felles for begge sider
+- `folding`: uendrede linjer foldes, felles for begge sider
 - `layout`, `geometry`: vertikal og horisontal plassering per side
 - `divider`, `separator`, `stripe`: trakten, bølgen på folds og error stripe
 - `keys`, `command`: keymap og kommandoene det gir

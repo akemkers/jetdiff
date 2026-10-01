@@ -476,7 +476,7 @@ mod tests {
     }
 
     fn folded(d: &FileDiff) -> Folding {
-        Folding::new(d, crate::folding::FoldSettings::default())
+        Folding::new(d)
     }
 
     #[test]

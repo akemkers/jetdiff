@@ -256,13 +256,6 @@ impl DiffState {
                 let any_closed = f.visible(Side::Left).next().is_some();
                 f.expand_all(any_closed)
             }),
-            NextContextRange => {
-                let diff = self.diff.clone();
-                self.change_folding(vp, move |_, f| {
-                    *f = f.with_settings(&diff, f.settings().next_context_range());
-                    true
-                })
-            }
             // Eies av UI-et. Etter zoom kalles `rescale`.
             CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
         }
@@ -345,10 +338,9 @@ impl DiffState {
         self.diff.block_at(c.side, c.line)
     }
 
-    /// Samme fil med nytt innhold. Cursor, scroll og kontekstnivå beholdes så langt det går.
+    /// Samme fil med nytt innhold. Cursor og scroll beholdes så langt det går.
     pub fn replace_diff(&mut self, diff: Rc<FileDiff>, vp: Viewport) {
-        let settings = self.folding.settings();
-        self.folding = Rc::new(Folding::new(&diff, settings));
+        self.folding = Rc::new(Folding::new(&diff));
         self.diff = diff;
         let side = self.diff.single_side().unwrap_or(self.cursor.side);
         self.cursor = Cursor::new(side, self.clamp_line(side, self.cursor.line));
@@ -444,7 +436,6 @@ impl DiffState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::folding::FoldSettings;
     use Command::*;
     use jetdiff_core::ComparisonPolicy;
 
@@ -469,7 +460,7 @@ mod tests {
     fn state(a: &str, b: &str, folds: bool) -> DiffState {
         let diff = FileDiff::new(a, b, ComparisonPolicy::Default).unwrap();
         let folding = if folds {
-            Folding::new(&diff, FoldSettings::default())
+            Folding::new(&diff)
         } else {
             Folding::none(&diff)
         };
@@ -713,8 +704,6 @@ mod tests {
         assert!(s.folding.visible(R).count() > 0);
         // Cursoren var inne i en fold som lukket seg
         assert_eq!(s.cursor.line, 45);
-        let out = run(&mut s, NextContextRange);
-        assert!(out.folding_changed);
     }
 
     #[test]
@@ -787,7 +776,13 @@ mod tests {
 
     #[test]
     fn rull_tilbake_beholder_cursor_og_scroll() {
-        let mut s = three_changes(false);
+        // Tett nok til at gapet 37..44 ikke foldes etter at 40 er rullet tilbake
+        let a = lines("a", 100);
+        let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
+        for i in [36, 40, 44] {
+            b[i] = format!("x{i}");
+        }
+        let mut s = state(&a, &(b.join("\n") + "\n"), true);
         run(&mut s, NextChange);
         run(&mut s, NextChange);
         assert_eq!(s.cursor, Cursor::new(R, 40));

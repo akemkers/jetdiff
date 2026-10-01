@@ -5,12 +5,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use jetdiff_view::folding::CONTEXT_RANGE_MODES;
 use jetdiff_view::nav::{next_block, prev_block, target_for_block};
 use jetdiff_view::{
-    Command, ComparisonPolicy, DiffState, DiffType, FileDiff, FoldSettings, Folding, Horizontal,
-    InlineHighlight, PositionKeeper, ScrollState, Side, Viewport, divider_bands,
-    divider_separators, stripe_markers,
+    Command, ComparisonPolicy, DiffState, DiffType, FileDiff, Folding, Horizontal, InlineHighlight,
+    PositionKeeper, ScrollState, Side, Viewport, divider_bands, divider_separators, stripe_markers,
 };
 
 const L: Side = Side::Left;
@@ -227,55 +225,42 @@ fn stripe_per_side() {
     assert!(right[0].end_y < content);
 }
 
-fn settings() -> Vec<FoldSettings> {
-    CONTEXT_RANGE_MODES
-        .iter()
-        .map(|&context_range| FoldSettings { context_range })
-        .collect()
-}
-
 #[test]
 fn folds_ligger_i_gapene_pa_alle_nivaer() {
     for (name, d) in all() {
-        for s in settings() {
-            let f = Folding::new(&d, s);
-            let Some(range) = s.context_range else {
-                assert!(f.groups().is_empty(), "{name}");
-                continue;
-            };
-            for (i, side) in [L, R].into_iter().enumerate() {
-                let count = d.line_count(side);
-                // Gapene per side: før første blokk, mellom og etter siste
-                let mut bounds = vec![0];
-                for b in d.blocks() {
-                    bounds.extend([b.lines[i].start, b.lines[i].end]);
-                }
-                bounds.push(count);
-                let gaps: Vec<(usize, usize)> = bounds.chunks(2).map(|c| (c[0], c[1])).collect();
-                for group in f.groups() {
-                    let mut outer: Option<std::ops::Range<usize>> = None;
-                    for (level, block) in group.iter().enumerate() {
-                        let Some(r) = block.lines(side) else { continue };
-                        assert!(r.len() >= 2 && r.end <= count, "{name} {r:?}");
-                        let shift = range << level;
-                        let g = gaps
-                            .iter()
-                            .position(|(s, e)| *s <= r.start && r.end <= *e)
-                            .unwrap_or_else(|| panic!("{name} {side:?} {r:?} utenfor gap"));
-                        let (gs, ge) = gaps[g];
-                        // Første og siste gap går helt ut til kanten
-                        let start = if g == 0 { 0 } else { gs + shift };
-                        let end = if g == gaps.len() - 1 {
-                            count
-                        } else {
-                            ge - shift
-                        };
-                        assert_eq!(r, start..end, "{name} {side:?} nivå {level}");
-                        if let Some(o) = &outer {
-                            assert!(o.start <= r.start && r.end <= o.end, "{name}");
-                        }
-                        outer = Some(r);
+        let f = Folding::new(&d);
+        for (i, side) in [L, R].into_iter().enumerate() {
+            let count = d.line_count(side);
+            // Gapene per side: før første blokk, mellom og etter siste
+            let mut bounds = vec![0];
+            for b in d.blocks() {
+                bounds.extend([b.lines[i].start, b.lines[i].end]);
+            }
+            bounds.push(count);
+            let gaps: Vec<(usize, usize)> = bounds.chunks(2).map(|c| (c[0], c[1])).collect();
+            for group in f.groups() {
+                let mut outer: Option<std::ops::Range<usize>> = None;
+                for (level, block) in group.iter().enumerate() {
+                    let Some(r) = block.lines(side) else { continue };
+                    assert!(r.len() >= 2 && r.end <= count, "{name} {r:?}");
+                    let shift = 4 << level;
+                    let g = gaps
+                        .iter()
+                        .position(|(s, e)| *s <= r.start && r.end <= *e)
+                        .unwrap_or_else(|| panic!("{name} {side:?} {r:?} utenfor gap"));
+                    let (gs, ge) = gaps[g];
+                    // Første og siste gap går helt ut til kanten
+                    let start = if g == 0 { 0 } else { gs + shift };
+                    let end = if g == gaps.len() - 1 {
+                        count
+                    } else {
+                        ge - shift
+                    };
+                    assert_eq!(r, start..end, "{name} {side:?} nivå {level}");
+                    if let Some(o) = &outer {
+                        assert!(o.start <= r.start && r.end <= o.end, "{name}");
                     }
+                    outer = Some(r);
                 }
             }
         }
@@ -283,37 +268,21 @@ fn folds_ligger_i_gapene_pa_alle_nivaer() {
 }
 
 #[test]
-fn kotlin_folds_per_niva() {
+fn kotlin_folds() {
     let d = load("kotlin-realistic-edit");
     let blocks: Vec<_> = d.blocks().iter().map(|b| b.lines.clone()).collect();
-    let visible = |range| {
-        let f = Folding::new(
-            &d,
-            FoldSettings {
-                context_range: Some(range),
-            },
-        );
-        let v: Vec<_> = f.visible(L).map(|(_, v)| v.lines.clone()).collect();
-        (v, f.layout(L, 18.).visual_line_count())
-    };
+    let f = Folding::new(&d);
+    let folds: Vec<_> = f.visible(L).map(|(_, v)| v.lines.clone()).collect();
     assert_eq!(blocks[5..7], [[45..46, 42..43], [47..47, 44..45]]);
-    assert_eq!(
-        visible(1),
-        (vec![0..2, 4..9, 11..18, 33..37, 40..44, 48..56], 35)
-    );
-    assert_eq!(visible(2), (vec![5..8, 12..17, 34..36, 41..43, 49..55], 46));
-    // Standardnivået: bare gapet 47..57 er langt nok, 4 linjer kontekst på hver side
-    let (folds, count) = visible(4);
-    assert_eq!((folds.len(), count), (1, 58));
-    assert_eq!(folds[0], 51..53);
-    assert_eq!(visible(8), (vec![], 59));
+    // Bare gapet 47..57 er langt nok, 4 linjer kontekst på hver side
+    assert_eq!(folds, vec![51..53]);
+    assert_eq!(f.layout(L, 18.).visual_line_count(), 58);
 }
 
 #[test]
 fn scroll_og_navigasjon_med_folds() {
     for (name, d) in all() {
-        for s in settings() {
-            let f = Folding::new(&d, s);
+        for f in [Folding::new(&d), Folding::none(&d)] {
             let layouts = f.layouts(VP.line_height);
             let mut state = ScrollState::default();
             let mut y = 0.;
@@ -338,7 +307,7 @@ fn scroll_og_navigasjon_med_folds() {
                     assert_eq!(f.caret_after(side, line), line, "{name}");
                     assert!(t.scroll_y[i] <= layout.max_scroll(VP.height), "{name}");
                     let top = layout.line_top(line) - t.scroll_y[i];
-                    assert!((0. ..VP.height).contains(&top), "{name} {s:?} {t:?}");
+                    assert!((0. ..VP.height).contains(&top), "{name} {t:?}");
                 }
                 let Some(next) = next_block(&d, R, t.caret_lines[1]) else {
                     break;
@@ -355,7 +324,7 @@ fn scroll_og_navigasjon_med_folds() {
 #[test]
 fn fold_operasjoner_holder_seg_innenfor() {
     for (name, d) in all() {
-        let mut f = Folding::new(&d, FoldSettings::default());
+        let mut f = Folding::new(&d);
         let mut state = ScrollState::default();
         let mut carets = [0, 0];
         let lines = d.line_count(L).max(d.line_count(R));
@@ -364,15 +333,14 @@ fn fold_operasjoner_holder_seg_innenfor() {
             let line = (step * 7) % lines.min(d.line_count(side));
             carets[step % 2] = line;
             let keeper = PositionKeeper::save(&state, &f, carets, VP);
-            match step % 5 {
+            match step % 4 {
                 0 => {
                     f.expand_at(side, line);
                 }
                 1 => {
                     f.expand_all(false);
                 }
-                2 => f = f.with_settings(&d, f.settings().next_context_range()),
-                3 => {
+                2 => {
                     f.expand_all(true);
                 }
                 _ => {
@@ -447,7 +415,6 @@ fn cursor_holder_seg_gyldig() {
         FocusSide(R),
         FoldOpen,
         ToggleFolds,
-        NextContextRange,
         CopyLocation,
     ];
     let small = Viewport {
@@ -462,7 +429,7 @@ fn cursor_holder_seg_gyldig() {
     for (name, diff) in all() {
         let diff = Rc::new(diff);
         for vp in [VP, small] {
-            let folding = Rc::new(Folding::new(&diff, FoldSettings::default()));
+            let folding = Rc::new(Folding::new(&diff));
             let mut s = DiffState::new(diff.clone(), folding);
             s.init(vp);
             assert_cursor_valid(&name, &s, vp, MoveDown);

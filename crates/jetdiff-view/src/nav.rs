@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn navigasjon_over_folds() {
         let d = three_changes();
-        let f = Folding::new(&d, crate::folding::FoldSettings::default());
+        let f = Folding::new(&d);
         let mut seen = vec![0];
         let mut t = target_for_block(&d, &f, 0, VP);
         loop {

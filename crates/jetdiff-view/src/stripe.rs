@@ -109,7 +109,7 @@ mod tests {
         let a: String = (0..100).map(|i| format!("a{i}\n")).collect();
         let b = a.replace("a50\n", "x\n");
         let d = diff(&a, &b);
-        let f = Folding::new(&d, crate::folding::FoldSettings::default());
+        let f = Folding::new(&d);
         let m = stripe_markers(&d, &f, Side::Left, 10.);
         // 0..46 foldes til én linje, så linje 50 er visuell linje 5
         assert_eq!(f.layout(Side::Left, 10.).logical_to_visual(50), 5);

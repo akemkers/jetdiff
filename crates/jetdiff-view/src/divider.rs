@@ -272,7 +272,6 @@ mod tests {
 
     #[test]
     fn koblinger_for_synlige_folds() {
-        use crate::folding::FoldSettings;
         // Endringer på linje 10, 40 og 90 av 100: folds 0..6, 15..36, 45..86 og 95..101
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
@@ -280,7 +279,7 @@ mod tests {
             b[i] = format!("x{i}");
         }
         let d = diff(&a, &(b.join("\n") + "\n"));
-        let f = Folding::new(&d, FoldSettings::default());
+        let f = Folding::new(&d);
         let seps = divider_separators(&f, [0., 0.], VP, 24.);
         // Viewport på 10 visuelle linjer: fold 0 og 1 (visuell linje 0 og 10)
         assert_eq!(seps.len(), 2);

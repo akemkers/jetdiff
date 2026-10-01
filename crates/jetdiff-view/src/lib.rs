@@ -23,7 +23,7 @@ pub use anim::ScrollAnimation;
 pub use command::Command;
 pub use cursor::Cursor;
 pub use divider::{Cubic, DividerBand, DividerSeparator, Point, divider_bands, divider_separators};
-pub use folding::{Connector, FoldId, FoldSettings, Folding};
+pub use folding::{Connector, FoldId, Folding};
 pub use geometry::{SideGeometry, side_geometry};
 pub use jetdiff_core::ComparisonPolicy;
 pub use jetdiff_core::side::Side;

@@ -15,9 +15,8 @@ use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
 use jetdiff_view::metrics::{FONT_SIZE, zoomed};
 use jetdiff_view::{
-    Command, DiffState, FileDiff, FoldId, FoldSettings, Folding, Horizontal, Key, KeyCode,
-    KeyParser, Parsed, ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport,
-    stripe_markers,
+    Command, DiffState, FileDiff, FoldId, Folding, Horizontal, Key, KeyCode, KeyParser, Parsed,
+    ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport, stripe_markers,
 };
 
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
@@ -26,7 +25,7 @@ use crate::side_editor::{CaretRow, SideCache, SideEditor, StripeRects};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
-actions!(jetdiff, [NextContextRange, ZoomIn, ZoomOut, ResetZoom]);
+actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom]);
 
 /// Varighet på animert hopp til endring.
 const NAV_ANIMATION_MS: f32 = 170.;
@@ -317,14 +316,6 @@ impl FileDiffView {
             return;
         };
         let out = self.state.execute(cmd, vp, self.horizontal());
-        if cmd == Command::NextContextRange {
-            let text = match self.state.folding.settings().context_range {
-                Some(1) => "Kontekst: 1 linje".into(),
-                Some(n) => format!("Kontekst: {n} linjer"),
-                None => "Folding av".into(),
-            };
-            self.show_message(text, cx);
-        }
         if cmd == Command::ToggleFolds && out.changed {
             let closed = self.state.folding.visible(Side::Left).next().is_some();
             self.show_message(
@@ -557,11 +548,6 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// `TextDiffSettings.setContextRange`: foldene bygges på nytt med tilstanden bevart.
-    fn next_context_range(&mut self, _: &NextContextRange, w: &mut Window, cx: &mut Context<Self>) {
-        self.execute(Command::NextContextRange, w, cx);
-    }
-
     pub(crate) fn zoom_in(&mut self, _: &ZoomIn, w: &mut Window, cx: &mut Context<Self>) {
         self.execute(Command::ZoomIn, w, cx);
     }
@@ -612,7 +598,7 @@ impl FileDiffView {
 }
 
 fn diff_state(diff: FileDiff) -> DiffState {
-    let folding = Folding::new(&diff, FoldSettings::default());
+    let folding = Folding::new(&diff);
     DiffState::new(Rc::new(diff), Rc::new(folding))
 }
 
@@ -739,7 +725,6 @@ impl Render for FileDiffView {
             .bg(theme.editor_bg)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))
-            .on_action(cx.listener(Self::next_context_range))
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))
             .on_action(cx.listener(Self::reset_zoom))

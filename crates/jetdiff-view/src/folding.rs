@@ -1,6 +1,5 @@
 //! Folding av uendrede linjer. Port av `FoldingModelSupport`: `FoldingBuilderBase` bygger
-//! nestede nivåer per gap, `FoldedBlock` holder regionene parret på begge sider, og
-//! `ExpandSuggester` bevarer tilstanden når foldene bygges på nytt.
+//! nestede nivåer per gap, og `FoldedBlock` holder regionene parret på begge sider.
 
 use std::ops::Range;
 
@@ -9,37 +8,8 @@ use jetdiff_core::side::Side;
 use crate::layout::{LineLayout, VisualFold, visual_folds};
 use crate::model::{FileDiff, idx};
 
-/// `TextDiffSettingsHolder.CONTEXT_RANGE_MODES`. `None` er -1, aldri fold.
-pub const CONTEXT_RANGE_MODES: [Option<usize>; 5] = [Some(1), Some(2), Some(4), Some(8), None];
-
-/// `TextDiffSettings.contextRange`.
-const DEFAULT_CONTEXT_RANGE: usize = 4;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FoldSettings {
-    pub context_range: Option<usize>,
-}
-
-impl Default for FoldSettings {
-    fn default() -> Self {
-        Self {
-            context_range: Some(DEFAULT_CONTEXT_RANGE),
-        }
-    }
-}
-
-impl FoldSettings {
-    /// Neste verdi i `CONTEXT_RANGE_MODES`, og rundt til starten.
-    pub fn next_context_range(self) -> Self {
-        let i = CONTEXT_RANGE_MODES
-            .iter()
-            .position(|&m| m == self.context_range)
-            .map_or(0, |i| i + 1);
-        Self {
-            context_range: CONTEXT_RANGE_MODES[i % CONTEXT_RANGE_MODES.len()],
-        }
-    }
-}
+/// Linjer som vises rundt hver endring, som standarden i `TextDiffSettings.contextRange`.
+const CONTEXT_RANGE: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FoldBlock {
@@ -75,7 +45,6 @@ type Regions = [Option<Range<usize>>; 2];
 
 #[derive(Debug, Clone)]
 pub struct Folding {
-    settings: FoldSettings,
     line_counts: [usize; 2],
     /// `FoldedGroup`: nestede blokker per gap, ytterst først.
     groups: Vec<Vec<FoldBlock>>,
@@ -85,48 +54,31 @@ pub struct Folding {
 }
 
 impl Folding {
-    pub fn new(diff: &FileDiff, settings: FoldSettings) -> Self {
-        Self::build(diff, settings, None)
-    }
-
-    /// Ingen folds. For tester og filer der folding er slått av.
-    pub fn none(diff: &FileDiff) -> Self {
-        Self::new(
-            diff,
-            FoldSettings {
-                context_range: None,
-            },
-        )
-    }
-
-    /// Nye innstillinger. Åpne og lukkede områder beholdes som i `ExpandSuggester`.
-    pub fn with_settings(&self, diff: &FileDiff, settings: FoldSettings) -> Self {
-        Self::build(diff, settings, Some(self.cache()))
-    }
-
-    fn build(diff: &FileDiff, settings: FoldSettings, cache: Option<FoldingCache>) -> Self {
-        let line_counts = [diff.line_count(Side::Left), diff.line_count(Side::Right)];
-        let groups = match settings.context_range {
-            None => Vec::new(),
-            Some(range) => {
-                let changes = diff.blocks().iter().map(|b| b.lines.clone());
-                let mut suggester = ExpandSuggester::new(cache);
-                build_groups(changes, line_counts, range)
+    pub fn new(diff: &FileDiff) -> Self {
+        let line_counts = line_counts(diff);
+        let changes = diff.blocks().iter().map(|b| b.lines.clone());
+        let groups = build_groups(changes, line_counts)
+            .into_iter()
+            .map(|group| {
+                group
                     .into_iter()
-                    .map(|group| {
-                        group
-                            .into_iter()
-                            .map(|lines| FoldBlock {
-                                expanded: suggester.is_expanded(&lines),
-                                lines,
-                            })
-                            .collect()
+                    .map(|lines| FoldBlock {
+                        lines,
+                        expanded: false,
                     })
                     .collect()
-            }
-        };
+            })
+            .collect();
+        Self::with_groups(line_counts, groups)
+    }
+
+    /// Ingen folds. For tester.
+    pub fn none(diff: &FileDiff) -> Self {
+        Self::with_groups(line_counts(diff), Vec::new())
+    }
+
+    fn with_groups(line_counts: [usize; 2], groups: Vec<Vec<FoldBlock>>) -> Self {
         let mut folding = Self {
-            settings,
             line_counts,
             groups,
             visible: Default::default(),
@@ -135,10 +87,6 @@ impl Folding {
         };
         folding.update();
         folding
-    }
-
-    pub fn settings(&self) -> FoldSettings {
-        self.settings
     }
 
     pub fn groups(&self) -> &[Vec<FoldBlock>] {
@@ -313,47 +261,22 @@ impl Folding {
             self.hovered = None;
         }
     }
+}
 
-    /// `collectFoldedGroupsStates`: ytterste åpne og ytterste lukkede per gruppe.
-    fn cache(&self) -> FoldingCache {
-        let ranges = [Side::Left, Side::Right].map(|side| {
-            self.groups
-                .iter()
-                .filter_map(|group| {
-                    let mut state = GroupState::default();
-                    for block in group {
-                        let Some(lines) = block.lines(side) else {
-                            continue;
-                        };
-                        if !block.expanded {
-                            state.collapsed = Some(lines);
-                            break;
-                        }
-                        state.expanded.get_or_insert(lines);
-                    }
-                    (state.expanded.is_some() || state.collapsed.is_some()).then_some(state)
-                })
-                .collect()
-        });
-        FoldingCache {
-            ranges,
-            // `updateContext` skriver ikke over cachen med en tom tilstand
-            empty: self.groups.is_empty(),
-        }
-    }
+fn line_counts(diff: &FileDiff) -> [usize; 2] {
+    [diff.line_count(Side::Left), diff.line_count(Side::Right)]
 }
 
 /// `FoldingBuilderBase.build` og `addGroup`: ett gap mellom hver blokk, pluss før første
-/// og etter siste. Nivåene har `range`, `2 * range` og `4 * range` linjer kontekst.
+/// og etter siste. Nivåene har 1, 2 og 4 ganger `CONTEXT_RANGE` linjer kontekst.
 fn build_groups(
     changes: impl IntoIterator<Item = [Range<usize>; 2]>,
     line_counts: [usize; 2],
-    range: usize,
 ) -> Vec<Vec<Regions>> {
     let mut groups = Vec::new();
     let counts = line_counts.map(|c| c as i64);
     let mut add = |starts: [i64; 2], ends: [i64; 2]| {
-        let group: Vec<Regions> = [range, range * 2, range * 4]
+        let group: Vec<Regions> = [CONTEXT_RANGE, CONTEXT_RANGE * 2, CONTEXT_RANGE * 4]
             .into_iter()
             .filter_map(|shift| {
                 let shift = shift as i64;
@@ -378,95 +301,6 @@ fn build_groups(
     }
     add(last, [i64::MAX; 2]);
     groups
-}
-
-#[derive(Debug, Clone, Default)]
-struct GroupState {
-    expanded: Option<Range<usize>>,
-    collapsed: Option<Range<usize>>,
-}
-
-impl GroupState {
-    fn range(&self) -> &Range<usize> {
-        self.expanded.as_ref().or(self.collapsed.as_ref()).unwrap()
-    }
-}
-
-#[derive(Debug, Clone)]
-struct FoldingCache {
-    ranges: [Vec<GroupState>; 2],
-    empty: bool,
-}
-
-fn contains(outer: &Range<usize>, inner: &Range<usize>) -> bool {
-    outer.start <= inner.start && inner.end <= outer.end
-}
-
-/// `ExpandSuggester`. Blokkene spørres i rekkefølge, så en markør per side holder. Uten
-/// treff i cachen er folden kollapset, som commit-dialogen i `TextDiffSettingsHolder`.
-struct ExpandSuggester {
-    cache: Option<FoldingCache>,
-    index: [usize; 2],
-}
-
-impl ExpandSuggester {
-    fn new(cache: Option<FoldingCache>) -> Self {
-        Self {
-            cache: cache.filter(|c| !c.empty),
-            index: [0, 0],
-        }
-    }
-
-    fn is_expanded(&mut self, regions: &Regions) -> bool {
-        if self.cache.is_none() {
-            return false;
-        }
-        let mut state = None;
-        for (i, range) in regions.iter().enumerate() {
-            let Some(range) = range else {
-                continue;
-            };
-            let Some(side_state) = self.cached_expanded(range, i) else {
-                continue;
-            };
-            match state {
-                None => state = Some(side_state),
-                Some(s) if s != side_state => return false,
-                Some(_) => {}
-            }
-        }
-        state.unwrap_or(false)
-    }
-
-    fn cached_expanded(&mut self, range: &Range<usize>, i: usize) -> Option<bool> {
-        let state = self.cached_state(range, i)?;
-        if state.collapsed.as_ref().is_some_and(|c| contains(c, range)) {
-            return Some(false);
-        }
-        if state.expanded.as_ref().is_some_and(|e| contains(e, range)) {
-            return Some(true);
-        }
-        None
-    }
-
-    fn cached_state(&mut self, range: &Range<usize>, i: usize) -> Option<&GroupState> {
-        if range.is_empty() {
-            return None;
-        }
-        let ranges = &self.cache.as_ref()?.ranges[i];
-        while let Some(state) = ranges.get(self.index[i]) {
-            let r = state.range();
-            if contains(r, range) {
-                return Some(state);
-            }
-            // Kan trengs for neste nivå inni samme gruppe
-            if r.end > range.start && r.start >= range.start {
-                return None;
-            }
-            self.index[i] += 1;
-        }
-        None
-    }
 }
 
 #[cfg(test)]
@@ -505,7 +339,6 @@ mod tests {
         let groups = build_groups(
             [[10..11, 10..11], [40..41, 40..41], [90..91, 90..91]],
             [101, 101],
-            4,
         );
         assert_eq!(
             groups,
@@ -523,18 +356,18 @@ mod tests {
     #[test]
     fn minst_to_linjer_per_side() {
         // Gap på 9 linjer: 4 kontekst på hver side gir én linje, altså ingen fold
-        let groups = build_groups([[0..1, 0..1], [10..11, 10..11]], [11, 11], 4);
+        let groups = build_groups([[0..1, 0..1], [10..11, 10..11]], [11, 11]);
         assert!(groups.iter().flatten().all(|r| r != &both(5..6)));
         assert_eq!(groups.len(), 0);
         // Ulik lengde: bare den lange siden får fold
-        let groups = build_groups([[0..1, 0..1], [10..11, 20..21]], [11, 21], 4);
+        let groups = build_groups([[0..1, 0..1], [10..11, 20..21]], [11, 21]);
         assert_eq!(groups[0][0], [None, Some(5..16)]);
     }
 
     #[test]
     fn like_filer_foldes_helt() {
         let d = diff(&lines("a", 30), &lines("a", 30));
-        let f = Folding::new(&d, FoldSettings::default());
+        let f = Folding::new(&d);
         assert_eq!(f.groups.len(), 1);
         assert_eq!(f.groups[0][0].lines, both(0..31));
         assert_eq!(f.layout(L, 10.).visual_line_count(), 1);
@@ -550,21 +383,9 @@ mod tests {
     }
 
     #[test]
-    fn kontekst_sykler_som_intellij() {
-        let mut s = FoldSettings::default();
-        assert_eq!(s.context_range, Some(4));
-        let mut seen = vec![];
-        for _ in 0..5 {
-            s = s.next_context_range();
-            seen.push(s.context_range);
-        }
-        assert_eq!(seen, [Some(8), None, Some(1), Some(2), Some(4)]);
-    }
-
-    #[test]
     fn klikk_apner_ett_niva_om_gangen() {
         let d = three_changes();
-        let mut f = Folding::new(&d, FoldSettings::default());
+        let mut f = Folding::new(&d);
         let visible = |f: &Folding| -> Vec<Range<usize>> {
             f.visible(L).map(|(_, v)| v.lines.clone()).collect()
         };
@@ -594,7 +415,7 @@ mod tests {
     #[test]
     fn expand_og_collapse_alle() {
         let d = three_changes();
-        let mut f = Folding::new(&d, FoldSettings::default());
+        let mut f = Folding::new(&d);
         assert!(f.expand_all(true));
         assert_eq!(f.visible(L).count(), 0);
         assert_eq!(f.layout(R, 10.).visual_line_count(), 101);
@@ -606,7 +427,7 @@ mod tests {
     #[test]
     fn expand_pa_caret() {
         let d = three_changes();
-        let mut f = Folding::new(&d, FoldSettings::default());
+        let mut f = Folding::new(&d);
         // Caret på foldens linje: ytterste kollapsede
         assert!(f.expand_at(L, 45));
         assert_eq!(f.fold_at_line(L, 49), Some(FoldId { group: 2, block: 1 }));
@@ -623,7 +444,7 @@ mod tests {
     #[test]
     fn caret_i_kollapset_fold_flyttes_til_starten() {
         let d = three_changes();
-        let f = Folding::new(&d, FoldSettings::default());
+        let f = Folding::new(&d);
         assert_eq!(f.caret_after(L, 50), 45);
         assert_eq!(f.caret_after(L, 45), 45);
         assert_eq!(f.caret_after(L, 40), 40);
@@ -643,7 +464,7 @@ mod tests {
         );
         let d = diff(&a, &b);
         assert_eq!(d.blocks()[0].lines, [10..10, 10..30]);
-        let mut f = Folding::new(&d, FoldSettings::default());
+        let mut f = Folding::new(&d);
         let c: Vec<_> = f.connectors().collect();
         assert_eq!(c.len(), 2);
         assert_eq!(c[0].lines, [0, 0]);
@@ -652,40 +473,24 @@ mod tests {
         assert!(f.connectors().nth(1).unwrap().hovered);
 
         // Kun én side har fold: ingen kobling
-        let groups = build_groups([[0..1, 0..1], [10..11, 20..21]], [11, 21], 4);
+        let groups = build_groups([[0..1, 0..1], [10..11, 20..21]], [11, 21]);
         assert_eq!(groups[0][0].clone(), [None, Some(5..16)]);
         let d = diff(
             &(lines("a", 1) + &lines("b", 9) + "c\n"),
             &(lines("a", 1) + &lines("b", 19) + "c\n"),
         );
-        let f = Folding::new(&d, FoldSettings::default());
+        let f = Folding::new(&d);
         assert!(f.connectors().all(|c| c.lines[0] != 5));
     }
 
     #[test]
     fn hover_nullstilles_nar_folden_forsvinner() {
         let d = three_changes();
-        let mut f = Folding::new(&d, FoldSettings::default());
+        let mut f = Folding::new(&d);
         let id = f.fold_at_line(L, 45).unwrap();
         assert!(f.set_hovered(Some(id)));
         assert!(!f.set_hovered(Some(id)));
         f.set_expanded(id, true);
         assert_eq!(f.hovered(), None);
-    }
-
-    #[test]
-    fn tilstand_bevares_nar_konteksten_endres() {
-        let d = three_changes();
-        let mut f = Folding::new(&d, FoldSettings::default());
-        // Åpne gruppen rundt 45..86 helt
-        f.expand_at(L, 60);
-        f.expand_at(L, 60);
-        f.expand_at(L, 60);
-        assert_eq!(f.fold_at_line(L, 57), None);
-        let f8 = f.with_settings(&d, f.settings().next_context_range());
-        assert_eq!(f8.settings().context_range, Some(8));
-        let visible: Vec<_> = f8.visible(L).map(|(_, v)| v.lines.clone()).collect();
-        // Gruppen 49..82 er åpen, de andre kollapset med 8 linjer kontekst
-        assert_eq!(visible, [0..2, 19..32, 99..101]);
     }
 }
