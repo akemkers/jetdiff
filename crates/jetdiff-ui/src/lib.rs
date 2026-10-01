@@ -19,6 +19,7 @@ mod watcher;
 pub use changes_view::{
     ChangesView, FocusDown, FocusLeft, FocusRight, FocusUp, NextFile, PrevFile, ToggleSidePanel,
 };
+pub use commit_list::LOCAL_CHANGES;
 pub use file_diff::{FileDiffView, ResetZoom, ZoomIn, ZoomOut};
 pub use help::{HideHelp, ToggleHelp};
 pub use icons::Assets;

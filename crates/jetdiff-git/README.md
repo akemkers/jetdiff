@@ -6,7 +6,7 @@ Endringer og filinnhold fra git.
 
 Resultatet skal være det samme som `git diff` gir. Derfor kaller craten `git` i stedet for å bruke et bibliotek. Da følger brukerens config og rename-deteksjon med.
 
-Craten bestemmer også hva som sammenlignes. Working tree på en branch er mot merge-base med default-branchen, så commits på branchen er med. På default-branchen er det mot HEAD.
+Craten bestemmer også hva som sammenlignes. Working tree er mot HEAD. Commit-lista har commitene siden merge-base med default-branchen, eller de siste når branchen ikke har egne.
 
 ## Bruk
 
@@ -19,7 +19,7 @@ let [left, right] = repo.read(&changes[0])?;    // innholdet på hver side
 let commits = repo.commits()?;                  // branchens commits, maks 50
 ```
 
-`label()` er det som vises øverst i commit-lista, og `name()` er mappenavnet til repoet.
+`name()` er mappenavnet til repoet.
 
 ```mermaid
 graph LR

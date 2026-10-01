@@ -20,12 +20,13 @@ const LANE_WIDTH: f32 = 16.;
 const LINE_WIDTH: f32 = 2.;
 const DOT_SIZE: f32 = 8.;
 
+/// Første rad, som er working tree.
+pub const LOCAL_CHANGES: &str = "Lokale endringer";
+
 /// Hashen til valgt commit. `None` er working tree.
 pub struct SelectCommit(pub Option<String>);
 
 pub struct CommitList {
-    /// Første rad, som «Endringer mot main».
-    label: SharedString,
     commits: Rc<[Commit]>,
     selected: Option<String>,
     /// Raden j og k flytter, som hash. Enter åpner den.
@@ -41,14 +42,12 @@ impl EventEmitter<SelectCommit> for CommitList {}
 
 impl CommitList {
     pub fn new(
-        label: String,
         commits: Vec<Commit>,
         theme: UiTheme,
         font_family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
-            label: label.into(),
             commits: commits.into(),
             selected: None,
             cursor: None,
@@ -60,8 +59,7 @@ impl CommitList {
         }
     }
 
-    pub fn set_commits(&mut self, label: String, commits: Vec<Commit>, cx: &mut Context<Self>) {
-        self.label = label.into();
+    pub fn set_commits(&mut self, commits: Vec<Commit>, cx: &mut Context<Self>) {
         self.commits = commits.into();
         // En commit som er borte, som etter en rebase, gir working tree
         if self.row_of(&self.cursor) == 0 {
@@ -135,7 +133,7 @@ impl CommitList {
                 SharedString::from(c.subject.clone()),
                 Some(age(now - c.time)),
             ),
-            None => (self.label.clone(), None),
+            None => (LOCAL_CHANGES.into(), None),
         };
         let bg = row_bg(
             &self.theme,

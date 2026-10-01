@@ -70,7 +70,7 @@ Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, foldin
 2. **Én fil, JetBrains-kvalitet.** Radmodell, sync scroll, trakt med riktig kurve (0.3/0.7), farger, ord-markering, gutter, error stripe. Dette er milepælen alt avhenger av.
 3. **Folding og navigasjon.** Kollapsede områder med bølge, neste/forrige endring med animasjon.
 4. **Syntax highlighting.**
-5. **Commit-view.** Tre med mapper, ikoner og status-farger, og én fil om gangen. Commit mot forelder og working tree mot HEAD, eller mot merge-base med default-branchen på en branch.
+5. **Commit-view.** Tre med mapper, ikoner og status-farger, og én fil om gangen. Commit mot forelder og working tree mot HEAD.
 6. **Git difftool og mappe mot mappe.**
 
 ## Fra spiken (`spikes/gpui-trakt`, slettet, ligger i git-historikken)

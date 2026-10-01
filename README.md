@@ -22,7 +22,7 @@ Det legger `jetdiff` på PATH. Krever Rust stable.
 jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
 ```
 
-- Uten argumenter: lokale endringer, også nye filer git ikke kjenner. På en branch er det mot der den gikk ut fra default-branchen på `origin` (`origin/main`), så commits underveis er med. På main er det mot HEAD, eller mot `origin/main` når noe ikke er pushet
+- Uten argumenter: det som ikke er committet, også nye filer git ikke kjenner. Alltid mot HEAD
 - `<mappe>`: som uten argumenter, men for repoet eller worktreet mappa ligger i
 - `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
 - `<pr-lenke>`: en PR på GitHub, f.eks. `https://github.com/eier/repo/pull/12`, som den vises der. Må kjøres i repoet PR-en hører til, og henter den fra `origin`. Krever `gh`
@@ -33,7 +33,7 @@ Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan s
 
 Til venstre er et tre over endrede filer. Nye og slettede filer vises som én side, binærfiler vises ikke. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
 
-For lokale endringer ligger commitene under treet: branchens commits, eller de siste når branchen ikke har egne (som på main). Maks 50. Klikk på en commit for å se den, og på raden øverst for å gå tilbake. Klikk på «Filer» eller «Commits» for å klappe seksjonen sammen.
+For lokale endringer ligger commitene under treet: branchens commits mot `origin/main`, eller de siste når branchen ikke har egne. Maks 50. Klikk på en commit for å se den, og på raden øverst for å gå tilbake. Klikk på «Filer» eller «Commits» for å klappe seksjonen sammen.
 
 Lokale endringer lastes inn på nytt når filer endres. Valgt fil beholdes, og diffen starter på toppen hvis innholdet er endret.
 

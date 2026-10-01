@@ -18,8 +18,8 @@ use gpui::{
 use jetdiff_git::{PullRequest, Repo};
 use jetdiff_ui::{
     Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp,
-    NextFile, PrevFile, ResetZoom, ToggleHelp, ToggleSidePanel, UiTheme, ZoomIn, ZoomOut,
-    load_font,
+    LOCAL_CHANGES, NextFile, PrevFile, ResetZoom, ToggleHelp, ToggleSidePanel, UiTheme, ZoomIn,
+    ZoomOut, load_font,
 };
 use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 
@@ -143,11 +143,7 @@ fn load(source: &Source) -> Result<(Content, String), String> {
             let repo = with_progress(&text, || Repo::pull_request(Path::new("."), pr))?;
             (repo, format!("PR #{}", pr.number))
         }
-        Source::WorkTree(dir) => {
-            let repo = Repo::work_tree(dir)?;
-            let title = repo.label();
-            (repo, title)
-        }
+        Source::WorkTree(dir) => (Repo::work_tree(dir)?, LOCAL_CHANGES.to_owned()),
     };
     // Flere vinduer åpne samtidig må kunne skilles i tittelen
     let title = format!("{}: {title}", repo.name());

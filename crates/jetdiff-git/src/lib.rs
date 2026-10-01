@@ -53,8 +53,6 @@ pub struct Repo {
     left: String,
     /// `None` er working tree.
     right: Option<String>,
-    /// Default-branchen når venstre side er der branchen gikk ut fra den.
-    base: Option<String>,
     /// Revisjonene commit-lista viser. `None` for en commit og for et repo uten commits.
     history: Option<String>,
 }
@@ -72,7 +70,6 @@ impl Repo {
             root,
             left,
             right: Some(right),
-            base: None,
             history: None,
         })
     }
@@ -125,13 +122,12 @@ impl Repo {
             root,
             left: fork.trim_end().to_owned(),
             right: Some(right),
-            base: None,
             history: None,
         })
     }
 
-    /// Working tree med filer git ikke sporer ennå. På en branch er det mot der den gikk ut
-    /// fra default-branchen, så commits på branchen er med. Ellers mot HEAD.
+    /// Working tree med filer git ikke sporer ennå, mot HEAD. Commit-lista har commitene på
+    /// branchen, eller de siste når branchen ikke har egne.
     pub fn work_tree(dir: &Path) -> Result<Self, String> {
         // Hvert git-kall koster en prosess, så de uavhengige kjøres samtidig
         let (root, head, branch) = thread::scope(|s| {
@@ -146,26 +142,21 @@ impl Repo {
                 root,
                 left,
                 right: None,
-                base: None,
                 history: None,
             });
         };
         let fork = branch.and_then(|b| {
             let out = git(&root, &["merge-base", "HEAD", &b]).ok()?;
-            Some((b, out.trim_end().to_owned()))
+            Some(out.trim_end().to_owned())
         });
-        let (left, base, history) = match fork {
-            Some((b, fork)) if fork != head => {
-                let range = format!("{fork}..HEAD");
-                (fork, Some(b), range)
-            }
-            _ => (head, None, "HEAD".to_owned()),
+        let history = match fork {
+            Some(fork) if fork != head => format!("{fork}..HEAD"),
+            _ => "HEAD".to_owned(),
         };
         Ok(Self {
             root,
-            left,
+            left: head,
             right: None,
-            base,
             history: Some(history),
         })
     }
@@ -177,14 +168,6 @@ impl Repo {
     /// Working tree kan endre seg mens den vises, en commit kan ikke.
     pub fn is_work_tree(&self) -> bool {
         self.right.is_none()
-    }
-
-    /// Det working tree vises mot. Gir ikke mening for en commit.
-    pub fn label(&self) -> String {
-        match &self.base {
-            Some(base) => format!("Endringer mot {base}"),
-            None => "Lokale endringer".into(),
-        }
     }
 
     /// Commitene på branchen, eller de siste. Nyeste først. Tom for en commit.
@@ -299,7 +282,7 @@ fn verify(root: &Path, rev: &str) -> Option<String> {
     Some(out.trim_end().to_owned())
 }
 
-/// `origin` først, så diffen blir den samme som i PR-en. Lokal main ligger ofte bak.
+/// `origin` først, så commit-lista blir den samme som i PR-en. Lokal main ligger ofte bak.
 fn default_branch(root: &Path) -> Option<String> {
     let remote = git(
         root,
@@ -488,6 +471,14 @@ mod tests {
         }
     }
 
+    fn subjects(repo: &Repo) -> Vec<String> {
+        repo.commits()
+            .unwrap()
+            .into_iter()
+            .map(|c| c.subject)
+            .collect()
+    }
+
     fn summary(changes: &[FileChange]) -> Vec<(Status, &str, Option<&str>)> {
         let mut s: Vec<_> = changes
             .iter()
@@ -643,7 +634,7 @@ mod tests {
     }
 
     #[test]
-    fn branch_mot_default_branchen() {
+    fn branch_viser_bare_det_som_ikke_er_committet() {
         let r = TempRepo::new("branch");
         r.write("a.rs", "a\n");
         r.commit();
@@ -652,78 +643,6 @@ mod tests {
         r.commit();
         r.write("a.rs", "endret\n");
         let repo = Repo::work_tree(&r.0).unwrap();
-        assert_eq!(repo.base.as_deref(), Some("main"));
-        assert_eq!(
-            summary(&repo.changes().unwrap()),
-            [
-                (Status::Modified, "a.rs", None),
-                (Status::Added, "b.rs", None)
-            ]
-        );
-        // Nye commits på main endrer ikke diffen
-        r.git(&["checkout", "-q", "main"]);
-        r.write("a.rs", "a\n");
-        r.write("c.rs", "c\n");
-        r.commit();
-        r.git(&["checkout", "-q", "feature"]);
-        let repo = Repo::work_tree(&r.0).unwrap();
-        assert_eq!(
-            summary(&repo.changes().unwrap()),
-            [(Status::Added, "b.rs", None)]
-        );
-    }
-
-    #[test]
-    fn origin_foran_lokal_main() {
-        let r = TempRepo::new("origin");
-        r.write("a.rs", "a\n");
-        r.commit();
-        // Andres endring er merget til origin/main, men lokal main er ikke pullet
-        r.git(&["checkout", "-q", "-b", "andre"]);
-        r.write("c.rs", "c\n");
-        r.commit();
-        r.origin_main();
-        r.git(&["checkout", "-q", "-b", "feature"]);
-        r.write("b.rs", "b\n");
-        r.commit();
-        let repo = Repo::work_tree(&r.0).unwrap();
-        assert_eq!(repo.base.as_deref(), Some("origin/main"));
-        assert_eq!(
-            summary(&repo.changes().unwrap()),
-            [(Status::Added, "b.rs", None)]
-        );
-    }
-
-    #[test]
-    fn main_med_upushede_commits_mot_origin() {
-        let r = TempRepo::new("upushet");
-        r.write("a.rs", "a\n");
-        r.commit();
-        r.origin_main();
-        r.write("b.rs", "b\n");
-        r.commit();
-        r.write("a.rs", "endret\n");
-        let repo = Repo::work_tree(&r.0).unwrap();
-        assert_eq!(repo.base.as_deref(), Some("origin/main"));
-        assert_eq!(
-            summary(&repo.changes().unwrap()),
-            [
-                (Status::Modified, "a.rs", None),
-                (Status::Added, "b.rs", None)
-            ]
-        );
-    }
-
-    #[test]
-    fn default_branchen_mot_head() {
-        let r = TempRepo::new("main");
-        r.write("a.rs", "a\n");
-        r.commit();
-        r.write("b.rs", "b\n");
-        r.commit();
-        r.write("a.rs", "endret\n");
-        let repo = Repo::work_tree(&r.0).unwrap();
-        assert_eq!(repo.base, None);
         assert_eq!(
             summary(&repo.changes().unwrap()),
             [(Status::Modified, "a.rs", None)]
@@ -731,15 +650,39 @@ mod tests {
     }
 
     #[test]
+    fn commits_mot_origin_foran_lokal_main() {
+        let r = TempRepo::new("origin");
+        r.write("a.rs", "a\n");
+        r.commit();
+        // Andres endring er merget til origin/main, men lokal main er ikke pullet
+        r.git(&["checkout", "-q", "-b", "andre"]);
+        r.write("c.rs", "c\n");
+        r.git(&["add", "-A"]);
+        r.git(&["commit", "-q", "-m", "andres"]);
+        r.origin_main();
+        r.git(&["checkout", "-q", "-b", "feature"]);
+        r.write("b.rs", "b\n");
+        r.git(&["add", "-A"]);
+        r.git(&["commit", "-q", "-m", "min"]);
+        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["min"]);
+    }
+
+    #[test]
+    fn main_med_upushede_commits() {
+        let r = TempRepo::new("upushet");
+        r.write("a.rs", "a\n");
+        r.git(&["add", "-A"]);
+        r.git(&["commit", "-q", "-m", "pushet"]);
+        r.origin_main();
+        r.write("b.rs", "b\n");
+        r.git(&["add", "-A"]);
+        r.git(&["commit", "-q", "-m", "upushet"]);
+        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["upushet"]);
+    }
+
+    #[test]
     fn commits_pa_branchen_ellers_de_siste() {
         let r = TempRepo::new("commits");
-        let subjects = |repo: &Repo| -> Vec<String> {
-            repo.commits()
-                .unwrap()
-                .into_iter()
-                .map(|c| c.subject)
-                .collect()
-        };
         assert!(Repo::work_tree(&r.0).unwrap().commits().unwrap().is_empty());
         r.write("a.rs", "a\n");
         r.git(&["add", "-A"]);

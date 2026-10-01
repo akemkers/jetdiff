@@ -41,7 +41,6 @@ struct Loaded {
     commit: Option<String>,
     repo: Repo,
     changes: Vec<FileChange>,
-    label: String,
     commits: Vec<Commit>,
 }
 
@@ -112,7 +111,7 @@ impl ChangesView {
                 message.update(cx, |m, cx| m.show(e, Level::Warning, cx));
                 Vec::new()
             });
-            let list = cx.new(|cx| CommitList::new(repo.label(), list, theme, font_family, cx));
+            let list = cx.new(|cx| CommitList::new(list, theme, font_family, cx));
             subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectCommit, cx| {
                 this.commit = e.0.clone();
                 this.changed(Vec::new(), cx);
@@ -189,7 +188,6 @@ impl ChangesView {
                 .background_executor()
                 .spawn(async move {
                     let home = Repo::work_tree(&root)?;
-                    let label = home.label();
                     let commits = home.commits()?;
                     let repo = match &commit {
                         Some(hash) => Repo::commit(&root, hash)?,
@@ -200,7 +198,6 @@ impl ChangesView {
                         commit,
                         repo,
                         changes,
-                        label,
                         commits,
                     })
                 })
@@ -219,7 +216,6 @@ impl ChangesView {
             commit,
             repo,
             changes,
-            label,
             commits,
         } = match loaded {
             Ok(l) => l,
@@ -236,7 +232,7 @@ impl ChangesView {
             }
         };
         if let Some(list) = &self.commits {
-            list.update(cx, |l, cx| l.set_commits(label, commits, cx));
+            list.update(cx, |l, cx| l.set_commits(commits, cx));
         }
         // Bare working tree mot working tree er en oppdatering. En commit endrer seg ikke.
         let same_work_tree = commit.is_none() && self.loaded_commit.is_none();
