@@ -299,7 +299,7 @@ fn verify(root: &Path, rev: &str) -> Option<String> {
     Some(out.trim_end().to_owned())
 }
 
-/// Lokal branch først, siden worktrees lages fra den og `origin` kan ligge bak.
+/// `origin` først. Alt kommer inn i main via CI/CD, så lokal main ligger ofte bak.
 fn default_branch(root: &Path) -> Option<String> {
     let remote = git(
         root,
@@ -312,11 +312,7 @@ fn default_branch(root: &Path) -> Option<String> {
     )
     .ok()
     .map(|s| s.trim_end().to_owned());
-    let local = remote
-        .as_deref()
-        .and_then(|r| r.strip_prefix("origin/"))
-        .map(str::to_owned);
-    [local, remote, Some("main".into()), Some("master".into())]
+    [remote, Some("main".into()), Some("master".into())]
         .into_iter()
         .flatten()
         .find(|b| verify(root, b).is_some())
@@ -473,6 +469,16 @@ mod tests {
         fn commit(&self) {
             self.git(&["add", "-A"]);
             self.git(&["commit", "-q", "-m", "c"]);
+        }
+
+        /// Som etter en fetch der `origin/main` står på HEAD.
+        fn origin_main(&self) {
+            self.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+            self.git(&[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ]);
         }
     }
 
@@ -664,6 +670,47 @@ mod tests {
         assert_eq!(
             summary(&repo.changes().unwrap()),
             [(Status::Added, "b.rs", None)]
+        );
+    }
+
+    #[test]
+    fn origin_foran_lokal_main() {
+        let r = TempRepo::new("origin");
+        r.write("a.rs", "a\n");
+        r.commit();
+        // Andres endring er merget til origin/main, men lokal main er ikke pullet
+        r.git(&["checkout", "-q", "-b", "andre"]);
+        r.write("c.rs", "c\n");
+        r.commit();
+        r.origin_main();
+        r.git(&["checkout", "-q", "-b", "feature"]);
+        r.write("b.rs", "b\n");
+        r.commit();
+        let repo = Repo::work_tree(&r.0).unwrap();
+        assert_eq!(repo.base.as_deref(), Some("origin/main"));
+        assert_eq!(
+            summary(&repo.changes().unwrap()),
+            [(Status::Added, "b.rs", None)]
+        );
+    }
+
+    #[test]
+    fn main_med_upushede_commits_mot_origin() {
+        let r = TempRepo::new("upushet");
+        r.write("a.rs", "a\n");
+        r.commit();
+        r.origin_main();
+        r.write("b.rs", "b\n");
+        r.commit();
+        r.write("a.rs", "endret\n");
+        let repo = Repo::work_tree(&r.0).unwrap();
+        assert_eq!(repo.base.as_deref(), Some("origin/main"));
+        assert_eq!(
+            summary(&repo.changes().unwrap()),
+            [
+                (Status::Modified, "a.rs", None),
+                (Status::Added, "b.rs", None)
+            ]
         );
     }
 

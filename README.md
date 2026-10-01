@@ -22,7 +22,7 @@ Det legger `jetdiff` på PATH. Krever Rust stable.
 jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
 ```
 
-- Uten argumenter: lokale endringer, også nye filer git ikke kjenner. På en branch er det mot der den gikk ut fra default-branchen (`main`), så commits underveis er med. På main er det mot HEAD
+- Uten argumenter: lokale endringer, også nye filer git ikke kjenner. På en branch er det mot der den gikk ut fra default-branchen på `origin` (`origin/main`), så commits underveis er med. På main er det mot HEAD, eller mot `origin/main` når noe ikke er pushet
 - `<mappe>`: som uten argumenter, men for repoet eller worktreet mappa ligger i
 - `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
 - `<pr-lenke>`: en PR på GitHub, f.eks. `https://github.com/eier/repo/pull/12`, som den vises der. Må kjøres i repoet PR-en hører til, og henter den fra `origin`. Krever `gh`
