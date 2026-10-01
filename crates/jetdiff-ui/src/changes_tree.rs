@@ -227,6 +227,9 @@ impl ChangesTree {
                             .text_color(self.status_color(change.status))
                             .child(name.to_owned()),
                     )
+                    .when_some(change.renamed_from(), |d, from| {
+                        d.child(div().pl(s(2.)).text_color(theme.line_number).child(from))
+                    })
             }
         }
     }
@@ -286,7 +289,11 @@ fn content_width(changes: &[FileChange], char_width: f32) -> f32 {
                 RowKind::Dir { name, count, .. } => {
                     icons + text(name) + GAP + 2. + text(&count_label(*count))
                 }
-                &RowKind::File(f) => icons + text(file_name(&changes[f].path)),
+                &RowKind::File(f) => {
+                    let change = &changes[f];
+                    let from = change.renamed_from().map_or(0., |t| GAP + 2. + text(&t));
+                    icons + text(file_name(&change.path)) + from
+                }
             };
             PAD_LEFT + r.depth as f32 * INDENT + row
         })

@@ -7,7 +7,7 @@ use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
     Window, actions, div, prelude::*, px,
 };
-use jetdiff_changes::FileChange;
+use jetdiff_changes::{FileChange, Status};
 use jetdiff_git::{Commit, Repo};
 use jetdiff_view::metrics::FONT_SIZE;
 use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
@@ -299,7 +299,7 @@ impl ChangesView {
         self.shown = shown;
         let (diff, notice) = build_diff(&change, content);
         self.message.update(cx, |m, cx| match notice {
-            Some(text) => m.pin(text, Level::Warning, cx),
+            Some((text, level)) => m.pin(text, level, cx),
             None => m.unpin(cx),
         });
         let paths = [change.left_path().to_owned(), change.path.clone()];
@@ -501,11 +501,12 @@ impl Render for ChangesView {
 fn build_diff(
     change: &FileChange,
     content: Result<[String; 2], String>,
-) -> (FileDiff, Option<String>) {
+) -> (FileDiff, Option<(String, Level)>) {
+    let warning = |text: String| Some((text, Level::Warning));
     match content {
-        Err(e) => (empty_diff(), Some(e)),
+        Err(e) => (empty_diff(), warning(e)),
         Ok([l, r]) if l.contains('\0') || r.contains('\0') => {
-            (empty_diff(), Some("Binærfil kan ikke vises".to_owned()))
+            (empty_diff(), warning("Binærfil kan ikke vises".to_owned()))
         }
         Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
             Ok(mut diff) => {
@@ -514,11 +515,14 @@ fn build_diff(
                 if let Some(lang) = lang {
                     diff.highlight_syntax(lang);
                 }
-                (diff, None)
+                // Ved flytting eller bare endret filmodus er diffen ellers tom uten forklaring
+                let identical = l == r && !matches!(change.status, Status::Added | Status::Deleted);
+                let notice = identical.then(|| ("Innholdet er likt".to_owned(), Level::Info));
+                (diff, notice)
             }
             Err(_) => (
                 empty_diff(),
-                Some("Filen er for stor til å vises".to_owned()),
+                warning("Filen er for stor til å vises".to_owned()),
             ),
         },
     }
