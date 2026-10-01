@@ -106,7 +106,6 @@ fn to_key(k: &Keystroke) -> Key {
         }
     };
     let code = match k.key.as_str() {
-        "escape" => KeyCode::Esc,
         "up" => KeyCode::Up,
         "down" => KeyCode::Down,
         "left" => KeyCode::Left,
@@ -841,7 +840,6 @@ mod tests {
             KeyCode::Char('[')
         );
         assert_eq!(to_key(&stroke("f7", None, shift)).code, KeyCode::F(7));
-        assert_eq!(to_key(&stroke("escape", None, none)).code, KeyCode::Esc);
         assert_eq!(
             to_key(&stroke("f", Some("f"), none)).code,
             KeyCode::Char('f')

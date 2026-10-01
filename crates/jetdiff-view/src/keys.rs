@@ -9,7 +9,6 @@ use crate::command::Command;
 pub enum KeyCode {
     /// Tegnet tasten gir med shift og alt. Med ctrl er det grunntasten.
     Char(char),
-    Esc,
     Up,
     Down,
     Left,
@@ -187,14 +186,14 @@ mod tests {
     #[test]
     fn g_venter_paa_neste_tast() {
         assert_eq!(
-            run(&[Key::char('g'), Key::new(KeyCode::Esc), Key::char('g')]),
+            run(&[Key::char('g'), Key::new(KeyCode::Other), Key::char('g')]),
             [Parsed::Pending, Parsed::Pending, Parsed::Pending]
         );
         assert_eq!(
             run(&chars("gxj")),
             [Parsed::Pending, Parsed::Pending, c(MoveDown)]
         );
-        assert_eq!(run(&[Key::new(KeyCode::Esc)]), [Parsed::Ignored]);
+        assert_eq!(run(&[Key::new(KeyCode::Other)]), [Parsed::Ignored]);
         assert_eq!(run(&chars("5")), [Parsed::Ignored]);
         assert_eq!(run(&chars("x")), [Parsed::Ignored]);
     }
