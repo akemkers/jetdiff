@@ -299,7 +299,7 @@ fn verify(root: &Path, rev: &str) -> Option<String> {
     Some(out.trim_end().to_owned())
 }
 
-/// `origin` først. Alt kommer inn i main via CI/CD, så lokal main ligger ofte bak.
+/// `origin` først, så diffen blir den samme som i PR-en. Lokal main ligger ofte bak.
 fn default_branch(root: &Path) -> Option<String> {
     let remote = git(
         root,
