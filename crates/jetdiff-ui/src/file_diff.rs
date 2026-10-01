@@ -7,13 +7,13 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
-    Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
-    Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render,
+    App, Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    KeyDownEvent, Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render,
     ScrollWheelEvent, SharedString, Window, actions, canvas, div, prelude::*, px, relative,
 };
 use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
-use jetdiff_view::metrics::{FONT_SIZE, zoomed};
+use jetdiff_view::metrics::zoomed;
 use jetdiff_view::{
     Command, DiffState, FileDiff, FoldId, Folding, Horizontal, Key, KeyCode, KeyParser, Parsed,
     ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport, stripe_markers,
@@ -21,9 +21,9 @@ use jetdiff_view::{
 
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
 use crate::message::{Level, Message};
+use crate::settings::Settings;
 use crate::side_editor::{CaretRow, SideCache, SideEditor, StripeRects};
-use crate::text::TextStyle;
-use crate::theme::UiTheme;
+use crate::text::{FAMILY, TextStyle};
 
 actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom]);
 
@@ -74,8 +74,6 @@ struct Shared {
 
 pub struct FileDiffView {
     state: DiffState,
-    theme: UiTheme,
-    font_family: &'static str,
     font_size: f32,
     style: Option<TextStyle>,
     /// Det som vises nå. Under en animasjon ligger den etter `state.scroll`, som er målet.
@@ -137,31 +135,21 @@ fn to_key(k: &Keystroke) -> Key {
 
 impl FileDiffView {
     /// Én fil, med egne beskjeder.
-    pub fn standalone(
-        diff: FileDiff,
-        paths: [String; 2],
-        theme: UiTheme,
-        font_family: &'static str,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let message = cx.new(|_| Message::new(theme, font_family));
-        Self::new(diff, paths, message, theme, font_family, cx)
+    pub fn standalone(diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) -> Self {
+        let message = cx.new(|_| Message::default());
+        Self::new(diff, paths, message, cx)
     }
 
     pub(crate) fn new(
         diff: FileDiff,
         paths: [String; 2],
         message: Entity<Message>,
-        theme: UiTheme,
-        font_family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
             max_cols: max_cols(&diff),
-            state: diff_state(diff),
-            theme,
-            font_family,
-            font_size: FONT_SIZE,
+            state: diff_state(diff, cx),
+            font_size: cx.global::<Settings>().font_size,
             style: None,
             shown: ScrollState::default(),
             animation: None,
@@ -194,7 +182,7 @@ impl FileDiffView {
         }
         self.paths = paths;
         self.max_cols = max_cols(&diff);
-        self.state = diff_state(diff);
+        self.state = diff_state(diff, cx);
         self.shown = ScrollState::default();
         self.animation = None;
         self.keys.reset();
@@ -214,7 +202,8 @@ impl FileDiffView {
         self.paths = paths;
         self.max_cols = max_cols(&diff);
         self.stop_animation();
-        self.state.replace_diff(Rc::new(diff), vp);
+        let folding = folding(&diff, cx);
+        self.state.replace_diff(Rc::new(diff), Rc::new(folding), vp);
         *self.shared.caches.borrow_mut() = new_caches();
         self.shared.widest.set(0.);
         let max_x = self.max_scroll_x();
@@ -236,11 +225,11 @@ impl FileDiffView {
         if self
             .style
             .as_ref()
-            .is_some_and(|s| s.font.family == self.font_family && s.font_size == px(self.font_size))
+            .is_some_and(|s| s.font_size == px(self.font_size))
         {
             return;
         }
-        let style = TextStyle::new(self.font_family, self.font_size, window);
+        let style = TextStyle::new(self.font_size, window);
         // Nøkkelen har fontstørrelsen, så zoom tømmer cachen
         let mut caches = self.shared.caches.borrow_mut();
         for cache in caches.iter_mut() {
@@ -285,7 +274,7 @@ impl FileDiffView {
         let size = match cmd {
             Command::ZoomIn => Some(zoomed(self.font_size, 1.)),
             Command::ZoomOut => Some(zoomed(self.font_size, -1.)),
-            Command::ResetZoom => Some(FONT_SIZE),
+            Command::ResetZoom => Some(cx.global::<Settings>().font_size),
             Command::Rollback => {
                 self.rollback(cx);
                 return;
@@ -598,9 +587,15 @@ impl FileDiffView {
     }
 }
 
-fn diff_state(diff: FileDiff) -> DiffState {
-    let folding = Folding::new(&diff);
+fn diff_state(diff: FileDiff, cx: &App) -> DiffState {
+    let folding = folding(&diff, cx);
     DiffState::new(Rc::new(diff), Rc::new(folding))
+}
+
+fn folding(diff: &FileDiff, cx: &App) -> Folding {
+    let mut folding = Folding::new(diff);
+    folding.expand_all(!cx.global::<Settings>().collapse_unchanged);
+    folding
 }
 
 fn max_cols(diff: &FileDiff) -> usize {
@@ -657,7 +652,7 @@ impl Render for FileDiffView {
         let scroll_x = snap(self.shown.x, scale);
         let diff = self.state.diff.clone();
         let folding = self.state.folding.clone();
-        let theme = self.theme;
+        let theme = cx.global::<Settings>().theme;
         let style = self.style.clone();
         let markers = self.markers.clone();
         let shared = self.shared.clone();
@@ -675,10 +670,7 @@ impl Render for FileDiffView {
             }
         });
 
-        let keys = KeyHelp {
-            theme,
-            font_family: self.font_family,
-        };
+        let keys = KeyHelp { theme };
         let footer = div()
             .relative()
             .flex_none()
@@ -705,7 +697,7 @@ impl Render for FileDiffView {
                         .border_color(theme.line_number)
                         .rounded(px(6.))
                         .shadow_lg()
-                        .font_family(self.font_family)
+                        .font_family(FAMILY)
                         .text_size(px(13.))
                         .text_color(theme.editor_fg)
                         .child("Rull tilbake endringen?")

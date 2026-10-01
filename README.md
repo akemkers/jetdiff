@@ -19,7 +19,7 @@ Det legger `jetdiff` på PATH. Krever Rust stable.
 ## Bruk
 
 ```
-jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
+jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 ```
 
 - Uten argumenter: det som ikke er committet, også nye filer git ikke kjenner. Alltid mot HEAD
@@ -27,7 +27,6 @@ jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>] [--theme catppucc
 - `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
 - `<pr-lenke>`: en PR på GitHub, f.eks. `https://github.com/eier/repo/pull/12`, som den vises der. Må kjøres i repoet PR-en hører til, og henter den fra `origin`. Krever `gh`
 - `<venstre> <høyre>`: to filer
-- `--theme`: `catppuccin-mocha` er standard. `jetbrains-dark` og `jetbrains-light` er IntelliJ sine Islands-temaer
 
 Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
@@ -40,6 +39,21 @@ Lokale endringer lastes inn på nytt når filer endres. Valgt fil beholdes, og d
 Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer.
 
 Syntaksfarger for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML og Markdown. Språket velges fra filendelsen.
+
+### Innstillinger
+
+Leses fra `$XDG_CONFIG_HOME/jetdiff/config.toml`, eller `~/.config/jetdiff/config.toml`. Fila lages første gang jetdiff starter, med standardverdiene:
+
+```toml
+theme = "catppuccin-mocha"
+font_size = 14             # mellom 8 og 40, Cmd-0 går tilbake hit
+collapse_unchanged = true  # false viser hele fila
+
+[side_panel]
+open = false               # true viser filtreet og commitene ved oppstart
+```
+
+`theme` er `catppuccin-mocha`, `jetbrains-dark` eller `jetbrains-light`. De to siste er IntelliJ sine Islands-temaer.
 
 ### Taster
 

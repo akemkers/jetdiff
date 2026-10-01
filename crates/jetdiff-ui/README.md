@@ -13,16 +13,24 @@ Modulene kjenner ikke hverandre. Delt tilstand, som valgt fil, ligger i små GPU
 To visninger er offentlige:
 
 ```rust
-use jetdiff_ui::{Assets, ChangesView, FileDiffView, UiTheme, load_font};
+use jetdiff_ui::{Assets, ChangesView, FileDiffView, Settings, UiTheme, load_font};
 
 Application::new().with_assets(Assets).run(|cx| {
-    let font = load_font(cx);
+    load_font(cx);
+    cx.set_global(Settings {
+        theme: UiTheme::mocha(),
+        font_size: 14.,
+        collapse_unchanged: true,
+        side_panel_open: false,
+    });
     // Én fil:
-    cx.new(|cx| FileDiffView::standalone(diff, paths, UiTheme::mocha(), font, cx));
+    cx.new(|cx| FileDiffView::standalone(diff, paths, cx));
     // Et repo eller en commit, med tre og commits:
-    cx.new(|cx| ChangesView::new(repo, changes, UiTheme::mocha(), font, cx));
+    cx.new(|cx| ChangesView::new(repo, changes, cx));
 });
 ```
+
+`Settings` er en GPUI-global som alle visningene leser. `font_size` er der zoom starter, og `collapse_unchanged` klapper sammen uendrede deler i nye filer.
 
 Tastene går gjennom `KeyParser` i `jetdiff-view`. Actions som zoom og panelbytte (`ZoomIn`, `FocusLeft`, `ToggleSidePanel` osv.) eksporteres, og den som lager vinduet binder dem til taster.
 

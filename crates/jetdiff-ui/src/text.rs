@@ -6,7 +6,7 @@ use gpui::{App, Font, FontFeatures, Pixels, SharedString, Window, font, px};
 
 use jetdiff_view::metrics::{LINE_NUMBER_FONT_DELTA, LineMetrics, line_metrics};
 
-const FAMILY: &str = "JetBrains Mono";
+pub(crate) const FAMILY: &str = "JetBrains Mono";
 
 /// Samme versjon som i JBR-en til IntelliJ, så tekstmålene blir de samme som i IDE-en.
 const FONTS: [&[u8]; 4] = [
@@ -16,11 +16,10 @@ const FONTS: [&[u8]; 4] = [
     include_bytes!("../fonts/JetBrainsMono-BoldItalic.ttf"),
 ];
 
-pub fn load_font(cx: &App) -> &'static str {
+pub fn load_font(cx: &App) {
     cx.text_system()
         .add_fonts(FONTS.map(Cow::Borrowed).to_vec())
         .expect("innebygd font skal kunne lastes");
-    FAMILY
 }
 
 #[derive(Debug, Clone)]
@@ -39,11 +38,11 @@ pub struct TextStyle {
 }
 
 impl TextStyle {
-    pub fn new(font_family: &'static str, size: f32, window: &Window) -> Self {
+    pub fn new(size: f32, window: &Window) -> Self {
         let font = Font {
             // Ingen ligaturer i diff, som IntelliJ sin default
             features: FontFeatures::disable_ligatures(),
-            ..font(font_family)
+            ..font(FAMILY)
         };
         let ts = window.text_system();
         let id = ts.resolve_font(&font);

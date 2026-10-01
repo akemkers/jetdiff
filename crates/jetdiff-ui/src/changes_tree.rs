@@ -15,6 +15,8 @@ use crate::icons::{chevron_icon, file_icon, folder_icon};
 use crate::list::{
     GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key, row_bg, step,
 };
+use crate::settings::Settings;
+use crate::text::FAMILY;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -37,8 +39,6 @@ pub struct ChangesTree {
     tree: ChangeTree,
     rows: Rc<[Row]>,
     selection: Entity<Selection>,
-    theme: UiTheme,
-    font_family: &'static str,
     scroll: UniformListScrollHandle,
     /// Følger zoomen i diffen, som hele UI-et i IntelliJ.
     scale: f32,
@@ -54,8 +54,6 @@ impl ChangesTree {
     pub fn new(
         changes: Rc<[FileChange]>,
         selection: Entity<Selection>,
-        theme: UiTheme,
-        font_family: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
         let tree = ChangeTree::new(&changes);
@@ -65,8 +63,6 @@ impl ChangesTree {
             changes,
             tree,
             selection,
-            theme,
-            font_family,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
             content_width: None,
@@ -134,16 +130,16 @@ impl ChangesTree {
     /// Bredden innholdet trenger, uskalert.
     pub fn content_width(&mut self, window: &Window) -> f32 {
         *self.content_width.get_or_insert_with(|| {
-            let char_width = TextStyle::new(self.font_family, TEXT_SIZE, window).char_width;
+            let char_width = TextStyle::new(TEXT_SIZE, window).char_width;
             content_width(&self.changes, char_width)
         })
     }
 
-    fn status_color(&self, status: Status) -> Hsla {
+    fn status_color(theme: &UiTheme, status: Status) -> Hsla {
         match status {
-            Status::Added => self.theme.file_added,
-            Status::Deleted => self.theme.file_deleted,
-            Status::Modified | Status::Renamed => self.theme.file_modified,
+            Status::Added => theme.file_added,
+            Status::Deleted => theme.file_deleted,
+            Status::Modified | Status::Renamed => theme.file_modified,
         }
     }
 
@@ -171,7 +167,7 @@ impl ChangesTree {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let row = &self.rows[i];
-        let theme = &self.theme;
+        let theme = cx.global::<Settings>().theme;
         let dark = theme.dark;
         let s = |v: f32| px(v * self.scale);
         // Eksplisitt Embedded, ellers tolker GPUI `java.svg` som en URI og henter over HTTP
@@ -192,7 +188,7 @@ impl ChangesTree {
             .overflow_hidden()
             .when_some(
                 row_bg(
-                    theme,
+                    &theme,
                     i == self.cursor,
                     selected.is_some_and(|f| row.kind == RowKind::File(f)),
                     focused,
@@ -224,7 +220,7 @@ impl ChangesTree {
                     .child(icon(file_icon(&change.path, dark)))
                     .child(
                         div()
-                            .text_color(self.status_color(change.status))
+                            .text_color(Self::status_color(&theme, change.status))
                             .child(name.to_owned()),
                     )
                     .when_some(change.renamed_from(), |d, from| {
@@ -248,9 +244,9 @@ impl Render for ChangesTree {
             .size_full()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))
-            .font_family(self.font_family)
+            .font_family(FAMILY)
             .text_size(px(TEXT_SIZE * self.scale))
-            .text_color(self.theme.editor_fg)
+            .text_color(cx.global::<Settings>().theme.editor_fg)
             .child(
                 uniform_list(
                     "changes",

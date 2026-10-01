@@ -10,3 +10,5 @@ jetdiff-changes = { path = "../jetdiff-changes" }
 jetdiff-git = { path = "../jetdiff-git" }
 jetdiff-ui = { path = "../jetdiff-ui" }
 jetdiff-view = { path = "../jetdiff-view" }
+serde.workspace = true
+toml = "1.1.6"

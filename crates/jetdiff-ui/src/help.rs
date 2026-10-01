@@ -2,6 +2,7 @@
 
 use gpui::{Div, FontWeight, actions, div, prelude::*, px};
 
+use crate::text::FAMILY;
 use crate::theme::UiTheme;
 
 actions!(jetdiff, [ToggleHelp, HideHelp]);
@@ -61,7 +62,6 @@ const ALL: [(&str, &[Keys]); 4] = [
 
 pub struct KeyHelp {
     pub theme: UiTheme,
-    pub font_family: &'static str,
 }
 
 impl KeyHelp {
@@ -78,7 +78,7 @@ impl KeyHelp {
             .gap_y(px(2.))
             .items_center()
             .bg(theme.editor_bg)
-            .font_family(self.font_family)
+            .font_family(FAMILY)
             .text_size(px(12.))
             .text_color(theme.line_number)
             .children(BAR.iter().map(|&(keys, what)| {
@@ -137,7 +137,7 @@ impl KeyHelp {
                     .border_color(theme.line_number)
                     .rounded(px(6.))
                     .shadow_lg()
-                    .font_family(self.font_family)
+                    .font_family(FAMILY)
                     .text_size(px(13.))
                     .text_color(theme.line_number)
                     .child(

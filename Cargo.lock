@@ -2853,6 +2853,8 @@ dependencies = [
  "jetdiff-git",
  "jetdiff-ui",
  "jetdiff-view",
+ "serde",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
