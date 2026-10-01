@@ -19,7 +19,8 @@ use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::message::{Level, Message};
 use crate::panel_size::{PanelHeight, PanelWidth};
-use crate::theme::UiTheme;
+use crate::settings::Settings;
+use crate::text::FAMILY;
 use crate::watcher::Watcher;
 
 // Vim sine vindustaster og filbytte. Treet og commitene er til venstre, diffen til høyre.
@@ -57,8 +58,6 @@ pub struct ChangesView {
     message: Entity<Message>,
     /// Bare for working tree.
     commits: Option<Entity<CommitList>>,
-    theme: UiTheme,
-    font_family: &'static str,
     scale: f32,
     panel_open: bool,
     /// Seksjonene i sidepanelet kan klappes sammen til bare overskriften.
@@ -74,29 +73,14 @@ pub struct ChangesView {
 }
 
 impl ChangesView {
-    pub fn new(
-        repo: Repo,
-        changes: Vec<FileChange>,
-        theme: UiTheme,
-        font_family: &'static str,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(repo: Repo, changes: Vec<FileChange>, cx: &mut Context<Self>) -> Self {
         let changes: Rc<[FileChange]> = changes.into();
         let first = jetdiff_changes::ChangeTree::new(&changes).first();
         let selection = cx.new(|_| Selection(first));
-        let tree = cx
-            .new(|cx| ChangesTree::new(changes.clone(), selection.clone(), theme, font_family, cx));
-        let message = cx.new(|_| Message::new(theme, font_family));
-        let diff = cx.new(|cx| {
-            FileDiffView::new(
-                empty_diff(),
-                Default::default(),
-                message.clone(),
-                theme,
-                font_family,
-                cx,
-            )
-        });
+        let tree = cx.new(|cx| ChangesTree::new(changes.clone(), selection.clone(), cx));
+        let message = cx.new(|_| Message::default());
+        let diff =
+            cx.new(|cx| FileDiffView::new(empty_diff(), Default::default(), message.clone(), cx));
         let mut subscriptions = vec![
             cx.observe(&selection, |this, _, cx| this.load(cx)),
             cx.subscribe(&diff, |this, _, e: &Zoomed, cx| {
@@ -111,7 +95,7 @@ impl ChangesView {
                 message.update(cx, |m, cx| m.show(e, Level::Warning, cx));
                 Vec::new()
             });
-            let list = cx.new(|cx| CommitList::new(list, theme, font_family, cx));
+            let list = cx.new(|cx| CommitList::new(list, cx));
             subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectCommit, cx| {
                 this.commit = e.0.clone();
                 this.changed(Vec::new(), cx);
@@ -136,8 +120,6 @@ impl ChangesView {
             diff,
             message,
             commits,
-            theme,
-            font_family,
             scale: 1.,
             panel_open: true,
             files_open: true,
@@ -381,7 +363,7 @@ impl ChangesView {
             .items_center()
             .gap(s(GAP))
             .pl(s(PAD_LEFT))
-            .text_color(self.theme.line_number)
+            .text_color(cx.global::<Settings>().theme.line_number)
             .cursor_pointer()
             .child(title)
             .child(if open { "−" } else { "+" })
@@ -406,16 +388,17 @@ impl ChangesView {
         let unscaled = |v: gpui::Pixels| f32::from(v) / self.scale;
         let content = self.tree.update(cx, |t, _| t.content_width(window));
         let width = self.width.resolve(content, unscaled(viewport.width));
+        let theme = cx.global::<Settings>().theme;
         let mut panel = div()
             .flex_none()
             .w(px(width * self.scale))
             .h_full()
             .flex()
             .flex_col()
-            .bg(self.theme.editor_bg)
+            .bg(theme.editor_bg)
             .border_r_1()
-            .border_color(self.theme.indent_guide)
-            .font_family(self.font_family)
+            .border_color(theme.indent_guide)
+            .font_family(FAMILY)
             .text_size(px(TEXT_SIZE * self.scale))
             .child(self.heading("Filer", self.files_open, cx, |this| &mut this.files_open))
             .when(self.files_open, |d| {
@@ -426,7 +409,7 @@ impl ChangesView {
                 .flex()
                 .flex_col()
                 .border_t_1()
-                .border_color(self.theme.indent_guide)
+                .border_color(theme.indent_guide)
                 .child(self.heading("Commits", self.commits_open, cx, |this| {
                     &mut this.commits_open
                 }))

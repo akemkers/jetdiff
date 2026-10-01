@@ -1,8 +1,10 @@
-//! jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>] [--theme catppuccin-mocha|jetbrains-dark|jetbrains-light]
+//! jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 //!
 //! Uten argumenter vises lokale endringer, på en branch mot der den gikk ut fra main.
 //! En mappe viser lokale endringer der. Med én commit vises den mot forelderen.
-//! En PR-lenke hentes inn i repoet du står i.
+//! En PR-lenke hentes inn i repoet du står i. Tema og folds settes i config-fila, se `config.rs`.
+
+mod config;
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -18,25 +20,12 @@ use gpui::{
 use jetdiff_git::{PullRequest, Repo};
 use jetdiff_ui::{
     Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp,
-    LOCAL_CHANGES, NextFile, PrevFile, ResetZoom, ToggleHelp, ToggleSidePanel, UiTheme, ZoomIn,
+    LOCAL_CHANGES, NextFile, PrevFile, ResetZoom, Settings, ToggleHelp, ToggleSidePanel, ZoomIn,
     ZoomOut, load_font,
 };
 use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 
 actions!(jetdiff, [Quit]);
-
-type NewTheme = fn() -> UiTheme;
-
-/// Navnene til `--theme`. Det første er standard.
-const THEMES: [(&str, NewTheme); 3] = [
-    ("catppuccin-mocha", UiTheme::mocha),
-    ("jetbrains-dark", UiTheme::dark),
-    ("jetbrains-light", UiTheme::light),
-];
-
-fn theme_names(sep: &str) -> String {
-    THEMES.map(|(name, _)| name).join(sep)
-}
 
 enum Source {
     WorkTree(PathBuf),
@@ -45,33 +34,12 @@ enum Source {
     Files(String, String),
 }
 
-struct Args {
-    source: Source,
-    theme: UiTheme,
-}
-
-fn parse_args() -> Result<Args, String> {
-    let mut theme = THEMES[0].1();
-    let mut paths = Vec::new();
-    let mut args = std::env::args().skip(1);
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--theme" => {
-                let name = args.next();
-                theme = THEMES
-                    .iter()
-                    .find(|(n, _)| Some(*n) == name.as_deref())
-                    .map(|(_, t)| t())
-                    .ok_or_else(|| format!("--theme må være en av {}", theme_names(", ")))?;
-            }
-            s if s.starts_with("--") => return Err(format!("ukjent flagg: {s}")),
-            _ => paths.push(arg),
-        }
+fn parse_args() -> Result<Source, String> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(flag) = args.iter().find(|a| a.starts_with("--")) {
+        return Err(format!("ukjent flagg: {flag}"));
     }
-    Ok(Args {
-        source: parse_source(&paths)?,
-        theme,
-    })
+    parse_source(&args)
 }
 
 fn parse_source(paths: &[String]) -> Result<Source, String> {
@@ -83,10 +51,7 @@ fn parse_source(paths: &[String]) -> Result<Source, String> {
         [dir] if Path::new(dir).is_dir() => Ok(Source::WorkTree(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
         [left, right] => Ok(Source::Files(left.clone(), right.clone())),
-        _ => Err(format!(
-            "bruk: jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>] [--theme {}]",
-            theme_names("|")
-        )),
+        _ => Err("bruk: jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]".into()),
     }
 }
 
@@ -231,14 +196,13 @@ fn open<V: Render + Focusable>(
 }
 
 fn main() -> ExitCode {
-    let args = match parse_args() {
+    let (source, config) = match parse_args().and_then(|s| Ok((s, config::load()?))) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
             return ExitCode::from(2);
         }
     };
-    let Args { source, theme } = args;
     let (content, title) = match load(&source) {
         Ok(c) => c,
         Err(e) => {
@@ -251,14 +215,18 @@ fn main() -> ExitCode {
         .with_assets(Assets)
         .run(move |cx: &mut App| {
             bind_keys(cx);
-            let font_family = load_font(cx);
+            load_font(cx);
+            cx.set_global(Settings {
+                theme: config.theme,
+                folds_open: config.folds.open,
+            });
             match content {
                 Content::File(diff, paths) => open(cx, title, move |cx| {
-                    FileDiffView::standalone(*diff, paths, theme, font_family, cx)
+                    FileDiffView::standalone(*diff, paths, cx)
                 }),
-                Content::Changes(repo, changes) => open(cx, title, move |cx| {
-                    ChangesView::new(repo, changes, theme, font_family, cx)
-                }),
+                Content::Changes(repo, changes) => {
+                    open(cx, title, move |cx| ChangesView::new(repo, changes, cx))
+                }
             }
             cx.on_window_closed(|cx| cx.quit()).detach();
             cx.activate(true);

@@ -339,8 +339,8 @@ impl DiffState {
     }
 
     /// Samme fil med nytt innhold. Cursor og scroll beholdes så langt det går.
-    pub fn replace_diff(&mut self, diff: Rc<FileDiff>, vp: Viewport) {
-        self.folding = Rc::new(Folding::new(&diff));
+    pub fn replace_diff(&mut self, diff: Rc<FileDiff>, folding: Rc<Folding>, vp: Viewport) {
+        self.folding = folding;
         self.diff = diff;
         let side = self.diff.single_side().unwrap_or(self.cursor.side);
         self.cursor = Cursor::new(side, self.clamp_line(side, self.cursor.line));
@@ -790,10 +790,9 @@ mod tests {
         let y = top(&s);
         let a = s.diff.text(L).to_owned();
         let text = s.diff.text(R).replace("x40\n", "a40\n");
-        s.replace_diff(
-            Rc::new(FileDiff::new(&a, &text, ComparisonPolicy::Default).unwrap()),
-            VP,
-        );
+        let diff = FileDiff::new(&a, &text, ComparisonPolicy::Default).unwrap();
+        let folding = Rc::new(Folding::new(&diff));
+        s.replace_diff(Rc::new(diff), folding, VP);
         assert_eq!(s.diff.blocks().len(), 2);
         assert_eq!(s.cursor, Cursor::new(R, 40));
         assert_eq!(top(&s), y);

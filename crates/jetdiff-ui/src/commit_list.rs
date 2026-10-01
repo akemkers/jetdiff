@@ -11,6 +11,8 @@ use gpui::{
 use jetdiff_git::Commit;
 
 use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, TEXT_SIZE, list_key, row_bg, step};
+use crate::settings::Settings;
+use crate::text::FAMILY;
 use crate::theme::UiTheme;
 
 /// Plass til meldingen med alderen under.
@@ -31,8 +33,6 @@ pub struct CommitList {
     selected: Option<String>,
     /// Raden j og k flytter, som hash. Enter åpner den.
     cursor: Option<String>,
-    theme: UiTheme,
-    font_family: &'static str,
     scroll: UniformListScrollHandle,
     scale: f32,
     focus: FocusHandle,
@@ -41,18 +41,11 @@ pub struct CommitList {
 impl EventEmitter<SelectCommit> for CommitList {}
 
 impl CommitList {
-    pub fn new(
-        commits: Vec<Commit>,
-        theme: UiTheme,
-        font_family: &'static str,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(commits: Vec<Commit>, cx: &mut Context<Self>) -> Self {
         Self {
             commits: commits.into(),
             selected: None,
             cursor: None,
-            theme,
-            font_family,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
             focus: cx.focus_handle(),
@@ -135,12 +128,8 @@ impl CommitList {
             ),
             None => (LOCAL_CHANGES.into(), None),
         };
-        let bg = row_bg(
-            &self.theme,
-            hash == self.cursor,
-            hash == self.selected,
-            focused,
-        );
+        let theme = cx.global::<Settings>().theme;
+        let bg = row_bg(&theme, hash == self.cursor, hash == self.selected, focused);
         div()
             .id(i)
             .h(s(COMMIT_ROW_HEIGHT))
@@ -151,7 +140,7 @@ impl CommitList {
             .pr(s(PAD_RIGHT))
             .whitespace_nowrap()
             .when_some(bg, |d, bg| d.bg(bg))
-            .child(self.graph(i, bg))
+            .child(self.graph(i, bg, &theme))
             .child(
                 div()
                     .flex_1()
@@ -163,7 +152,7 @@ impl CommitList {
                         d.child(
                             div()
                                 .text_size(s(AGE_SIZE))
-                                .text_color(self.theme.line_number)
+                                .text_color(theme.line_number)
                                 .child(age),
                         )
                     }),
@@ -173,9 +162,9 @@ impl CommitList {
 
     /// Én linje gjennom alle radene, med en prikk per commit. Working tree er en ring.
     /// `bg` er bakgrunnen til raden, så ringen dekker linja uten å skille seg ut.
-    fn graph(&self, i: usize, bg: Option<Hsla>) -> Div {
+    fn graph(&self, i: usize, bg: Option<Hsla>, theme: &UiTheme) -> Div {
         let s = |v: f32| px(v * self.scale);
-        let color = self.theme.commit_graph;
+        let color = theme.commit_graph;
         let line = || {
             div()
                 .absolute()
@@ -195,7 +184,7 @@ impl CommitList {
                     .border(s(LINE_WIDTH))
                     .border_color(color)
                     // Dekker linja under, i samme farge som raden
-                    .bg(bg.unwrap_or(self.theme.editor_bg)),
+                    .bg(bg.unwrap_or(theme.editor_bg)),
                 _ => d.bg(color),
             });
         div()
@@ -228,9 +217,9 @@ impl Render for CommitList {
             .flex_col()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))
-            .font_family(self.font_family)
+            .font_family(FAMILY)
             .text_size(s(TEXT_SIZE))
-            .text_color(self.theme.editor_fg)
+            .text_color(cx.global::<Settings>().theme.editor_fg)
             .child(
                 uniform_list(
                     "commits",

@@ -1,0 +1,8 @@
+# Innstillinger for jetdiff.
+
+# catppuccin-mocha, jetbrains-dark eller jetbrains-light.
+theme = "catppuccin-mocha"
+
+[folds]
+# true viser nye filer med alle folds åpne.
+open = false
