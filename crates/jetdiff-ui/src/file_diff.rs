@@ -47,6 +47,13 @@ pub struct Rollback {
     pub lines: [Range<usize>; 2],
 }
 
+/// Ligger over diffen. Bare én om gangen.
+enum Overlay {
+    /// Venter på bekreftelse av rollback. Enter bekrefter, alt annet avbryter.
+    Confirm(Rollback),
+    Help,
+}
+
 /// Ny fontstørrelse etter zoom, så resten av vinduet kan følge med.
 pub struct Zoomed {
     pub font_size: f32,
@@ -80,12 +87,9 @@ pub struct FileDiffView {
     markers: Rc<[Vec<StripeMarker>; 2]>,
     /// Lengste linje i tegn, regnet én gang. Gir maks horisontal scroll uten å shape alt.
     max_cols: usize,
-    file_keys: bool,
     /// Høyre side er en fil i working tree, så endringer kan rulles tilbake.
     can_rollback: bool,
-    /// Venter på bekreftelse av rollback. Enter bekrefter, alt annet avbryter.
-    confirm: Option<Rollback>,
-    help: bool,
+    overlay: Option<Overlay>,
     /// Venstre og høyre sti for `y`. Tom når det ikke finnes noen fil.
     paths: [String; 2],
     /// Eies av den som lager diffen, men tegnes over tastelinja her.
@@ -165,10 +169,8 @@ impl FileDiffView {
             initialized: false,
             viewport_height: 0.,
             markers: Rc::new([Vec::new(), Vec::new()]),
-            file_keys: false,
             can_rollback: false,
-            confirm: None,
-            help: false,
+            overlay: None,
             paths,
             message,
             shared: Rc::new(Shared {
@@ -181,18 +183,15 @@ impl FileDiffView {
         }
     }
 
-    pub fn with_file_keys(mut self) -> Self {
-        self.file_keys = true;
-        self
-    }
-
     pub fn set_can_rollback(&mut self, can_rollback: bool) {
         self.can_rollback = can_rollback;
     }
 
     /// Ny fil i samme visning. Zoom beholdes, cursor og scroll starter på nytt.
     pub fn set_diff(&mut self, diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) {
-        self.confirm = None;
+        if matches!(self.overlay, Some(Overlay::Confirm(_))) {
+            self.overlay = None;
+        }
         self.paths = paths;
         self.max_cols = max_cols(&diff);
         self.state = diff_state(diff);
@@ -357,29 +356,30 @@ impl FileDiffView {
             self.show_message("Ingen endring på linja", cx);
             return;
         };
-        self.confirm = Some(Rollback {
+        self.overlay = Some(Overlay::Confirm(Rollback {
             before: diff.text(Side::Right).to_owned(),
             lines: diff.blocks()[block].lines.clone(),
-        });
-        self.help = false;
+        }));
         cx.notify();
     }
 
     /// Kommer som action, så `?` virker også når treet har fokus. Avbryter rollback, som
     /// ellers ikke ser tasten.
     pub(crate) fn toggle_help(&mut self, _: &ToggleHelp, _: &mut Window, cx: &mut Context<Self>) {
-        self.help = !self.help;
-        self.confirm = None;
+        self.overlay = match self.overlay {
+            Some(Overlay::Help) => None,
+            _ => Some(Overlay::Help),
+        };
         cx.notify();
     }
 
     /// Esc går videre når hjelpen ikke vises, så rollback-dialogen får den.
     pub(crate) fn hide_help(&mut self, _: &HideHelp, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.help {
+        if !matches!(self.overlay, Some(Overlay::Help)) {
             cx.propagate();
             return;
         }
-        self.help = false;
+        self.overlay = None;
         cx.notify();
     }
 
@@ -425,14 +425,17 @@ impl FileDiffView {
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         // Mens rollback venter på svar, går ingen taster til diffen
-        if let Some(rollback) = self.confirm.take() {
-            let k = &ev.keystroke;
-            if k.key == "enter" && !k.modifiers.modified() {
-                cx.emit(rollback);
+        match self.overlay.take() {
+            Some(Overlay::Confirm(rollback)) => {
+                let k = &ev.keystroke;
+                if k.key == "enter" && !k.modifiers.modified() {
+                    cx.emit(rollback);
+                }
+                cx.stop_propagation();
+                cx.notify();
+                return;
             }
-            cx.stop_propagation();
-            cx.notify();
-            return;
+            other => self.overlay = other,
         }
         match self.keys.feed(to_key(&ev.keystroke)) {
             Parsed::Command(cmd) => {
@@ -530,8 +533,7 @@ impl FileDiffView {
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
         self.keys.reset();
-        self.confirm = None;
-        self.help = false;
+        self.overlay = None;
         let Some((side, line)) = self.hit(ev.position) else {
             return;
         };
@@ -673,19 +675,18 @@ impl Render for FileDiffView {
             }
         });
 
-        let help = KeyHelp {
-            files: self.file_keys,
-            split: self.state.diff.single_side().is_none(),
+        let keys = KeyHelp {
             theme,
             font_family: self.font_family,
         };
         let footer = div()
             .relative()
             .flex_none()
-            .child(help.bar())
+            .child(keys.bar())
             .child(self.message.clone());
-        let confirm = self.confirm.is_some().then(|| {
-            div()
+        let overlay = self.overlay.as_ref().map(|o| match o {
+            Overlay::Help => keys.popup(),
+            Overlay::Confirm(_) => div()
                 .absolute()
                 .inset_0()
                 .flex()
@@ -713,7 +714,7 @@ impl Render for FileDiffView {
                                 .text_color(theme.line_number)
                                 .child("[Enter] yes / [Esc] no"),
                         ),
-                )
+                ),
         });
 
         div()
@@ -799,8 +800,7 @@ impl Render for FileDiffView {
                 .w_full(),
             )
             .child(footer)
-            .when(self.help, |d| d.child(help.popup()))
-            .children(confirm)
+            .children(overlay)
     }
 }
 

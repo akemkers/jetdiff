@@ -97,7 +97,6 @@ impl ChangesView {
                 font_family,
                 cx,
             )
-            .with_file_keys()
         });
         let mut subscriptions = vec![
             cx.observe(&selection, |this, _, cx| this.load(cx)),
