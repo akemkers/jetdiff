@@ -17,7 +17,12 @@ use jetdiff_ui::{Assets, ChangesView, FileDiffView, Settings, UiTheme, load_font
 
 Application::new().with_assets(Assets).run(|cx| {
     load_font(cx);
-    cx.set_global(Settings { theme: UiTheme::mocha(), folds_open: false });
+    cx.set_global(Settings {
+        theme: UiTheme::mocha(),
+        font_size: 14.,
+        collapse_unchanged: true,
+        side_panel_open: false,
+    });
     // Én fil:
     cx.new(|cx| FileDiffView::standalone(diff, paths, cx));
     // Et repo eller en commit, med tre og commits:
@@ -25,7 +30,7 @@ Application::new().with_assets(Assets).run(|cx| {
 });
 ```
 
-`Settings` er en GPUI-global som alle visningene leser. `folds_open` gjør at nye filer vises med alle folds åpne.
+`Settings` er en GPUI-global som alle visningene leser. `font_size` er der zoom starter, og `collapse_unchanged` klapper sammen uendrede deler i nye filer.
 
 Tastene går gjennom `KeyParser` i `jetdiff-view`. Actions som zoom og panelbytte (`ZoomIn`, `FocusLeft`, `ToggleSidePanel` osv.) eksporteres, og den som lager vinduet binder dem til taster.
 

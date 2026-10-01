@@ -46,9 +46,11 @@ Leses fra `$XDG_CONFIG_HOME/jetdiff/config.toml`, eller `~/.config/jetdiff/confi
 
 ```toml
 theme = "catppuccin-mocha"
+font_size = 14             # mellom 8 og 40, Cmd-0 går tilbake hit
+collapse_unchanged = true  # false viser hele fila
 
-[folds]
-open = false   # true viser nye filer med alle folds åpne
+[side_panel]
+open = false               # true viser filtreet og commitene ved oppstart
 ```
 
 `theme` er `catppuccin-mocha`, `jetbrains-dark` eller `jetbrains-light`. De to siste er IntelliJ sine Islands-temaer.

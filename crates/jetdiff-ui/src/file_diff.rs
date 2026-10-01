@@ -13,7 +13,7 @@ use gpui::{
 };
 use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
-use jetdiff_view::metrics::{FONT_SIZE, zoomed};
+use jetdiff_view::metrics::zoomed;
 use jetdiff_view::{
     Command, DiffState, FileDiff, FoldId, Folding, Horizontal, Key, KeyCode, KeyParser, Parsed,
     ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport, stripe_markers,
@@ -149,7 +149,7 @@ impl FileDiffView {
         Self {
             max_cols: max_cols(&diff),
             state: diff_state(diff, cx),
-            font_size: FONT_SIZE,
+            font_size: cx.global::<Settings>().font_size,
             style: None,
             shown: ScrollState::default(),
             animation: None,
@@ -274,7 +274,7 @@ impl FileDiffView {
         let size = match cmd {
             Command::ZoomIn => Some(zoomed(self.font_size, 1.)),
             Command::ZoomOut => Some(zoomed(self.font_size, -1.)),
-            Command::ResetZoom => Some(FONT_SIZE),
+            Command::ResetZoom => Some(cx.global::<Settings>().font_size),
             Command::Rollback => {
                 self.rollback(cx);
                 return;
@@ -594,7 +594,7 @@ fn diff_state(diff: FileDiff, cx: &App) -> DiffState {
 
 fn folding(diff: &FileDiff, cx: &App) -> Folding {
     let mut folding = Folding::new(diff);
-    folding.expand_all(cx.global::<Settings>().folds_open);
+    folding.expand_all(!cx.global::<Settings>().collapse_unchanged);
     folding
 }
 

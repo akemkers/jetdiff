@@ -2,7 +2,7 @@
 //! `FontMetrics.getHeight()` fra Java og ganger med linjeavstanden
 //! (`FontPreferences.DEFAULT_LINE_SPACING = 1.2`), rundet opp.
 
-/// IntelliJ har 13 (`FontPreferences.DEFAULT_FONT_SIZE`), men 14 er lettere å lese.
+/// Størrelsen sidepanelet er tegnet for. IntelliJ har 13 (`FontPreferences.DEFAULT_FONT_SIZE`).
 pub const FONT_SIZE: f32 = 14.;
 
 /// `editor.gutter.linenumber.font.size.delta`: linjenumrene er 1pt mindre enn teksten.

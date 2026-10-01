@@ -3,6 +3,12 @@
 # catppuccin-mocha, jetbrains-dark eller jetbrains-light.
 theme = "catppuccin-mocha"
 
-[folds]
-# true viser nye filer med alle folds åpne.
+# Mellom 8 og 40. Cmd-0 går tilbake hit.
+font_size = 14
+
+# false viser hele fila, uten å klappe sammen uendrede deler.
+collapse_unchanged = true
+
+[side_panel]
+# true viser filtreet og commitene ved oppstart. b viser og skjuler dem.
 open = false

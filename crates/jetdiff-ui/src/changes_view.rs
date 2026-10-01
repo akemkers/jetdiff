@@ -121,7 +121,7 @@ impl ChangesView {
             message,
             commits,
             scale: 1.,
-            panel_open: true,
+            panel_open: cx.global::<Settings>().side_panel_open,
             files_open: true,
             commits_open: true,
             width: PanelWidth::default(),
@@ -131,6 +131,7 @@ impl ChangesView {
             _reload: None,
             _subscriptions: subscriptions,
         };
+        view.zoomed(cx.global::<Settings>().font_size, cx);
         view.load(cx);
         view
     }

@@ -6,8 +6,11 @@ use crate::theme::UiTheme;
 
 pub struct Settings {
     pub theme: UiTheme,
-    /// Nye filer vises med alle folds åpne.
-    pub folds_open: bool,
+    /// Der zoom starter, og der `ResetZoom` går tilbake.
+    pub font_size: f32,
+    /// Nye filer vises med uendrede deler klappet sammen.
+    pub collapse_unchanged: bool,
+    pub side_panel_open: bool,
 }
 
 impl Global for Settings {}

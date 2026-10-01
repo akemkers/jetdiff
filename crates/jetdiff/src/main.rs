@@ -2,7 +2,8 @@
 //!
 //! Uten argumenter vises lokale endringer, på en branch mot der den gikk ut fra main.
 //! En mappe viser lokale endringer der. Med én commit vises den mot forelderen.
-//! En PR-lenke hentes inn i repoet du står i. Tema og folds settes i config-fila, se `config.rs`.
+//! En PR-lenke hentes inn i repoet du står i. Innstillingene
+//! ligger i config-fila, se `config.rs`.
 
 mod config;
 
@@ -218,7 +219,9 @@ fn main() -> ExitCode {
             load_font(cx);
             cx.set_global(Settings {
                 theme: config.theme,
-                folds_open: config.folds.open,
+                font_size: config.font_size,
+                collapse_unchanged: config.collapse_unchanged,
+                side_panel_open: config.side_panel.open,
             });
             match content {
                 Content::File(diff, paths) => open(cx, title, move |cx| {
