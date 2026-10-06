@@ -6,6 +6,7 @@ mod changes_view;
 mod commit_list;
 mod divider;
 mod file_diff;
+mod file_header;
 mod help;
 mod icons;
 mod list;

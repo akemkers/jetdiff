@@ -15,6 +15,7 @@ use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
 use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
+use crate::file_header::file_header;
 use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::message::{Level, Message};
@@ -254,6 +255,7 @@ impl ChangesView {
                 .update(cx, |m, cx| m.pin("Ingen endringer", Level::Info, cx));
             self.diff
                 .update(cx, |v, cx| v.set_diff(empty_diff(), Default::default(), cx));
+            cx.notify();
             return;
         };
         let content = self.repo.read(&change);
@@ -473,7 +475,18 @@ impl Render for ChangesView {
                 this.diff.update(cx, |d, cx| d.hide_help(a, w, cx))
             }))
             .when(self.panel_open, |d| d.child(self.side_panel(window, cx)))
-            .child(div().flex_1().min_w_0().h_full().child(self.diff.clone()))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .children(self.shown.as_ref().map(|(change, _)| {
+                        file_header(&change.path, self.scale, &cx.global::<Settings>().theme)
+                    }))
+                    .child(div().flex_1().min_h_0().child(self.diff.clone())),
+            )
     }
 }
 
