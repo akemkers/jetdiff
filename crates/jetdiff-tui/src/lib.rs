@@ -4,7 +4,6 @@ mod app;
 mod clipboard;
 mod color;
 mod diff_view;
-mod divider;
 mod geometry;
 mod input;
 mod message;
@@ -25,7 +24,6 @@ use crate::app::App;
 
 pub struct Settings {
     pub theme: Theme,
-    pub collapse_unchanged: bool,
     pub unified: bool,
     pub side_panel_open: bool,
 }

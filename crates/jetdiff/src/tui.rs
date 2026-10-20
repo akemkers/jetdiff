@@ -8,7 +8,6 @@ use crate::config::Config;
 pub fn run(content: Content, config: Config) -> Result<(), String> {
     let settings = Settings {
         theme: config.theme,
-        collapse_unchanged: config.collapse_unchanged,
         unified: config.unified,
         side_panel_open: config.side_panel.open,
     };

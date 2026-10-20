@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use jetdiff_viewmodel::{DiffMode, Side};
+use jetdiff_viewmodel::{Cursor, FileDiff, Side};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollbackRequest {
@@ -11,26 +11,28 @@ pub struct RollbackRequest {
     pub lines: [Range<usize>; 2],
 }
 
+/// `block` er blokken cursoren står i.
 pub fn rollback_request(
-    mode: &DiffMode,
+    diff: &FileDiff,
+    block: Option<usize>,
     can_rollback: bool,
 ) -> Result<RollbackRequest, &'static str> {
-    let diff = mode.diff();
     if !can_rollback {
         return Err("Bare lokale endringer kan rulles tilbake");
     }
     if diff.single_side().is_some() {
         return Err("Hele fila er ny eller slettet");
     }
-    let block = mode.cursor_block().ok_or("Ingen endring på linja")?;
+    let block = block.ok_or("Ingen endring på linja")?;
     Ok(RollbackRequest {
         before: diff.text(Side::Right).to_owned(),
         lines: diff.blocks()[block].lines.clone(),
     })
 }
 
-pub fn location(mode: &DiffMode, paths: &[String; 2]) -> Option<String> {
-    let c = mode.location();
+/// `cursor` er markert linje i nyeste versjon.
+pub fn location(cursor: Cursor, paths: &[String; 2]) -> Option<String> {
+    let c = cursor;
     let path = &paths[c.side.select(0, 1)];
     (!path.is_empty()).then(|| format!("{path}:{}", c.line + 1))
 }

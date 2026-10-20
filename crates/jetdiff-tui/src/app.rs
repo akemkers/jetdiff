@@ -62,7 +62,7 @@ impl App {
     pub fn file(diff: FileDiff, paths: [String; 2], settings: &Settings) -> Self {
         Self {
             theme: settings.theme,
-            diff: DiffView::new(diff, paths, settings.unified, settings.collapse_unchanged),
+            diff: DiffView::new(diff, paths, settings.unified),
             message: Message::default(),
             repository: None,
             focus: Focus::Diff,
@@ -421,7 +421,7 @@ impl App {
                 repo.panel.wheel(y, down);
             }
         } else {
-            self.diff.wheel(x, down);
+            self.diff.wheel(down);
         }
     }
 

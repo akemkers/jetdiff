@@ -1,20 +1,20 @@
-//! Diffen av én fil, som `FileDiffView` i GPUI.
+//! Diffen av én fil, som `FileDiffView` i GPUI. Split er justerte rader og har ingen folding.
 
 use std::rc::Rc;
 
 use jetdiff_app::{RollbackRequest, location, rollback_request};
 use jetdiff_viewmodel::columns::display_width;
 use jetdiff_viewmodel::{
-    Command, DiffMode, FileDiff, Folding, Horizontal, Key, KeyCode, KeyParser, Parsed, Side, Theme,
-    Viewport,
+    Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, Side, Theme, UnifiedDiff,
+    UnifiedState, Viewport,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::geometry;
-use crate::paint::{RowContent, paint_split, paint_unified, row_content};
+use crate::paint::{paint, row_at};
 
-const WHEEL_LINES: f32 = 3.;
+const WHEEL_ROWS: f32 = 3.;
 
 pub enum Overlay {
     /// Enter bekrefter, alt annet avbryter.
@@ -29,10 +29,9 @@ pub enum Effect {
 }
 
 pub struct DiffView {
-    mode: DiffMode,
+    state: UnifiedState,
     keys: KeyParser,
     unified: bool,
-    collapse_unchanged: bool,
     can_rollback: bool,
     pub overlay: Option<Overlay>,
     paths: [String; 2],
@@ -42,18 +41,12 @@ pub struct DiffView {
 }
 
 impl DiffView {
-    pub fn new(
-        diff: FileDiff,
-        paths: [String; 2],
-        unified: bool,
-        collapse_unchanged: bool,
-    ) -> Self {
+    pub fn new(diff: FileDiff, paths: [String; 2], unified: bool) -> Self {
         Self {
             max_cols: max_cols(&diff),
-            mode: diff_mode(diff, unified, collapse_unchanged),
+            state: state(diff, unified),
             keys: KeyParser::default(),
             unified,
-            collapse_unchanged,
             can_rollback: false,
             overlay: None,
             paths,
@@ -72,7 +65,7 @@ impl DiffView {
         }
         self.paths = paths;
         self.max_cols = max_cols(&diff);
-        self.mode = diff_mode(diff, self.unified, self.collapse_unchanged);
+        self.state = state(diff, self.unified);
         self.keys.reset();
         self.initialized = false;
     }
@@ -84,9 +77,11 @@ impl DiffView {
         };
         self.paths = paths;
         self.max_cols = max_cols(&diff);
-        let folding = folding(&diff, self.collapse_unchanged);
-        self.mode
-            .replace_diff(Rc::new(diff), Rc::new(folding), self.unified, vp);
+        let aligned = !self.unified && diff.single_side().is_none();
+        if aligned != self.state.diff.is_aligned() {
+            self.state = self.state.realign(aligned, vp);
+        }
+        self.state.replace_diff(Rc::new(diff), vp);
         self.clamp_scroll_x();
     }
 
@@ -98,11 +93,11 @@ impl DiffView {
     }
 
     fn text_width(&self) -> u16 {
-        match &self.mode {
-            DiffMode::Split(state) => geometry::split(&state.diff, self.area)[0].text_width(),
-            DiffMode::Unified(state) => geometry::unified(&state.diff.diff, self.area)
-                .editor
-                .text_width(),
+        let diff = &self.state.diff.diff;
+        if self.state.diff.is_aligned() {
+            geometry::aligned(diff, self.area).sides[0].text_width()
+        } else {
+            geometry::unified(diff, self.area).columns.text_width()
         }
     }
 
@@ -120,10 +115,10 @@ impl DiffView {
 
     fn clamp_scroll_x(&mut self) {
         let max_x = self.max_scroll_x();
-        let scroll = self.mode.scroll_mut();
-        scroll.scroll_x_to(scroll.x, max_x);
+        self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
     }
 
+    /// Før tegning.
     pub fn layout(&mut self, area: Rect) {
         let resized = area.height != self.area.height;
         self.area = area;
@@ -132,23 +127,21 @@ impl DiffView {
         };
         if !self.initialized {
             self.initialized = true;
-            self.mode.init(vp);
+            self.state.init(vp);
         } else if resized {
-            self.mode.resize(vp);
+            self.state.resize(vp);
         }
         self.clamp_scroll_x();
     }
 
     pub fn toggle_view(&mut self) -> Option<Effect> {
-        if self.mode.diff().single_side().is_some() {
+        if self.state.diff.diff.single_side().is_some() {
             return None;
         }
         self.unified = !self.unified;
-        let diff = self.mode.diff().clone();
-        let folding = Rc::new(folding(&diff, self.collapse_unchanged));
         match self.viewport().filter(|_| self.initialized) {
-            Some(vp) => self.mode.toggle(folding, vp),
-            None => self.mode = DiffMode::new(diff, folding, self.unified),
+            Some(vp) => self.state = self.state.realign(!self.unified, vp),
+            None => self.state = state_for(self.state.diff.diff.clone(), self.unified),
         }
         self.clamp_scroll_x();
         Some(Effect::Message(
@@ -185,107 +178,62 @@ impl DiffView {
 
     fn execute(&mut self, cmd: Command) -> Option<Effect> {
         match cmd {
-            // En terminal har én fontstørrelse
-            Command::ZoomIn | Command::ZoomOut | Command::ResetZoom => return None,
             Command::Rollback => {
-                return match rollback_request(&self.mode, self.can_rollback) {
+                let diff = &self.state.diff.diff;
+                match rollback_request(diff, self.state.cursor_block(), self.can_rollback) {
                     Ok(request) => {
                         self.overlay = Some(Overlay::Confirm(request));
                         None
                     }
                     Err(text) => Some(Effect::Message(text.into())),
-                };
-            }
-            Command::CopyLocation => return location(&self.mode, &self.paths).map(Effect::Copy),
-            _ => {}
-        }
-        let vp = self.viewport()?;
-        let out = self.mode.execute(cmd, vp, self.horizontal());
-        if let (Command::ToggleFolds, true, DiffMode::Split(state)) = (cmd, out.changed, &self.mode)
-        {
-            let closed = state.folding.visible(Side::Left).next().is_some();
-            return Some(Effect::Message(
-                if closed {
-                    "Folds lukket"
-                } else {
-                    "Folds åpnet"
                 }
-                .into(),
-            ));
+            }
+            Command::CopyLocation => location(self.state.location(), &self.paths).map(Effect::Copy),
+            _ => {
+                let vp = self.viewport()?;
+                self.state.execute(cmd, vp, self.horizontal());
+                None
+            }
         }
-        None
     }
 
-    /// Klikk på en fold åpner neste nivå.
     pub fn click(&mut self, x: u16, y: u16) {
         self.keys.reset();
         self.overlay = None;
         if !self.area.contains((x, y).into()) {
             return;
         }
-        let row = y - self.area.y;
-        match &mut self.mode {
-            DiffMode::Split(state) => {
-                let sides = geometry::split(&state.diff, self.area);
-                let Some(cells) = sides.iter().find(|c| c.contains(x)) else {
-                    return;
-                };
-                let side = cells.side;
-                let layout = state.folding.layout(side, 1.);
-                let line = layout
-                    .y_to_logical_line(state.scroll.y(side).round() + row as f32)
-                    .min(layout.line_count() - 1);
-                let fold = matches!(
-                    row_content(&layout, state.scroll.y(side), row),
-                    RowContent::Fold
-                );
-                state.click(side, line);
-                if fold {
-                    self.execute(Command::FoldOpen);
-                }
-            }
-            DiffMode::Unified(state) => {
-                let layout = state.diff.layout(1.);
-                let index = layout.y_to_logical_line(state.scroll_y().round() + row as f32);
-                state.click(index.min(layout.line_count() - 1));
-            }
+        let layout = self.state.diff.layout(1.);
+        let screen = y - self.area.y;
+        if let Some(row) = row_at(&layout, self.state.scroll_y(), screen) {
+            self.state.click(row);
         }
     }
 
-    pub fn wheel(&mut self, x: u16, down: bool) {
-        let Some(vp) = self.viewport() else {
-            return;
-        };
-        let dy = if down { WHEEL_LINES } else { -WHEEL_LINES };
-        match &mut self.mode {
-            DiffMode::Split(state) => {
-                let middle = self.area.x + self.area.width / 2;
-                let side = if x < middle { Side::Left } else { Side::Right };
-                state.wheel(side, dy, vp);
-            }
-            DiffMode::Unified(state) => {
-                state.wheel(dy, vp);
-            }
+    pub fn wheel(&mut self, down: bool) {
+        if let Some(vp) = self.viewport() {
+            self.state
+                .wheel(if down { WHEEL_ROWS } else { -WHEEL_ROWS }, vp);
         }
     }
 
     pub fn render(&self, focused: bool, theme: &Theme, buf: &mut Buffer) {
-        match &self.mode {
-            DiffMode::Split(state) => paint_split(state, focused, self.area, theme, buf),
-            DiffMode::Unified(state) => paint_unified(state, focused, self.area, theme, buf),
-        }
+        paint(&self.state, focused, self.area, theme, buf);
     }
 }
 
-fn diff_mode(diff: FileDiff, unified: bool, collapse_unchanged: bool) -> DiffMode {
-    let folding = folding(&diff, collapse_unchanged);
-    DiffMode::new(Rc::new(diff), Rc::new(folding), unified)
+fn state(diff: FileDiff, unified: bool) -> UnifiedState {
+    state_for(Rc::new(diff), unified)
 }
 
-fn folding(diff: &FileDiff, collapse_unchanged: bool) -> Folding {
-    let mut folding = Folding::new(diff);
-    folding.expand_all(!collapse_unchanged);
-    folding
+/// Nye og slettede filer vises alltid unified.
+fn state_for(diff: Rc<FileDiff>, unified: bool) -> UnifiedState {
+    let rows = if unified || diff.single_side().is_some() {
+        UnifiedDiff::new(diff)
+    } else {
+        UnifiedDiff::aligned(diff)
+    };
+    UnifiedState::new(Rc::new(rows))
 }
 
 fn max_cols(diff: &FileDiff) -> usize {

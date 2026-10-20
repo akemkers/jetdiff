@@ -235,7 +235,7 @@ impl FileDiffView {
                 return;
             }
             Command::CopyLocation => {
-                if let Some(location) = location(&self.mode, &self.paths) {
+                if let Some(location) = location(self.mode.location(), &self.paths) {
                     cx.write_to_clipboard(ClipboardItem::new_string(location.clone()));
                     self.show_message(format!("Kopierte {location}"), cx);
                 }
@@ -284,7 +284,11 @@ impl FileDiffView {
     /// Sjekker at endringen kan rulles tilbake og åpner dialogen. `on_key_down` sender
     /// `Rollback` på Enter.
     fn rollback(&mut self, cx: &mut Context<Self>) {
-        match rollback_request(&self.mode, self.can_rollback) {
+        match rollback_request(
+            self.mode.diff(),
+            self.mode.cursor_block(),
+            self.can_rollback,
+        ) {
             Ok(request) => {
                 self.overlay = Some(Overlay::Confirm(Rollback(request)));
                 cx.notify();
