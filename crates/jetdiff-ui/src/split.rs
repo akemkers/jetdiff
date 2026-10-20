@@ -1,9 +1,9 @@
-//! Tegner split: to `SideEditor` med trakten mellom, eller én side alene for nye og
-//! slettede filer.
+//! Split-visningen: to `SideEditor` med trakten mellom, eller én side alene for nye og
+//! slettede filer. Tegning, og hvor på skjermen sidene og linjene er.
 
 use std::rc::Rc;
 
-use gpui::{App, Bounds, Pixels, Window};
+use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
 use jetdiff_view::{FileDiff, Folding, SideGeometry, StripeMarker, Viewport};
 
@@ -87,11 +87,51 @@ impl SplitPainter {
     }
 }
 
-pub fn side_geometry(
-    diff: &FileDiff,
-    style: &TextStyle,
-    bounds: Bounds<Pixels>,
-) -> [SideGeometry; 2] {
+fn side_geometry(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> [SideGeometry; 2] {
     let (x, width) = (f32::from(bounds.origin.x), f32::from(bounds.size.width));
     jetdiff_view::side_geometry(diff, style.number_char_width, x, width)
+}
+
+fn index(side: Side) -> usize {
+    side.select(0, 1)
+}
+
+/// Side og logisk linje under musa, `None` i divideren.
+pub fn hit(
+    diff: &FileDiff,
+    folding: &Folding,
+    style: &TextStyle,
+    bounds: Bounds<Pixels>,
+    scroll_y: [f32; 2],
+    position: Point<Pixels>,
+) -> Option<(Side, usize)> {
+    let geometries = side_geometry(diff, style, bounds);
+    let x = f32::from(position.x);
+    let side = SIDES
+        .into_iter()
+        .find(|&side| geometries[index(side)].bounds().contains(&x))?;
+    let layout = folding.layout(side, style.line_height());
+    let y = f32::from(position.y - bounds.origin.y) + scroll_y[index(side)];
+    let line = layout.y_to_logical_line(y).min(layout.line_count() - 1);
+    Some((side, line))
+}
+
+/// Siden musehjulet scroller. Divideren regnes til nærmeste side.
+pub fn side_at(diff: &FileDiff, bounds: Bounds<Pixels>, x: Pixels) -> Side {
+    if let Some(side) = diff.single_side() {
+        return side;
+    }
+    if x < bounds.center().x {
+        Side::Left
+    } else {
+        Side::Right
+    }
+}
+
+/// Bredden teksten har på én side. Sidene er like brede, så venstre side holder når begge
+/// vises.
+pub fn text_width(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
+    let side = diff.single_side().unwrap_or(Side::Left);
+    let geom = &side_geometry(diff, style, bounds)[index(side)];
+    geom.text.end - geom.text_x
 }

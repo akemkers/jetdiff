@@ -17,7 +17,7 @@ mod panel_size;
 mod rollback_dialog;
 mod settings;
 mod side_editor;
-mod split_paint;
+mod split;
 mod text;
 mod theme;
 mod watcher;

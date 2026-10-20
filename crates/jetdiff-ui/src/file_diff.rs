@@ -26,7 +26,7 @@ use crate::message::{Level, Message};
 use crate::rollback_dialog::rollback_dialog;
 use crate::settings::Settings;
 use crate::side_editor::{CaretRow, SideCache};
-use crate::split_paint::{SplitPainter, side_geometry};
+use crate::split::{self, SplitPainter};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -225,7 +225,7 @@ impl FileDiffView {
             return Horizontal::default();
         };
         Horizontal {
-            text_width: self.text_width(style, bounds),
+            text_width: split::text_width(&self.state.diff, style, bounds),
             char_width: style.char_width,
             max_x: self.max_scroll_x(),
         }
@@ -405,22 +405,17 @@ impl FileDiffView {
         }
     }
 
-    /// Side og logisk linje under musa, `None` i divideren.
     fn hit(&self, position: Point<Pixels>) -> Option<(Side, usize)> {
-        let (vp, bounds, style) = (
-            self.viewport()?,
-            self.shared.bounds.get()?,
-            self.style.as_ref()?,
-        );
-        let geoms = side_geometry(&self.state.diff, style, bounds);
-        let x = f32::from(position.x);
-        let side = SIDES
-            .into_iter()
-            .find(|&s| geoms[idx(s)].bounds().contains(&x))?;
-        let layout = self.state.folding.layout(side, vp.line_height);
-        let y = f32::from(position.y - bounds.origin.y) + self.shown.y(side);
-        let line = layout.y_to_logical_line(y).min(layout.line_count() - 1);
-        Some((side, line))
+        let (bounds, style) = (self.shared.bounds.get()?, self.style.as_ref()?);
+        let state = &self.state;
+        split::hit(
+            &state.diff,
+            &state.folding,
+            style,
+            bounds,
+            self.shown.y,
+            position,
+        )
     }
 
     fn fold_at(&self, position: Point<Pixels>) -> Option<FoldId> {
@@ -438,17 +433,12 @@ impl FileDiffView {
     }
 
     fn side_at(&self, x: Pixels) -> Side {
-        if let Some(side) = self.state.diff.single_side() {
-            return side;
-        }
-        let Some(bounds) = self.shared.bounds.get() else {
-            return self.state.master;
-        };
-        if x < bounds.center().x {
-            Side::Left
-        } else {
-            Side::Right
-        }
+        self.shared
+            .bounds
+            .get()
+            .map_or(self.state.master, |bounds| {
+                split::side_at(&self.state.diff, bounds, x)
+            })
     }
 
     fn max_scroll_x(&self) -> f32 {
@@ -456,14 +446,7 @@ impl FileDiffView {
             return 0.;
         };
         let content = (self.max_cols + 1) as f32 * style.char_width;
-        content.max(self.shared.widest.get()) - self.text_width(style, bounds)
-    }
-
-    /// Sidene er like brede, så venstre side holder når begge vises.
-    fn text_width(&self, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
-        let side = self.state.diff.single_side().unwrap_or(Side::Left);
-        let g = &side_geometry(&self.state.diff, style, bounds)[idx(side)];
-        g.text.end - g.text_x
+        content.max(self.shared.widest.get()) - split::text_width(&self.state.diff, style, bounds)
     }
 
     fn on_scroll(&mut self, ev: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
