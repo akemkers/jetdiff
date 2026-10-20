@@ -148,8 +148,7 @@ impl SideGeometry {
     }
 }
 
-/// Begge sidene for et vindu som starter på `x` og er `width` bredt. Med én side
-/// (`FileDiff::single_side`) får den hele bredden og den andre null.
+/// Begge sidene for et vindu som starter på `x` og er `width` bredt.
 pub fn side_geometry(
     diff: &FileDiff,
     number_char_width: f32,
@@ -162,15 +161,6 @@ pub fn side_geometry(
         let gutter = gutter_layout(digits as f32 * number_char_width);
         SideGeometry::new(side, mirrored, x, width, gutter)
     };
-    if let Some(shown) = diff.single_side() {
-        return [Side::Left, Side::Right].map(|side| {
-            if side == shown {
-                geom(side, false, x, width)
-            } else {
-                geom(side, false, x + width, 0.)
-            }
-        });
-    }
     let side_width = ((width - DIVIDER_WIDTH) / 2.).floor().max(0.);
     [
         geom(Side::Left, true, x, side_width),
@@ -265,16 +255,6 @@ mod tests {
         assert_eq!(g.scrollbar, 1006. ..1024.);
         assert_eq!(g.marker_x(), 1010. ..1024.);
         assert_eq!(g.thumb_x(), 1012. ..1022.);
-    }
-
-    #[test]
-    fn ny_fil_far_hele_bredden() {
-        use crate::ComparisonPolicy;
-        let diff = FileDiff::new("", "a\n", ComparisonPolicy::Default).unwrap();
-        let [left, right] = side_geometry(&diff, 7., 100., 800.);
-        assert_eq!(right.bounds(), 100. ..900.);
-        assert!(!right.mirrored);
-        assert!(left.bounds().is_empty());
     }
 
     #[test]

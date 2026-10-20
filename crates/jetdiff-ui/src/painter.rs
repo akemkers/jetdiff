@@ -112,9 +112,7 @@ pub fn wheel(
 ) {
     match mode {
         DiffMode::Split(state) => {
-            let side = bounds.map_or(state.master, |bounds| {
-                split::side_at(&state.diff, bounds, x)
-            });
+            let side = bounds.map_or(state.master, |bounds| split::side_at(bounds, x));
             state.wheel(side, delta_y, viewport);
         }
         DiffMode::Unified(state) => {

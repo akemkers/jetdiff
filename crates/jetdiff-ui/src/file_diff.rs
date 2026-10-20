@@ -143,7 +143,8 @@ impl FileDiffView {
         self.max_cols = max_cols(&diff);
         self.stop_animation();
         let folding = folding(&diff, cx);
-        self.mode.replace_diff(Rc::new(diff), Rc::new(folding), vp);
+        self.mode
+            .replace_diff(Rc::new(diff), Rc::new(folding), self.unified, vp);
         self.shared.clear();
         self.clamp_scroll_x();
         self.scroll.jump(self.mode.scroll());
@@ -154,6 +155,10 @@ impl FileDiffView {
     /// `v`: bytter mellom split og unified for alle filer. Cursoren blir på samme linje og
     /// høyde.
     pub(crate) fn toggle_view(&mut self, _: &ToggleView, _: &mut Window, cx: &mut Context<Self>) {
+        // Nye og slettede filer vises alltid unified, så `v` gjør ingenting der
+        if self.mode.diff().single_side().is_some() {
+            return;
+        }
         self.unified = !self.unified;
         self.stop_animation();
         let diff = self.mode.diff().clone();

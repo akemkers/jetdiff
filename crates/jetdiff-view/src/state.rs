@@ -63,7 +63,7 @@ pub struct DiffState {
 impl DiffState {
     pub fn new(diff: Rc<FileDiff>, folding: Rc<Folding>) -> Self {
         // `getCurrentSide` er RIGHT som default i SimpleDiffViewer
-        let side = diff.single_side().unwrap_or(Side::Right);
+        let side = Side::Right;
         Self {
             diff,
             folding,
@@ -281,7 +281,7 @@ impl DiffState {
     pub fn replace_diff(&mut self, diff: Rc<FileDiff>, folding: Rc<Folding>, vp: Viewport) {
         self.folding = folding;
         self.diff = diff;
-        let side = self.diff.single_side().unwrap_or(self.cursor.side);
+        let side = self.cursor.side;
         self.cursor = Cursor::new(side, self.clamp_line(side, self.cursor.line));
         self.master = side;
         let y = self.scroll.y(side);
@@ -293,7 +293,7 @@ impl DiffState {
     /// Cursoren settes, og linja havner `offset` piksler under toppen av viewporten. For
     /// bytte fra unified, så teksten under cursoren står i ro.
     pub fn place_cursor(&mut self, cursor: Cursor, offset: f32, vp: Viewport) {
-        let side = self.diff.single_side().unwrap_or(cursor.side);
+        let side = cursor.side;
         self.cursor = Cursor::new(side, self.clamp_line(side, cursor.line));
         self.master = side;
         let layout = self.layout(side, vp);
@@ -303,9 +303,9 @@ impl DiffState {
         self.follow(vp, false);
     }
 
-    /// Markert linje i nyeste versjon. Slettede filer har bare venstre side.
+    /// Markert linje i nyeste versjon.
     pub fn location(&self) -> Cursor {
-        if self.cursor.side == Side::Right || self.diff.single_side().is_some() {
+        if self.cursor.side == Side::Right {
             self.cursor
         } else {
             self.transferred_cursor()
@@ -315,7 +315,7 @@ impl DiffState {
     /// `MyFocusOppositePaneAction`: cursoren flyttes, siden blir master, og så
     /// `scrollToCaret(MAKE_VISIBLE)`.
     fn focus_side(&mut self, side: Side, vp: Viewport) -> Outcome {
-        if self.diff.single_side().is_some() || self.cursor.side == side {
+        if self.cursor.side == side {
             return Outcome::default();
         }
         self.cursor = self.transferred_cursor();
@@ -577,16 +577,6 @@ mod tests {
         assert_eq!(s.location(), Cursor::new(R, 1));
         s.click(R, 0);
         assert_eq!(s.location(), Cursor::new(R, 0));
-        let s = state("a\nb\n", "", false);
-        assert_eq!(s.location(), Cursor::new(L, 0));
-    }
-
-    #[test]
-    fn slettet_fil_vises_alene() {
-        let mut s = state("a\nb\n", "", false);
-        assert_eq!((s.cursor.side, s.master), (L, L));
-        run(&mut s, FocusSide(R));
-        assert_eq!(s.cursor.side, L);
     }
 
     #[test]

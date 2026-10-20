@@ -19,9 +19,10 @@ pub enum DiffMode {
 }
 
 impl DiffMode {
-    /// `folding` brukes bare i split.
+    /// `folding` brukes bare i split. Nye og slettede filer vises alltid unified, så split
+    /// slipper å vise én side alene.
     pub fn new(diff: Rc<FileDiff>, folding: Rc<Folding>, unified: bool) -> Self {
-        if unified {
+        if unified || diff.single_side().is_some() {
             Self::Unified(UnifiedState::new(Rc::new(UnifiedDiff::new(diff))))
         } else {
             Self::Split(DiffState::new(diff, folding))
@@ -112,11 +113,26 @@ impl DiffMode {
         }
     }
 
-    /// Samme fil med nytt innhold. `folding` brukes bare i split.
-    pub fn replace_diff(&mut self, diff: Rc<FileDiff>, folding: Rc<Folding>, viewport: Viewport) {
+    /// Samme fil med nytt innhold. Blir fila ny eller slettet, byttes det til unified før
+    /// innholdet byttes, så posisjonen beholdes. Er den ikke det lenger, og `unified` er av,
+    /// byttes det tilbake til split etterpå.
+    pub fn replace_diff(
+        &mut self,
+        diff: Rc<FileDiff>,
+        folding: Rc<Folding>,
+        unified: bool,
+        viewport: Viewport,
+    ) {
+        let unified = unified || diff.single_side().is_some();
+        if unified && !self.is_unified() {
+            self.toggle(folding.clone(), viewport);
+        }
         match self {
-            Self::Split(state) => state.replace_diff(diff, folding, viewport),
+            Self::Split(state) => state.replace_diff(diff, folding.clone(), viewport),
             Self::Unified(state) => state.replace_diff(diff, viewport),
+        }
+        if !unified && self.is_unified() {
+            self.toggle(folding, viewport);
         }
     }
 }
@@ -150,5 +166,25 @@ mod tests {
         mode.toggle(folding(), VIEWPORT);
         assert!(!mode.is_unified());
         assert_eq!(mode.location(), Cursor::new(Side::Right, 50));
+    }
+
+    #[test]
+    fn nye_og_slettede_filer_vises_unified() {
+        let diff = |old: &str, new: &str| {
+            Rc::new(FileDiff::new(old, new, ComparisonPolicy::Default).unwrap())
+        };
+        let new_file = diff("", "a\n");
+        let mode = DiffMode::new(new_file.clone(), Rc::new(Folding::none(&new_file)), false);
+        assert!(mode.is_unified());
+
+        let changed = diff("a\nb\n", "a\nc\n");
+        let folding = Rc::new(Folding::none(&changed));
+        let mut mode = DiffMode::new(changed.clone(), folding.clone(), false);
+        mode.init(VIEWPORT);
+        let deleted = diff("a\nb\n", "");
+        mode.replace_diff(deleted, folding.clone(), false, VIEWPORT);
+        assert!(mode.is_unified());
+        mode.replace_diff(changed, folding, false, VIEWPORT);
+        assert!(!mode.is_unified());
     }
 }

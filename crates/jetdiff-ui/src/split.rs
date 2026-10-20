@@ -1,5 +1,5 @@
-//! Split-visningen: to `SideEditor` med trakten mellom, eller én side alene for nye og
-//! slettede filer. Tegning, og hvor på skjermen sidene og linjene er.
+//! Split-visningen: to `SideEditor` med trakten mellom. Tegning, og hvor på skjermen sidene
+//! og linjene er. Nye og slettede filer vises alltid unified.
 
 use std::rc::Rc;
 
@@ -41,13 +41,9 @@ impl SplitPainter {
         let height = f32::from(bounds.size.height);
         let line_height = self.style.line_height();
         let geometries = side_geometry(&self.diff, &self.style, bounds);
-        let single = self.diff.single_side();
         let mut widest: f32 = 0.;
         for (index, geom) in geometries.iter().enumerate() {
             let side = SIDES[index];
-            if single.is_some_and(|shown| shown != side) {
-                continue;
-            }
             if stripes[index].track_height != height {
                 let content_height = self.folding.layout(side, line_height).content_height();
                 stripes[index] =
@@ -68,21 +64,19 @@ impl SplitPainter {
             };
             widest = widest.max(editor.paint(&mut caches[index], window, cx));
         }
-        if single.is_none() {
-            Divider {
-                diff: &self.diff,
-                folding: &self.folding,
-                theme: &self.theme,
-                x: geometries[0].gutter.end,
-                top,
-                viewport: Viewport {
-                    height,
-                    line_height,
-                },
-                scroll_y: self.scroll_y,
-            }
-            .paint(window);
+        Divider {
+            diff: &self.diff,
+            folding: &self.folding,
+            theme: &self.theme,
+            x: geometries[0].gutter.end,
+            top,
+            viewport: Viewport {
+                height,
+                line_height,
+            },
+            scroll_y: self.scroll_y,
         }
+        .paint(window);
         widest
     }
 }
@@ -117,10 +111,7 @@ pub fn hit(
 }
 
 /// Siden musehjulet scroller. Divideren regnes til nærmeste side.
-pub fn side_at(diff: &FileDiff, bounds: Bounds<Pixels>, x: Pixels) -> Side {
-    if let Some(side) = diff.single_side() {
-        return side;
-    }
+pub fn side_at(bounds: Bounds<Pixels>, x: Pixels) -> Side {
     if x < bounds.center().x {
         Side::Left
     } else {
@@ -128,10 +119,8 @@ pub fn side_at(diff: &FileDiff, bounds: Bounds<Pixels>, x: Pixels) -> Side {
     }
 }
 
-/// Bredden teksten har på én side. Sidene er like brede, så venstre side holder når begge
-/// vises.
+/// Bredden teksten har på én side. Sidene er like brede, så venstre side holder.
 pub fn text_width(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
-    let side = diff.single_side().unwrap_or(Side::Left);
-    let geom = &side_geometry(diff, style, bounds)[index(side)];
+    let [geom, _] = &side_geometry(diff, style, bounds);
     geom.text.end - geom.text_x
 }
