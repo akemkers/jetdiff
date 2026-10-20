@@ -97,7 +97,7 @@ cargo test
 
 GPUI bygges med `runtime_shaders`, så Metal-shaderne kompileres ved oppstart og Xcode sin Metal Toolchain trengs ikke.
 
-Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI. All logikk for scroll, folding og geometri ligger i `jetdiff-view` og testes uten vindu.
+Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI. All logikk for scroll, folding og geometri ligger i `jetdiff-view`, og tilstanden rundt diffen (endringer, reload, tre og commits) i `jetdiff-app`. Begge testes uten vindu.
 
 ```mermaid
 graph TD
@@ -105,10 +105,14 @@ graph TD
     jetdiff --> view[jetdiff-view]
     jetdiff --> git[jetdiff-git]
     jetdiff --> changes[jetdiff-changes]
+    ui --> app[jetdiff-app]
     ui --> view
     ui --> git
     ui --> changes
     ui --> core[jetdiff-core]
+    app --> view
+    app --> git
+    app --> changes
     view --> core
     view --> syntax[jetdiff-syntax]
     git --> changes
@@ -118,6 +122,7 @@ graph TD
 | ----------------------------------------------- | ------------------------------------------------------------- |
 | [`jetdiff`](crates/jetdiff)                     | Binæren: argumenter, vindu og tastebindinger                  |
 | [`jetdiff-ui`](crates/jetdiff-ui)               | GPUI-visningen                                                |
+| [`jetdiff-app`](crates/jetdiff-app)             | Tilstanden rundt diffen uten GUI: endringer, reload, tre, commits |
 | [`jetdiff-view`](crates/jetdiff-view)           | Visningsmodell uten GUI: scroll, folding, markert linje, taster |
 | [`jetdiff-core`](crates/jetdiff-core)           | Diff-algoritmen, portert fra IntelliJ                         |
 | [`jetdiff-syntax`](crates/jetdiff-syntax)       | Syntaksfarger med tree-sitter                                 |
