@@ -1,6 +1,6 @@
 # jetdiff
 
-En rask diff-viewer for macOS, med diffen fra JetBrains-IDE-ene. Rendres på GPU-en med [GPUI](https://www.gpui.rs).
+En rask diff-viewer for macOS, med diffen fra JetBrains-IDE-ene. Rendres på GPU-en med [GPUI](https://www.gpui.rs), eller i terminalen over SSH.
 
 Den viser lokale endringer, en commit eller to filer side om side, med trakt mellom sidene, ord-markering, folding av uendrede linjer og syntaksfarger. `v` bytter til unified, der slettede linjer står over de nye i én editor. Diff-algoritmen er portert fra IntelliJ og gir samme resultat. Alt er for lesing, ingenting kan redigeres.
 
@@ -16,6 +16,12 @@ cargo install --path crates/jetdiff
 
 Det legger `jetdiff` på PATH. Krever Rust stable.
 
+Featurene `gui` og `tui` er begge på som standard. På en server uten skjerm holder terminalvisningen, og GPUI trengs ikke:
+
+```
+cargo install --path crates/jetdiff --no-default-features --features tui
+```
+
 ## Bruk
 
 ```
@@ -27,6 +33,7 @@ jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 - `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
 - `<pr-lenke>`: en PR på GitHub, f.eks. `https://github.com/eier/repo/pull/12`, som den vises der. Må kjøres i repoet PR-en hører til, og henter den fra `origin`. Krever `gh`
 - `<venstre> <høyre>`: to filer
+- `--gui`, `--tui`: velger visning. Uten dem brukes terminalen over SSH og når det ikke er noen skjerm
 
 Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
@@ -97,11 +104,14 @@ cargo test
 
 GPUI bygges med `runtime_shaders`, så Metal-shaderne kompileres ved oppstart og Xcode sin Metal Toolchain trengs ikke.
 
-Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI. All logikk for scroll, folding og geometri ligger i `jetdiff-viewmodel`, og tilstanden rundt diffen (endringer, reload, tre og commits) i `jetdiff-app`. Begge testes uten vindu.
+Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI, og bare `jetdiff-tui` kjenner terminalen. All logikk for scroll, folding og geometri ligger i `jetdiff-viewmodel`, og tilstanden rundt diffen (endringer, reload, tre og commits) i `jetdiff-app`. Begge testes uten vindu.
 
 ```mermaid
 graph TD
     jetdiff --> ui[jetdiff-ui]
+    jetdiff --> tui[jetdiff-tui]
+    tui --> app
+    tui --> view
     jetdiff --> view[jetdiff-viewmodel]
     jetdiff --> git[jetdiff-git]
     jetdiff --> changes[jetdiff-changes]
@@ -122,6 +132,7 @@ graph TD
 | ----------------------------------------------- | ------------------------------------------------------------- |
 | [`jetdiff`](crates/jetdiff)                     | Binæren: argumenter, config og vindu                          |
 | [`jetdiff-ui`](crates/jetdiff-ui)               | GPUI-visningen                                                |
+| [`jetdiff-tui`](crates/jetdiff-tui)             | Terminalvisningen                                             |
 | [`jetdiff-app`](crates/jetdiff-app)             | Tilstanden rundt diffen uten GUI: endringer, reload, tre, commits |
 | [`jetdiff-viewmodel`](crates/jetdiff-viewmodel) | Visningsmodell uten GUI: scroll, folding, markert linje, taster |
 | [`jetdiff-core`](crates/jetdiff-core)           | Diff-algoritmen, portert fra IntelliJ                         |

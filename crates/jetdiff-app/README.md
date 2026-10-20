@@ -27,7 +27,7 @@ Tilstanden rundt diffen: endringene i repoet, fila som vises, filtreet, commit-l
 | `jetdiff-viewmodel`       | Diffen av én fil: markert linje, scroll, folding, split og unified, vim-tastene |
 | `jetdiff-git`        | Å snakke med `git`                                                              |
 | `jetdiff-changes`    | `FileChange` og tremodellen                                                     |
-| UI-et (`jetdiff-ui`) | Tegning, fokus, mus, animasjon, zoom, utklippstavla, timere og tråder           |
+| UI-et (`jetdiff-ui`, `jetdiff-tui`) | Tegning, fokus, mus, animasjon, zoom, utklippstavla, timere og tråder |
 | Binæren (`jetdiff`)  | Argumenter og config-fila                                                       |
 
 Grensen er at denne craten bestemmer **hva** som vises, og UI-et bestemmer **hvordan**. En `if` som endrer hva som vises hører hjemme her.
