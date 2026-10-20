@@ -13,6 +13,9 @@ pub enum KeyCode {
     Down,
     Left,
     Right,
+    Tab,
+    Enter,
+    Escape,
     F(u8),
     Other,
 }

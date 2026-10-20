@@ -16,6 +16,7 @@ Tilstanden rundt diffen: endringene i repoet, fila som vises, filtreet, commit-l
 | Commit-listas rader, markør og valg, og alderen som «3 timer siden»                                 | `commits` |
 | Rollback og `fil:linje` for markert linje: hva som rulles tilbake, eller hvorfor det ikke går        | `actions` |
 | Tastene i tastelinja og i hjelpen på `?`                                                            | `help`    |
+| Tastene utenfor diffen: filbytte, paneler, hjelp, zoom og avslutt                                   | `keys`    |
 | Stier som er endret i working tree, samlet til det er stille                                        | `watcher` |
 | Beskjedene og nivået deres (`Notice`, `Level`)                                                      | `content` |
 
@@ -27,7 +28,7 @@ Tilstanden rundt diffen: endringene i repoet, fila som vises, filtreet, commit-l
 | `jetdiff-git`        | Å snakke med `git`                                                              |
 | `jetdiff-changes`    | `FileChange` og tremodellen                                                     |
 | UI-et (`jetdiff-ui`) | Tegning, fokus, mus, animasjon, zoom, utklippstavla, timere og tråder           |
-| Binæren (`jetdiff`)  | Argumenter, config-fila og tastebindinger                                       |
+| Binæren (`jetdiff`)  | Argumenter og config-fila                                                       |
 
 Grensen er at denne craten bestemmer **hva** som vises, og UI-et bestemmer **hvordan**. En `if` som endrer hva som vises hører hjemme her.
 

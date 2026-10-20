@@ -18,6 +18,7 @@ use gpui::{
     App, AppContext, Application, Bounds, Context, Focusable, KeyBinding, Render, WindowBounds,
     WindowOptions, actions, px, size,
 };
+use jetdiff_app::{AppCommand, BINDINGS};
 use jetdiff_git::{PullRequest, Repo};
 use jetdiff_ui::{
     Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp,
@@ -64,30 +65,27 @@ fn read(path: &str) -> Result<String, String> {
 
 fn bind_keys(cx: &mut App) {
     // Resten av tastene går gjennom vim-parseren i `FileDiffView`
-    cx.bind_keys([
-        // `secondary` er Cmd på macOS og Ctrl ellers. GPUI matcher på tegnet som skrives,
-        // så Pluss er `+` på norsk og `=` på US
-        KeyBinding::new("secondary-+", ZoomIn, None),
-        KeyBinding::new("secondary-=", ZoomIn, None),
-        KeyBinding::new("secondary--", ZoomOut, None),
-        KeyBinding::new("secondary-0", ResetZoom, None),
-        KeyBinding::new("ctrl-h", FocusLeft, None),
-        KeyBinding::new("ctrl-j", FocusDown, None),
-        KeyBinding::new("ctrl-k", FocusUp, None),
-        KeyBinding::new("ctrl-l", FocusRight, None),
-        KeyBinding::new("b", ToggleSidePanel, None),
-        KeyBinding::new("v", ToggleView, None),
-        KeyBinding::new("tab", NextFile, None),
-        KeyBinding::new("J", NextFile, None),
-        KeyBinding::new("shift-tab", PrevFile, None),
-        KeyBinding::new("K", PrevFile, None),
-        KeyBinding::new("?", ToggleHelp, None),
-        KeyBinding::new("escape", HideHelp, None),
-        KeyBinding::new("q", Quit, None),
-        KeyBinding::new("secondary-q", Quit, None),
-        KeyBinding::new("secondary-w", Quit, None),
-    ]);
+    cx.bind_keys(BINDINGS.iter().map(|&(keys, cmd)| key_binding(keys, cmd)));
     cx.on_action(|_: &Quit, cx| cx.quit());
+}
+
+fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
+    match cmd {
+        AppCommand::ZoomIn => KeyBinding::new(keys, ZoomIn, None),
+        AppCommand::ZoomOut => KeyBinding::new(keys, ZoomOut, None),
+        AppCommand::ResetZoom => KeyBinding::new(keys, ResetZoom, None),
+        AppCommand::FocusLeft => KeyBinding::new(keys, FocusLeft, None),
+        AppCommand::FocusDown => KeyBinding::new(keys, FocusDown, None),
+        AppCommand::FocusUp => KeyBinding::new(keys, FocusUp, None),
+        AppCommand::FocusRight => KeyBinding::new(keys, FocusRight, None),
+        AppCommand::ToggleSidePanel => KeyBinding::new(keys, ToggleSidePanel, None),
+        AppCommand::ToggleView => KeyBinding::new(keys, ToggleView, None),
+        AppCommand::NextFile => KeyBinding::new(keys, NextFile, None),
+        AppCommand::PrevFile => KeyBinding::new(keys, PrevFile, None),
+        AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),
+        AppCommand::HideHelp => KeyBinding::new(keys, HideHelp, None),
+        AppCommand::Quit => KeyBinding::new(keys, Quit, None),
+    }
 }
 
 /// Det vinduet skal vise, klart før appen starter så feil kan skrives til terminalen.

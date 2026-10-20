@@ -120,7 +120,7 @@ graph TD
 
 | Crate                                           | Ansvar                                                        |
 | ----------------------------------------------- | ------------------------------------------------------------- |
-| [`jetdiff`](crates/jetdiff)                     | Binæren: argumenter, vindu og tastebindinger                  |
+| [`jetdiff`](crates/jetdiff)                     | Binæren: argumenter, config og vindu                          |
 | [`jetdiff-ui`](crates/jetdiff-ui)               | GPUI-visningen                                                |
 | [`jetdiff-app`](crates/jetdiff-app)             | Tilstanden rundt diffen uten GUI: endringer, reload, tre, commits |
 | [`jetdiff-viewmodel`](crates/jetdiff-viewmodel) | Visningsmodell uten GUI: scroll, folding, markert linje, taster |
