@@ -4,7 +4,7 @@ GPUI-visningen: diffen, filtreet og commit-lista.
 
 ## Hvorfor
 
-Dette er laget som tegner. Logikken ligger i `jetdiff-view`, så her er bare det som trenger GPUI: tekst og former, mus og taster, animasjon, zoom og fokus.
+Dette er laget som tegner. Logikken for diffen ligger i `jetdiff-view`, og tilstanden rundt den (endringer, reload, tre, commits, watcher) i `jetdiff-app`. Her er bare det som trenger GPUI: tekst og former, mus og taster, animasjon, zoom, fokus, og å kjøre jobbene fra `jetdiff-app` i bakgrunnen.
 
 Modulene kjenner ikke hverandre. Delt tilstand, som valgt fil, ligger i små GPUI-entiteter som alle observerer. Treet skriver til `Selection` ved klikk, og diffen følger den. `J` og `K` i diffen sender et event som treet flytter valget for.
 
@@ -54,18 +54,18 @@ graph TD
     fdv --> msg[(Message)]
 ```
 
-- `changes_view`: treet og commitene til venstre, diffen til høyre. Henter fra git og laster på nytt når filer endres
+- `changes_view`: treet og commitene til venstre, diffen til høyre. Kjører reload fra `jetdiff_app::Changes` i bakgrunnen og viser resultatet
 - `file_diff`: diffen av én fil, split eller unified. Taster, mus, zoom og scroll-animasjon
 - `painter`: velger split eller unified for tegning og mus
 - `split`: to `SideEditor` med divider mellom
 - `unified_editor`: én editor med gammelt og nytt linjenummer
 - `editor_paint`: det begge visningene tegner likt
-- `help`: tastelinja og popupen med alle tastene
+- `help`: tegner tastelinja og popupen. Tastene ligger i `jetdiff_app::help`
 - `side_editor`: én side i split: bakgrunner, folds, tekst og linjenumre
 - `divider`: tegner trakten og fold-koblingene
-- `changes_tree`, `commit_list`: listene i sidepanelet
+- `changes_tree`, `commit_list`: listene i sidepanelet, over `FileTree` og `Commits` fra `jetdiff-app`
 - `message`: kort info eller fast advarsel over tastelinja
-- `watcher`: følger working tree med `notify`
+- `watcher`: spør `jetdiff_app::Watcher` på GPUI-executoren
 - `theme`: Catppuccin Mocha og IntelliJ sine Islands-temaer
 
 ## Ressurser

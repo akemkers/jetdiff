@@ -40,6 +40,15 @@ jetdiff-changes  FileChange { path, old_path, status } og tremodellen: mapper f�
 
 jetdiff-git      git-CLI: endringer for en commit eller working tree, og filinnhold
 
+jetdiff-app      tilstanden rundt diffen, fortsatt uten GUI. Delt av alle UI-er
+  changes        repo, commit og fila som vises. Reload og valgt fil etterpå
+  content        fra git-innhold til FileDiff, med beskjed når den ikke kan vises
+  files          filtreets rader og markør
+  commits        commit-listas rader, markør og valg
+  actions        rollback og fil:linje for markert linje
+  help           tastene i tastelinja og hjelpen
+  watcher        endrede stier, samlet til det er stille
+
 jetdiff-ui       GPUI
   side_editor    én side i split: bakgrunner, folds, tekst og linjenumre
   divider        bezier-trakt og fold-koblinger
@@ -57,7 +66,7 @@ jetdiff          binær: CLI
 
 Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy. Treet skriver til `Selection` ved klikk, og diff-viewen følger den. `J`/`K` og Tab flytter valget i treet uansett hvor fokus er. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.
 
-Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, folding og geometri skal kunne testes uten vindu. `ui` skal bare tegne det `view` sier.
+Skillet mellom `view`/`app` og `ui` er det viktigste. All logikk for scrolling, folding og geometri skal kunne testes uten vindu. `ui` skal bare tegne det `view` og `app` sier.
 
 ## Viktige valg
 
