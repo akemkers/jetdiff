@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
-use jetdiff_view::{DiffMode, ScrollState, StripeMarker, Viewport};
+use jetdiff_viewmodel::{DiffMode, ScrollState, StripeMarker, Viewport};
 
 use crate::editor_paint::StripeRects;
 use crate::side_editor::{CaretRow, SideCache};

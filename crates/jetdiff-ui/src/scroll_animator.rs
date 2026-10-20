@@ -4,7 +4,7 @@
 
 use std::time::Instant;
 
-use jetdiff_view::{ScrollAnimation, ScrollState};
+use jetdiff_viewmodel::{ScrollAnimation, ScrollState};
 
 /// Varighet på animert hopp til endring.
 const NAV_ANIMATION_MS: f32 = 170.;

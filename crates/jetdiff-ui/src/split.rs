@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
-use jetdiff_view::{FileDiff, Folding, SideGeometry, StripeMarker, Viewport};
+use jetdiff_viewmodel::{FileDiff, Folding, SideGeometry, StripeMarker, Viewport};
 
 use crate::divider::Divider;
 use crate::editor_paint::StripeRects;
@@ -83,7 +83,7 @@ impl SplitPainter {
 
 fn side_geometry(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> [SideGeometry; 2] {
     let (x, width) = (f32::from(bounds.origin.x), f32::from(bounds.size.width));
-    jetdiff_view::side_geometry(diff, style.number_char_width, x, width)
+    jetdiff_viewmodel::side_geometry(diff, style.number_char_width, x, width)
 }
 
 fn index(side: Side) -> usize {

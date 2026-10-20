@@ -6,7 +6,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use jetdiff_ui::UiTheme;
-use jetdiff_view::metrics::{MAX_FONT_SIZE, MIN_FONT_SIZE};
+use jetdiff_viewmodel::metrics::{MAX_FONT_SIZE, MIN_FONT_SIZE};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use toml::{Table, Value};

@@ -4,7 +4,7 @@ Tilstanden rundt diffen: endringene i repoet, fila som vises, filtreet, commit-l
 
 ## Hvorfor
 
-`jetdiff-view` vet alt om diffen av én fil, men ingenting om hvor fila kommer fra. Det som skjer rundt, som at valgt fil beholdes etter en reload eller at en commit som ikke finnes gir advarsel og working tree igjen, lå før i `jetdiff-ui` sammen med GPUI. Et nytt UI måtte da skrevet det på nytt og holdt det likt for hånd. Her ligger det én gang, med tester.
+`jetdiff-viewmodel` vet alt om diffen av én fil, men ingenting om hvor fila kommer fra. Det som skjer rundt, som at valgt fil beholdes etter en reload eller at en commit som ikke finnes gir advarsel og working tree igjen, lå før i `jetdiff-ui` sammen med GPUI. Et nytt UI måtte da skrevet det på nytt og holdt det likt for hånd. Her ligger det én gang, med tester.
 
 ## Hva craten eier
 
@@ -23,7 +23,7 @@ Tilstanden rundt diffen: endringene i repoet, fila som vises, filtreet, commit-l
 
 | Ligger i             | Hva                                                                             |
 | -------------------- | ------------------------------------------------------------------------------- |
-| `jetdiff-view`       | Diffen av én fil: markert linje, scroll, folding, split og unified, vim-tastene |
+| `jetdiff-viewmodel`       | Diffen av én fil: markert linje, scroll, folding, split og unified, vim-tastene |
 | `jetdiff-git`        | Å snakke med `git`                                                              |
 | `jetdiff-changes`    | `FileChange` og tremodellen                                                     |
 | UI-et (`jetdiff-ui`) | Tegning, fokus, mus, animasjon, zoom, utklippstavla, timere og tråder           |
@@ -66,13 +66,13 @@ graph TD
     changes -- ReloadJob --> ui
     changes -- Show --> ui
     changes --> content[content: build_diff]
-    content --> view[jetdiff-view: FileDiff]
+    content --> view[jetdiff-viewmodel: FileDiff]
     changes --> git[jetdiff-git: Repo]
     ui --> files[files: FileTree]
     ui --> commits[commits: Commits]
     ui --> watcher[watcher: Watcher]
     ui --> actions[actions: rollback og fil:linje]
-    actions --> mode[jetdiff-view: DiffMode]
+    actions --> mode[jetdiff-viewmodel: DiffMode]
     files --> tree[jetdiff-changes: ChangeTree]
 ```
 

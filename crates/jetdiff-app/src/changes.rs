@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use jetdiff_changes::{ChangeTree, FileChange};
 use jetdiff_git::{Commit, Repo};
-use jetdiff_view::FileDiff;
+use jetdiff_viewmodel::FileDiff;
 
 use crate::actions::RollbackRequest;
 use crate::content::{Notice, build_diff};

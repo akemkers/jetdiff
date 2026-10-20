@@ -10,7 +10,7 @@ use gpui::{
 };
 use jetdiff_app::{FileTree, count_label, file_name};
 use jetdiff_changes::{ChangeTree, FileChange, RowKind, Status};
-use jetdiff_view::columns::display_width;
+use jetdiff_viewmodel::columns::display_width;
 
 use crate::icons::{chevron_icon, file_icon, folder_icon};
 use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key, row_bg};

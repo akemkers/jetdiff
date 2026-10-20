@@ -24,7 +24,8 @@ jetdiff-core     ren logikk, ingen GUI. Testes med golden-tester.
 
 jetdiff-syntax   tree-sitter med egne queries, tokens tilsvarer IntelliJ sine DEFAULT_*
 
-jetdiff-view     view-modell, fortsatt uten GUI
+jetdiff-viewmodel
+                 visningsmodell, fortsatt uten GUI
   model          FileDiff: blokker, linjer, syntaks per side
   state          markert linje, kommandoer, scroll og folding samlet
   unified        rader over FileDiff og egen tilstand, ingen folding
@@ -66,7 +67,7 @@ jetdiff          binær: CLI
 
 Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy. Treet skriver til `Selection` ved klikk, og diff-viewen følger den. `J`/`K` og Tab flytter valget i treet uansett hvor fokus er. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.
 
-Skillet mellom `view`/`app` og `ui` er det viktigste. All logikk for scrolling, folding og geometri skal kunne testes uten vindu. `ui` skal bare tegne det `view` og `app` sier.
+Skillet mellom `viewmodel`/`app` og `ui` er det viktigste. All logikk for scrolling, folding og geometri skal kunne testes uten vindu. `ui` skal bare tegne det `viewmodel` og `app` sier.
 
 ## Viktige valg
 

@@ -1,4 +1,4 @@
-# jetdiff-view
+# jetdiff-viewmodel
 
 Visningsmodellen for diffen av én fil, split eller unified: scroll, folding, markert linje, taster og geometri.
 
@@ -8,10 +8,12 @@ Det meste av det som gjør diffen i IntelliJ god, er logikk og ikke tegning. Sid
 
 `jetdiff-ui` tegner bare det denne craten regner ut. Geometrien er i piksler, klar til å tegnes.
 
+`model` (`FileDiff`) er diffdataene for én fil. De ligger her fordi de er bygd for visning: syntaks, ord-markering og linjemappingen sync scroll bruker.
+
 ## Bruk
 
 ```rust
-use jetdiff_view::{
+use jetdiff_viewmodel::{
     ComparisonPolicy, DiffMode, FileDiff, Folding, KeyParser, Language, Parsed,
 };
 
@@ -71,5 +73,5 @@ Mange moduler er porter av bestemte klasser i IntelliJ, og navnet står øverst 
 ## Tester
 
 ```
-cargo test -p jetdiff-view
+cargo test -p jetdiff-viewmodel
 ```

@@ -24,7 +24,7 @@ use jetdiff_ui::{
     LOCAL_CHANGES, NextFile, PrevFile, ResetZoom, Settings, ToggleHelp, ToggleSidePanel,
     ToggleView, ZoomIn, ZoomOut, load_font,
 };
-use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
+use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
 
 actions!(jetdiff, [Quit]);
 

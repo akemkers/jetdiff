@@ -1,4 +1,4 @@
-//! GPUI-laget. Tegner bare det `jetdiff-view` regner ut.
+//! GPUI-laget. Tegner bare det `jetdiff-viewmodel` regner ut.
 
 mod cache;
 mod changes_tree;

@@ -1,11 +1,11 @@
 //! Én editor: bakgrunner, ord-markering, tekst, linjenumre og error stripe. Tegner bare
-//! det `jetdiff-view` gir, og bare synlige linjer.
+//! det `jetdiff-viewmodel` gir, og bare synlige linjer.
 
 use std::ops::{Range, RangeInclusive};
 
 use gpui::{App, Bounds, Pixels, ShapedLine, SharedString, Window, fill, point, px};
-use jetdiff_view::separator::{stroke_width, wave};
-use jetdiff_view::{FileDiff, Folding, LineLayout, SideGeometry};
+use jetdiff_viewmodel::separator::{stroke_width, wave};
+use jetdiff_viewmodel::{FileDiff, Folding, LineLayout, SideGeometry};
 
 use crate::cache::LineCache;
 use crate::divider::stroke_path;
@@ -181,7 +181,7 @@ impl SideEditor<'_> {
             let y = self.screen_y(layout.visual_line_to_y(fold.visual));
             let path = wave(geom.bounds(), edge, geom.mirrored, y, line_height);
             let width = stroke_width(hovered == Some(id));
-            let to_pixels = |p: jetdiff_view::Point| point(px(p.x), px(p.y));
+            let to_pixels = |p: jetdiff_viewmodel::Point| point(px(p.x), px(p.y));
             stroke_path(window, &path, to_pixels, width, self.theme.separator_wave);
         }
     }

@@ -5,8 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use jetdiff_view::nav::{next_block, prev_block, target_for_block};
-use jetdiff_view::{
+use jetdiff_viewmodel::nav::{next_block, prev_block, target_for_block};
+use jetdiff_viewmodel::{
     Command, ComparisonPolicy, DiffState, DiffType, FileDiff, Folding, Horizontal, InlineHighlight,
     PositionKeeper, ScrollState, Side, Viewport, divider_bands, divider_separators, stripe_markers,
 };

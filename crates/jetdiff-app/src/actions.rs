@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use jetdiff_view::{DiffMode, Side};
+use jetdiff_viewmodel::{DiffMode, Side};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollbackRequest {

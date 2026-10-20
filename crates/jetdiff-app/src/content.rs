@@ -1,7 +1,7 @@
 //! Fra git-innhold til `FileDiff`.
 
 use jetdiff_changes::{FileChange, Status};
-use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
+use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
