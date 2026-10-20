@@ -1,5 +1,4 @@
-//! Tilstanden rundt diffen som begge UI-ene deler: endringene i repoet, filtreet, commit-lista
-//! og watcheren. Ingen GUI-avhengighet. UI-et tegner, tar imot input og kjører jobbene.
+//! Tilstanden rundt diffen som UI-ene deler. Se README.
 
 pub mod actions;
 pub mod changes;

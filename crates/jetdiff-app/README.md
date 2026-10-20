@@ -14,7 +14,7 @@ Tilstanden rundt diffen: endringene i repoet, fila som vises, filtreet, commit-l
 | Fra innholdet git gir til `FileDiff`: binærfil, for stor, likt innhold og syntaks                   | `content` |
 | Filtreets rader og markør, og mapper som klappes sammen                                             | `files`   |
 | Commit-listas rader, markør og valg, og alderen som «3 timer siden»                                 | `commits` |
-| Hva `r` og `y` gjør: om endringen kan rulles tilbake, og `fil:linje`                                | `actions` |
+| Rollback og `fil:linje` for markert linje: hva som rulles tilbake, eller hvorfor det ikke går        | `actions` |
 | Tastene i tastelinja og i hjelpen på `?`                                                            | `help`    |
 | Stier som er endret i working tree, samlet til det er stille                                        | `watcher` |
 | Beskjedene og nivået deres (`Notice`, `Level`)                                                      | `content` |
@@ -71,7 +71,7 @@ graph TD
     ui --> files[files: FileTree]
     ui --> commits[commits: Commits]
     ui --> watcher[watcher: Watcher]
-    ui --> actions[actions: r og y]
+    ui --> actions[actions: rollback og fil:linje]
     actions --> mode[jetdiff-view: DiffMode]
     files --> tree[jetdiff-changes: ChangeTree]
 ```

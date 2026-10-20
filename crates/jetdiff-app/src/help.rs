@@ -1,8 +1,7 @@
-//! Tastene som vises i tastelinja og i hjelpen på `?`. Begge UI-ene viser disse.
+//! Tastene i tastelinja og hjelpen.
 
 pub type Keys = (&'static str, &'static str);
 
-/// De viktigste, i tastelinja nederst.
 pub const BAR: [Keys; 5] = [
     ("Tab Shift-Tab", "fil"),
     ("j k", "opp/ned"),
@@ -11,7 +10,7 @@ pub const BAR: [Keys; 5] = [
     ("q", "avslutt"),
 ];
 
-/// Alle, i seksjoner. Ctrl-variantene fra vim er ikke med.
+/// Ctrl-variantene fra vim er ikke med.
 pub const ALL: [(&str, &[Keys]); 4] = [
     (
         "Flytt",

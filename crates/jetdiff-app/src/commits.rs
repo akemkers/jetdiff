@@ -1,5 +1,4 @@
-//! Commitene under filtreet. Rad 0 er working tree, resten er commitene i rekkefølge.
-//! Rader refereres med hash, så markøren og valget overlever at lista hentes på nytt.
+//! Commit-lista. Rad 0 og `None` er working tree. Hash i stedet for rad, så valget overlever en reload.
 
 use std::rc::Rc;
 
@@ -7,15 +6,12 @@ use jetdiff_git::Commit;
 
 use crate::step;
 
-/// Første rad, som er working tree.
 pub const LOCAL_CHANGES: &str = "Lokale endringer";
 
 #[derive(Default)]
 pub struct Commits {
     commits: Rc<[Commit]>,
-    /// Det som vises. `None` er working tree.
     selected: Option<String>,
-    /// Raden j og k flytter, som hash. Enter åpner den.
     cursor: Option<String>,
 }
 
@@ -27,7 +23,6 @@ impl Commits {
         }
     }
 
-    /// Antall rader, med working tree.
     pub fn len(&self) -> usize {
         self.commits.len() + 1
     }
@@ -36,7 +31,6 @@ impl Commits {
         false
     }
 
-    /// Commiten på en rad. `None` er working tree.
     pub fn commit(&self, row: usize) -> Option<&Commit> {
         row.checked_sub(1).map(|c| &self.commits[c])
     }
@@ -62,14 +56,13 @@ impl Commits {
         self.selected = hash;
     }
 
-    /// Gir raden markøren står på etterpå.
     pub fn move_cursor(&mut self, down: bool) -> usize {
         let row = step(self.row_of(&self.cursor), down, self.len());
         self.cursor = self.hash_at(row);
         row
     }
 
-    /// Velger raden. Gir commiten som skal vises når valget endret seg.
+    /// `Some` når valget endret seg.
     pub fn select(&mut self, row: usize) -> Option<Option<String>> {
         let hash = self.hash_at(row);
         self.cursor = hash.clone();
@@ -99,7 +92,6 @@ impl Commits {
     }
 }
 
-/// Sekunder siden, som «3 timer siden».
 pub fn age(seconds: i64) -> String {
     const MINUTE: i64 = 60;
     const HOUR: i64 = 60 * MINUTE;

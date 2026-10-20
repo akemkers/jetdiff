@@ -1,19 +1,16 @@
-//! Det `r` og `y` i diffen gjør, uten UI. UI-et spør om bekreftelse og skriver til utklippstavla.
+//! Rollback og `fil:linje` for markert linje.
 
 use std::ops::Range;
 
 use jetdiff_view::{DiffMode, Side};
 
-/// Brukeren vil rulle tilbake en endring. Sendes til den som kan skrive fila.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollbackRequest {
     /// Høyre side slik den vises, for å oppdage om fila er endret siden.
     pub before: String,
-    /// Linjene i endringen, per side.
     pub lines: [Range<usize>; 2],
 }
 
-/// Endringen på markert linje, eller hvorfor den ikke kan rulles tilbake.
 pub fn rollback_request(
     mode: &DiffMode,
     can_rollback: bool,
@@ -32,7 +29,6 @@ pub fn rollback_request(
     })
 }
 
-/// `fil:linje` for markert linje. `None` når det ikke finnes noen fil.
 pub fn location(mode: &DiffMode, paths: &[String; 2]) -> Option<String> {
     let c = mode.location();
     let path = &paths[c.side.select(0, 1)];

@@ -1,4 +1,4 @@
-//! Fra innholdet git gir til en `FileDiff`, og beskjeden når den ikke kan vises.
+//! Fra git-innhold til `FileDiff`.
 
 use jetdiff_changes::{FileChange, Status};
 use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
@@ -31,7 +31,6 @@ impl Notice {
     }
 }
 
-/// Diffen for en fil, eller en tom diff og hvorfor den ikke kan vises.
 pub fn build_diff(
     change: &FileChange,
     content: Result<[String; 2], String>,

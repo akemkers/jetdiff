@@ -45,7 +45,7 @@ jetdiff-app      tilstanden rundt diffen, fortsatt uten GUI. Delt av alle UI-er
   content        fra git-innhold til FileDiff, med beskjed når den ikke kan vises
   files          filtreets rader og markør
   commits        commit-listas rader, markør og valg
-  actions        hva r og y gjør
+  actions        rollback og fil:linje for markert linje
   help           tastene i tastelinja og hjelpen
   watcher        endrede stier, samlet til det er stille
 

@@ -1,4 +1,4 @@
-//! Spør `jetdiff_app::Watcher` på GPUI-executoren og melder fra til visningen.
+//! Kjører `jetdiff_app::Watcher` på GPUI-executoren.
 
 use std::path::Path;
 
@@ -10,7 +10,6 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    /// `on_change` får stiene som er endret, relative til `root`.
     pub fn new<T: 'static>(
         root: &Path,
         cx: &mut Context<T>,

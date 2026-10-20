@@ -1,5 +1,4 @@
-//! Endringene i et repo eller en commit, og fila som vises. Git leses i en `ReloadJob` som UI-et
-//! kjører i bakgrunnen, og svaret gis tilbake til `reloaded`.
+//! Endringene i et repo og fila som vises.
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -11,7 +10,6 @@ use jetdiff_view::FileDiff;
 use crate::actions::RollbackRequest;
 use crate::content::{Notice, build_diff};
 
-/// Det en `ReloadJob` har hentet.
 pub struct Loaded {
     commit: Option<String>,
     repo: Repo,
@@ -19,7 +17,6 @@ pub struct Loaded {
     commits: Vec<Commit>,
 }
 
-/// Leser git, uten tilgang til tilstanden. Kan kjøres på en annen tråd.
 pub struct ReloadJob {
     root: PathBuf,
     commit: Option<String>,
@@ -45,7 +42,6 @@ impl ReloadJob {
 }
 
 pub enum Reloaded {
-    /// Commit-lista skal vise `shown`, det som faktisk vises, og feilen som advarsel.
     Failed {
         shown: Option<String>,
         error: String,
@@ -54,36 +50,28 @@ pub enum Reloaded {
         commits: Vec<Commit>,
         /// Bare når lista er endret.
         changes: Option<Rc<[FileChange]>>,
-        /// Fila som skal velges.
         file: Option<usize>,
         notice: Option<Notice>,
     },
 }
 
-/// Det diffen skal vise etter at en fil er valgt.
 pub enum Show {
-    /// Ingen fil. Tom diff, og beskjeden står fast.
     Empty(Notice),
-    /// Samme fil med samme innhold. Ingenting å gjøre.
     Unchanged,
     Diff(Box<Shown>),
 }
 
 pub struct Shown {
     pub diff: FileDiff,
-    /// Står fast til neste fil. `None` fjerner den forrige.
     pub notice: Option<Notice>,
-    /// Venstre og høyre sti, for `y`.
     pub paths: [String; 2],
     /// Bare working tree kan skrives til, ikke en commit.
     pub can_rollback: bool,
-    /// Samme fil med nytt innhold. Cursor og scroll beholdes.
     pub same_file: bool,
 }
 
 pub struct Changes {
     repo: Repo,
-    /// Commiten som skal vises. `None` er working tree.
     commit: Option<String>,
     /// Commiten `changes` er fra. Blir lik `commit` når lastingen er ferdig.
     loaded_commit: Option<String>,
@@ -111,12 +99,10 @@ impl Changes {
         &self.changes
     }
 
-    /// Fila som vises.
     pub fn shown(&self) -> Option<&FileChange> {
         self.shown.as_ref().map(|(c, _)| c)
     }
 
-    /// Første fil i treet, den som velges ved oppstart.
     pub fn first(&self) -> Option<usize> {
         ChangeTree::new(&self.changes).first()
     }
@@ -181,7 +167,6 @@ impl Changes {
         }
     }
 
-    /// Leser fila på nytt fra git, så en reload med nytt innhold gir ny diff.
     pub fn load(&mut self, file: Option<usize>) -> Show {
         let Some(change) = file.map(|i| self.changes[i].clone()) else {
             self.shown = None;
@@ -208,8 +193,7 @@ impl Changes {
         }))
     }
 
-    /// Skriver fila og viser resultatet med en gang, uten å vente på watcheren. Kjør en
-    /// `reload` etterpå, så lista følger med. `None` når ingen fil vises.
+    /// Kjør en `reload` etterpå, så lista følger med.
     pub fn rollback(&mut self, request: &RollbackRequest) -> Option<Result<Show, String>> {
         let Some((change, Ok([left, _]))) = self.shown.clone() else {
             return None;
@@ -296,7 +280,6 @@ mod tests {
         let mut c = r.changes();
         let b = c.changes().iter().position(|c| c.path == "b.rs");
         assert!(matches!(c.load(b), Show::Diff(s) if !s.same_file && s.can_rollback));
-        // Samme innhold gir ingenting å gjøre
         assert!(matches!(c.load(b), Show::Unchanged));
 
         r.write("b.rs", "b3\n");
@@ -328,7 +311,6 @@ mod tests {
             reload(&mut c, &[]),
             Reloaded::Failed { shown: None, .. }
         ));
-        // Neste reload er working tree igjen
         assert!(matches!(
             reload(&mut c, &[]),
             Reloaded::Done { file: None, .. }

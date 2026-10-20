@@ -1,5 +1,4 @@
-//! Følger en mappe og samler endrede stier til det har vært stille en stund. UI-et spør med
-//! `take` hver `POLL`, fra sin egen løkke.
+//! Samler endrede stier til det har vært stille. UI-et spør med `take`.
 
 use std::mem;
 use std::path::{Path, PathBuf};
@@ -12,7 +11,6 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher as _};
 const QUIET: Duration = Duration::from_millis(300);
 /// Melder fra selv om noe skriver hele tiden, som en build.
 const MAX_WAIT: Duration = Duration::from_secs(2);
-/// Hvor ofte UI-et bør kalle `take`.
 pub const POLL: Duration = Duration::from_millis(100);
 
 #[derive(Default)]
@@ -74,7 +72,6 @@ impl Watcher {
         })
     }
 
-    /// Stiene som er endret, relative til roten, når det har vært stille lenge nok.
     pub fn take(&self) -> Option<Vec<String>> {
         let paths = {
             let mut p = self.pending.lock().unwrap();

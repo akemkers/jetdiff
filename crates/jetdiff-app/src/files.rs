@@ -1,5 +1,4 @@
-//! Filtreet: radene som vises, markøren `j` og `k` flytter, og mapper som klappes sammen.
-//! Valgt fil eies av den som bruker treet. Her regnes bare ut hva den blir.
+//! Filtreet. Valgt fil eies av den som bruker treet.
 
 use std::rc::Rc;
 
@@ -11,7 +10,6 @@ pub struct FileTree {
     changes: Rc<[FileChange]>,
     tree: ChangeTree,
     rows: Rc<[Row]>,
-    /// Raden j og k flytter. Enter åpner den.
     cursor: usize,
 }
 
@@ -49,14 +47,12 @@ impl FileTree {
         self.tree.first()
     }
 
-    /// Neste eller forrige fil etter `file`. `None` ved endene.
     pub fn next_file(&self, file: usize, forward: bool) -> Option<usize> {
         let next = self.tree.step(file, forward);
         (next != file).then_some(next)
     }
 
     /// Valgt fil blir synlig, også når den er valgt med tastaturet i en lukket mappe.
-    /// Gir raden markøren flyttes til.
     pub fn reveal(&mut self, file: usize) -> Option<usize> {
         self.tree.reveal(file, &self.changes);
         self.rows = self.tree.rows().into();
@@ -73,7 +69,6 @@ impl FileTree {
         self.cursor
     }
 
-    /// Mapper klappes sammen eller opp. En fil gir indeksen sin, som skal velges.
     pub fn open(&mut self, row: usize) -> Option<usize> {
         self.cursor = row;
         match &self.rows[row].kind {
@@ -86,7 +81,6 @@ impl FileTree {
         }
     }
 
-    /// Raden markøren står på. Ingenting når treet er tomt.
     pub fn open_cursor(&mut self) -> Option<usize> {
         if self.rows.is_empty() {
             return None;
@@ -130,7 +124,6 @@ mod tests {
         assert_eq!(t.open(0), None);
         assert_eq!(t.rows().len(), 2);
         assert_eq!(t.open(1), Some(1));
-        // Valgt med tastaturet i en lukket mappe åpner den
         t.open(0);
         assert_eq!(t.reveal(0), Some(1));
         assert_eq!(t.rows().len(), 3);

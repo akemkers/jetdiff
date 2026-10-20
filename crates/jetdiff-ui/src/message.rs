@@ -44,7 +44,6 @@ impl Message {
         cx.notify();
     }
 
-    /// Fast beskjed fra `jetdiff-app`, eller ingen.
     pub fn pin_notice(&mut self, notice: Option<Notice>, cx: &mut Context<Self>) {
         match notice {
             Some(n) => self.pin(n.text, n.level, cx),
