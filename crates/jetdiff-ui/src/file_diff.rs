@@ -19,10 +19,11 @@ use jetdiff_view::{
     ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport, stripe_markers,
 };
 
+use crate::editor_paint::StripeRects;
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
 use crate::message::{Level, Message};
 use crate::settings::Settings;
-use crate::side_editor::{CaretRow, SideCache, SideEditor, StripeRects};
+use crate::side_editor::{CaretRow, SideCache, SideEditor};
 use crate::text::{FAMILY, TextStyle};
 
 actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom]);

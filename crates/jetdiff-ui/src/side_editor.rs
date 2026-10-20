@@ -1,71 +1,22 @@
 //! Én editor: bakgrunner, ord-markering, tekst, linjenumre og error stripe. Tegner bare
 //! det `jetdiff-view` gir, og bare synlige linjer.
 
-use gpui::{
-    App, Bounds, ContentMask, Hsla, Pixels, ShapedLine, SharedString, TextRun, Window, fill, point,
-    px, quad, size,
-};
-use jetdiff_view::columns::ExpandedLine;
+use gpui::{App, ShapedLine, SharedString, Window, fill, point, px};
 use jetdiff_view::separator::{stroke_width, wave};
-use jetdiff_view::{FileDiff, Folding, SideGeometry, StripeMarker, thumb_range};
+use jetdiff_view::{FileDiff, Folding, SideGeometry};
 
 use crate::cache::LineCache;
 use crate::divider::stroke_path;
+use crate::editor_paint::{ShapedText, StripeRects, mask, rect, shape_number};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
 pub struct CachedLine {
-    pub expanded: ExpandedLine,
-    /// `None` for tomme linjer, de har ingenting å shape.
-    pub shaped: Option<ShapedLine>,
+    pub text: ShapedText,
     pub number: ShapedLine,
 }
 
-impl CachedLine {
-    /// X i den viste teksten for en byte-kolonne i originallinja.
-    pub fn x_for_col(&self, col: usize) -> f32 {
-        match &self.shaped {
-            Some(s) => f32::from(s.x_for_index(self.expanded.display_index(col))),
-            None => 0.,
-        }
-    }
-
-    pub fn width(&self) -> f32 {
-        self.shaped.as_ref().map_or(0., |s| f32::from(s.width))
-    }
-}
-
 pub type SideCache = LineCache<(SharedString, u32), CachedLine>;
-
-/// Error stripe-rektangler i sporet, slått sammen per piksel. Regnes ut når sporhøyden endres.
-#[derive(Debug, Clone, Default)]
-pub struct StripeRects {
-    pub track_height: f32,
-    pub rects: Vec<(f32, f32, Hsla)>,
-}
-
-impl StripeRects {
-    pub fn new(
-        markers: &[StripeMarker],
-        content_height: f32,
-        track_height: f32,
-        theme: &UiTheme,
-    ) -> Self {
-        let mut rects: Vec<(f32, f32, Hsla)> = Vec::new();
-        for m in markers {
-            let (start, end) = m.track_range(content_height, track_height);
-            let color = theme.diff(m.diff_type).stripe;
-            match rects.last_mut() {
-                Some(last) if last.2 == color && start <= last.1 => last.1 = last.1.max(end),
-                _ => rects.push((start, end, color)),
-            }
-        }
-        Self {
-            track_height,
-            rects,
-        }
-    }
-}
 
 pub struct SideEditor<'a> {
     pub diff: &'a FileDiff,
@@ -87,28 +38,6 @@ pub struct CaretRow {
     pub line: usize,
     /// Aktiv side med fokus får full farge, så man ser hvor `o` virker.
     pub active: bool,
-}
-
-fn rect(x: std::ops::Range<f32>, y1: f32, y2: f32) -> Bounds<Pixels> {
-    Bounds::new(
-        point(px(x.start), px(y1)),
-        size(px(x.end - x.start), px(y2 - y1)),
-    )
-}
-
-fn run(len: usize, style: &TextStyle, color: Hsla) -> TextRun {
-    TextRun {
-        len,
-        font: style.font.clone(),
-        color,
-        background_color: None,
-        underline: None,
-        strikethrough: None,
-    }
-}
-
-fn mask(bounds: Bounds<Pixels>) -> Option<ContentMask<Pixels>> {
-    Some(ContentMask { bounds })
 }
 
 impl SideEditor<'_> {
@@ -169,23 +98,16 @@ impl SideEditor<'_> {
                 for &line in &lines {
                     let y = screen_y(layout.line_top(line));
                     let entry = cache.get_or_insert_with(line, || self.shape(line, window));
-                    widest = widest.max(entry.width());
-                    for h in self.diff.line_highlight(side, line).inline {
-                        let color = self.theme.diff(h.diff_type).background;
-                        let x1 = text_x + entry.x_for_col(h.cols.start);
-                        if h.cols.is_empty() && !h.past_line_end {
-                            // `DiffEmptyHighlighterRenderer`
-                            window.paint_quad(fill(rect(x1 - 1.0..x1 + 1., y, y + lh), color));
-                            continue;
-                        }
-                        let x2 = if h.past_line_end {
-                            g.text.end
-                        } else {
-                            text_x + entry.x_for_col(h.cols.end)
-                        };
-                        window.paint_quad(fill(rect(x1..x2, y, y + lh), color));
-                    }
-                    if let Some(shaped) = &entry.shaped {
+                    widest = widest.max(entry.text.width());
+                    entry.text.paint_inline(
+                        self.diff.line_highlight(side, line).inline,
+                        text_x,
+                        g.text.end,
+                        y..y + lh,
+                        self.theme,
+                        window,
+                    );
+                    if let Some(shaped) = &entry.text.shaped {
                         let origin = point(px(text_x), px(y + self.style.text_dy));
                         let _ = shaped.paint(origin, px(lh), window, cx);
                     }
@@ -197,7 +119,12 @@ impl SideEditor<'_> {
                     let y = screen_y(layout.line_top(line)) + self.style.number_dy;
                     let caret;
                     let number = if line == self.caret.line {
-                        caret = self.shape_number(line, self.theme.line_number_caret_row, window);
+                        caret = shape_number(
+                            line,
+                            self.theme.line_number_caret_row,
+                            self.style,
+                            window,
+                        );
                         &caret
                     } else {
                         &cache
@@ -209,7 +136,14 @@ impl SideEditor<'_> {
                 }
             });
 
-            self.paint_stripe(layout.content_height(), window);
+            self.stripe.paint(
+                g,
+                self.top,
+                self.scroll_y,
+                layout.content_height(),
+                self.theme,
+                window,
+            );
         });
 
         cache.trim(first..last_line + 1);
@@ -282,93 +216,25 @@ impl SideEditor<'_> {
         }
     }
 
-    /// Scrollbaren ligger over teksten, så den males etter den.
-    fn paint_stripe(&self, content_height: f32, window: &mut Window) {
-        let g = self.geom;
-        let markers = g.marker_x();
-        if !markers.is_empty() {
-            for &(y1, y2, color) in &self.stripe.rects {
-                window.paint_quad(fill(
-                    rect(markers.clone(), self.top + y1, self.top + y2),
-                    color,
-                ));
-            }
-        }
-        let thumb = g.thumb_x();
-        if thumb.is_empty() {
-            return;
-        }
-        if let Some((y1, y2)) = thumb_range(self.scroll_y, self.height, content_height, self.height)
-        {
-            let radius = (thumb.end - thumb.start) / 2.;
-            window.paint_quad(quad(
-                rect(thumb, self.top + y1, self.top + y2),
-                px(radius),
-                self.theme.scrollbar_thumb,
-                px(0.),
-                gpui::transparent_black(),
-                Default::default(),
-            ));
-        }
-    }
-
     fn shape(&self, line: usize, window: &mut Window) -> CachedLine {
-        let expanded = ExpandedLine::new(self.diff.line(self.geom.side, line));
-        let shaped = (!expanded.text.is_empty()).then(|| {
-            let text = SharedString::from(expanded.text.clone());
-            let runs = self.syntax_runs(line, &expanded);
-            window
-                .text_system()
-                .shape_line(text, self.style.font_size, &runs, None)
-        });
+        let side = self.geom.side;
+        let text = ShapedText::new(
+            self.diff.line(side, line),
+            self.diff.line_syntax(side, line),
+            self.style,
+            self.theme,
+            window,
+        );
         // Standardfargen forsvinner mot diff-bakgrunnen, spesielt blå
-        let changed = self
-            .diff
-            .line_highlight(self.geom.side, line)
-            .block
-            .is_some();
+        let changed = self.diff.line_highlight(side, line).block.is_some();
         let color = if changed {
             self.theme.line_number_caret_row
         } else {
             self.theme.line_number
         };
         CachedLine {
-            expanded,
-            shaped,
-            number: self.shape_number(line, color, window),
+            text,
+            number: shape_number(line, color, self.style, window),
         }
-    }
-
-    /// Runs for teksten med tabs ekspandert. Hull mellom tokens får standardfargen.
-    fn syntax_runs(&self, line: usize, expanded: &ExpandedLine) -> Vec<TextRun> {
-        let plain = |len| run(len, self.style, self.theme.editor_fg);
-        let mut runs = Vec::new();
-        let mut at = 0;
-        for span in self.diff.line_syntax(self.geom.side, line) {
-            let start = expanded.display_index(span.cols.start);
-            let end = expanded.display_index(span.cols.end);
-            if start > at {
-                runs.push(plain(start - at));
-            }
-            let s = self.theme.syntax(span.token);
-            runs.push(TextRun {
-                font: s.font(&self.style.font),
-                color: s.color,
-                ..plain(end - start)
-            });
-            at = end;
-        }
-        if expanded.text.len() > at {
-            runs.push(plain(expanded.text.len() - at));
-        }
-        runs
-    }
-
-    fn shape_number(&self, line: usize, color: Hsla, window: &mut Window) -> ShapedLine {
-        let text = SharedString::from((line + 1).to_string());
-        let runs = [run(text.len(), self.style, color)];
-        window
-            .text_system()
-            .shape_line(text, self.style.number_font_size, &runs, None)
     }
 }

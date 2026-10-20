@@ -5,6 +5,7 @@ mod changes_tree;
 mod changes_view;
 mod commit_list;
 mod divider;
+mod editor_paint;
 mod file_diff;
 mod file_header;
 mod help;
