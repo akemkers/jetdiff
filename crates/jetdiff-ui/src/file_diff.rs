@@ -8,19 +8,20 @@ use std::time::Instant;
 
 use gpui::{
     App, Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    KeyDownEvent, Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render,
+    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render,
     ScrollWheelEvent, SharedString, Window, actions, canvas, div, prelude::*, px, relative,
 };
 use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
 use jetdiff_view::metrics::zoomed;
 use jetdiff_view::{
-    Command, DiffState, FileDiff, FoldId, Folding, Horizontal, Key, KeyCode, KeyParser, Parsed,
-    ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport, stripe_markers,
+    Command, DiffState, FileDiff, FoldId, Folding, Horizontal, KeyParser, Parsed, ScrollAnimation,
+    ScrollState, SideGeometry, StripeMarker, Viewport, stripe_markers,
 };
 
 use crate::editor_paint::StripeRects;
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
+use crate::keystroke::to_key;
 use crate::message::{Level, Message};
 use crate::settings::Settings;
 use crate::side_editor::{CaretRow, SideCache, SideEditor};
@@ -95,43 +96,6 @@ pub struct FileDiffView {
     message: Entity<Message>,
     shared: Rc<Shared>,
     focus: FocusHandle,
-}
-
-/// GPUI-tast til vår `Key`. `key_char` har shift og alt med, så `G`, `$` og `[` på norsk
-/// tastatur kommer riktig. Med ctrl er `key_char` tom, og `key` er grunntasten.
-fn to_key(k: &Keystroke) -> Key {
-    let m = k.modifiers;
-    let single = |s: &str| {
-        let mut chars = s.chars();
-        match (chars.next(), chars.next()) {
-            (Some(c), None) => Some(c),
-            _ => None,
-        }
-    };
-    let code = match k.key.as_str() {
-        "up" => KeyCode::Up,
-        "down" => KeyCode::Down,
-        "left" => KeyCode::Left,
-        "right" => KeyCode::Right,
-        f if let Some(n) = f.strip_prefix('f').and_then(|n| n.parse().ok()) => KeyCode::F(n),
-        key => {
-            let typed = if m.control {
-                None
-            } else {
-                k.key_char.as_deref().and_then(single)
-            };
-            match typed.or_else(|| single(key)) {
-                Some(c) => KeyCode::Char(c),
-                None => KeyCode::Other,
-            }
-        }
-    };
-    Key {
-        code,
-        ctrl: m.control,
-        shift: m.shift,
-        cmd: m.platform,
-    }
 }
 
 impl FileDiffView {
@@ -794,59 +758,5 @@ impl Render for FileDiffView {
             )
             .child(footer)
             .children(overlay)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::Modifiers;
-
-    fn stroke(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> Keystroke {
-        Keystroke {
-            modifiers,
-            key: key.into(),
-            key_char: key_char.map(Into::into),
-        }
-    }
-
-    #[test]
-    fn taster_fra_gpui() {
-        let none = Modifiers::default();
-        let shift = Modifiers {
-            shift: true,
-            ..none
-        };
-        let ctrl = Modifiers {
-            control: true,
-            ..none
-        };
-        let alt = Modifiers { alt: true, ..none };
-        assert_eq!(
-            to_key(&stroke("g", Some("G"), shift)).code,
-            KeyCode::Char('G')
-        );
-        assert_eq!(to_key(&stroke("d", None, ctrl)), Key::ctrl('d'));
-        // Norsk Alt+8 gir `[`
-        assert_eq!(
-            to_key(&stroke("8", Some("["), alt)).code,
-            KeyCode::Char('[')
-        );
-        assert_eq!(to_key(&stroke("f7", None, shift)).code, KeyCode::F(7));
-        assert_eq!(
-            to_key(&stroke("f", Some("f"), none)).code,
-            KeyCode::Char('f')
-        );
-        assert_eq!(to_key(&stroke("tab", None, none)).code, KeyCode::Other);
-        assert_eq!(to_key(&stroke("home", None, none)).code, KeyCode::Other);
-        let cmd = to_key(&stroke(
-            "=",
-            None,
-            Modifiers {
-                platform: true,
-                ..none
-            },
-        ));
-        assert!(cmd.cmd);
     }
 }

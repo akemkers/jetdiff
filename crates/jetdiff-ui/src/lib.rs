@@ -10,6 +10,7 @@ mod file_diff;
 mod file_header;
 mod help;
 mod icons;
+mod keystroke;
 mod list;
 mod message;
 mod panel_size;
