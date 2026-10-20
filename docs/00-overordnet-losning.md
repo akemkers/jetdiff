@@ -48,6 +48,7 @@ jetdiff-app      tilstanden rundt diffen, fortsatt uten GUI. Delt av alle UI-er
   commits        commit-listas rader, markør og valg
   actions        rollback og fil:linje for markert linje
   help           tastene i tastelinja og hjelpen
+  keys           tastene utenfor diffen
   watcher        endrede stier, samlet til det er stille
 
 jetdiff-ui       GPUI

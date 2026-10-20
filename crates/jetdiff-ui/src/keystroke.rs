@@ -19,6 +19,9 @@ pub fn to_key(keystroke: &Keystroke) -> Key {
         "down" => KeyCode::Down,
         "left" => KeyCode::Left,
         "right" => KeyCode::Right,
+        "tab" => KeyCode::Tab,
+        "enter" => KeyCode::Enter,
+        "escape" => KeyCode::Escape,
         name if let Some(number) = name
             .strip_prefix('f')
             .and_then(|digits| digits.parse().ok()) =>
@@ -85,7 +88,7 @@ mod tests {
             to_key(&stroke("f", Some("f"), none)).code,
             KeyCode::Char('f')
         );
-        assert_eq!(to_key(&stroke("tab", None, none)).code, KeyCode::Other);
+        assert_eq!(to_key(&stroke("tab", None, none)).code, KeyCode::Tab);
         assert_eq!(to_key(&stroke("home", None, none)).code, KeyCode::Other);
         let cmd = to_key(&stroke(
             "=",

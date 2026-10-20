@@ -1,0 +1,135 @@
+//! Tastene utenfor diffen. Diffens egne taster er `KeyParser` i `jetdiff-viewmodel`.
+
+use jetdiff_viewmodel::{Key, KeyCode};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppCommand {
+    ZoomIn,
+    ZoomOut,
+    ResetZoom,
+    FocusLeft,
+    FocusDown,
+    FocusUp,
+    FocusRight,
+    ToggleSidePanel,
+    ToggleView,
+    NextFile,
+    PrevFile,
+    ToggleHelp,
+    HideHelp,
+    Quit,
+}
+
+/// I GPUI sin syntaks. `secondary` er Cmd på macOS og Ctrl ellers. GPUI matcher på tegnet som
+/// skrives, så Pluss er `+` på norsk og `=` på US.
+pub const BINDINGS: &[(&str, AppCommand)] = &[
+    ("secondary-+", AppCommand::ZoomIn),
+    ("secondary-=", AppCommand::ZoomIn),
+    ("secondary--", AppCommand::ZoomOut),
+    ("secondary-0", AppCommand::ResetZoom),
+    ("ctrl-h", AppCommand::FocusLeft),
+    ("ctrl-j", AppCommand::FocusDown),
+    ("ctrl-k", AppCommand::FocusUp),
+    ("ctrl-l", AppCommand::FocusRight),
+    ("b", AppCommand::ToggleSidePanel),
+    ("v", AppCommand::ToggleView),
+    ("tab", AppCommand::NextFile),
+    ("J", AppCommand::NextFile),
+    ("shift-tab", AppCommand::PrevFile),
+    ("K", AppCommand::PrevFile),
+    ("?", AppCommand::ToggleHelp),
+    ("escape", AppCommand::HideHelp),
+    ("q", AppCommand::Quit),
+    ("secondary-q", AppCommand::Quit),
+    ("secondary-w", AppCommand::Quit),
+];
+
+pub fn app_command(key: Key) -> Option<AppCommand> {
+    BINDINGS
+        .iter()
+        .find(|(binding, _)| parse(binding).is_some_and(|b| matches(b, key)))
+        .map(|&(_, cmd)| cmd)
+}
+
+fn parse(binding: &str) -> Option<Key> {
+    let (modifiers, name) = match binding.strip_suffix("--") {
+        Some(modifiers) => (modifiers, "-"),
+        None => binding.rsplit_once('-').unwrap_or(("", binding)),
+    };
+    let code = match name {
+        "tab" => KeyCode::Tab,
+        "enter" => KeyCode::Enter,
+        "escape" => KeyCode::Escape,
+        _ => {
+            let mut chars = name.chars();
+            match (chars.next(), chars.next()) {
+                (Some(c), None) => KeyCode::Char(c),
+                _ => return None,
+            }
+        }
+    };
+    let mut key = Key::new(code);
+    for modifier in modifiers.split('-').filter(|m| !m.is_empty()) {
+        match modifier {
+            "ctrl" => key.ctrl = true,
+            "shift" => key.shift = true,
+            "cmd" => key.cmd = true,
+            "secondary" if cfg!(target_os = "macos") => key.cmd = true,
+            "secondary" => key.ctrl = true,
+            _ => return None,
+        }
+    }
+    Some(key)
+}
+
+/// Shift er alt med i tegnet, som `J`.
+fn matches(binding: Key, key: Key) -> bool {
+    let shift = matches!(key.code, KeyCode::Char(_)) || binding.shift == key.shift;
+    binding.code == key.code && binding.ctrl == key.ctrl && binding.cmd == key.cmd && shift
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alle_bindinger_kan_leses() {
+        for (binding, _) in BINDINGS {
+            assert!(parse(binding).is_some(), "{binding}");
+        }
+    }
+
+    #[test]
+    fn taster_til_kommandoer() {
+        let secondary = |c| {
+            let mut k = Key::char(c);
+            if cfg!(target_os = "macos") {
+                k.cmd = true;
+            } else {
+                k.ctrl = true;
+            }
+            k
+        };
+        assert_eq!(
+            app_command(Key::char('J').shift()),
+            Some(AppCommand::NextFile)
+        );
+        assert_eq!(
+            app_command(Key::new(KeyCode::Tab)),
+            Some(AppCommand::NextFile)
+        );
+        assert_eq!(
+            app_command(Key::new(KeyCode::Tab).shift()),
+            Some(AppCommand::PrevFile)
+        );
+        assert_eq!(app_command(Key::ctrl('h')), Some(AppCommand::FocusLeft));
+        assert_eq!(app_command(secondary('-')), Some(AppCommand::ZoomOut));
+        assert_eq!(app_command(secondary('+')), Some(AppCommand::ZoomIn));
+        assert_eq!(
+            app_command(Key::char('?').shift()),
+            Some(AppCommand::ToggleHelp)
+        );
+        assert_eq!(app_command(Key::char('j')), None);
+        assert_eq!(app_command(Key::ctrl('d')), None);
+    }
+}
