@@ -7,9 +7,9 @@ use gpui::{
     Bounds, ContentMask, Hsla, Pixels, ShapedLine, SharedString, TextRun, Window, fill, point, px,
     quad, size,
 };
-use jetdiff_view::columns::ExpandedLine;
-use jetdiff_view::model::SyntaxSpan;
-use jetdiff_view::{InlineHighlight, SideGeometry, StripeMarker, thumb_range};
+use jetdiff_viewmodel::columns::ExpandedLine;
+use jetdiff_viewmodel::model::SyntaxSpan;
+use jetdiff_viewmodel::{InlineHighlight, SideGeometry, StripeMarker, thumb_range};
 
 use crate::text::TextStyle;
 use crate::theme::{UiDiffColors, UiTheme};

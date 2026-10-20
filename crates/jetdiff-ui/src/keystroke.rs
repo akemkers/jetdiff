@@ -1,7 +1,7 @@
-//! GPUI-tast til `Key` fra `jetdiff-view`, som oversetter videre til `Command`.
+//! GPUI-tast til `Key` fra `jetdiff-viewmodel`, som oversetter videre til `Command`.
 
 use gpui::Keystroke;
-use jetdiff_view::{Key, KeyCode};
+use jetdiff_viewmodel::{Key, KeyCode};
 
 /// `key_char` har shift og alt med, så `G`, `$` og `[` på norsk tastatur kommer riktig. Med
 /// ctrl er `key_char` tom, og `key` er grunntasten.

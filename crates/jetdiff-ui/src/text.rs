@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use gpui::{App, Font, FontFeatures, Pixels, SharedString, Window, font, px};
 
-use jetdiff_view::metrics::{LINE_NUMBER_FONT_DELTA, LineMetrics, line_metrics};
+use jetdiff_viewmodel::metrics::{LINE_NUMBER_FONT_DELTA, LineMetrics, line_metrics};
 
 pub(crate) const FAMILY: &str = "JetBrains Mono";
 

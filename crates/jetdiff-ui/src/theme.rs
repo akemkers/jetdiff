@@ -1,8 +1,8 @@
-//! `jetdiff_view::Theme` oversatt til GPUI-farger én gang, så paint slipper konvertering.
+//! `jetdiff_viewmodel::Theme` oversatt til GPUI-farger én gang, så paint slipper konvertering.
 
 use gpui::{Font, FontStyle, FontWeight, Hsla};
-use jetdiff_view::theme::DiffColors;
-use jetdiff_view::{DiffType, Rgba, SyntaxStyle, Theme, Token};
+use jetdiff_viewmodel::theme::DiffColors;
+use jetdiff_viewmodel::{DiffType, Rgba, SyntaxStyle, Theme, Token};
 
 pub fn hsla(c: Rgba) -> Hsla {
     gpui::Rgba {

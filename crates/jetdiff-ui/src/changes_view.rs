@@ -8,7 +8,7 @@ use gpui::{
 use jetdiff_app::{Changes, Reloaded, Show, Shown, empty_diff};
 use jetdiff_changes::FileChange;
 use jetdiff_git::Repo;
-use jetdiff_view::metrics::FONT_SIZE;
+use jetdiff_viewmodel::metrics::FONT_SIZE;
 
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};

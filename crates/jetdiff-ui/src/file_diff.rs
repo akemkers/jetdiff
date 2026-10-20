@@ -10,9 +10,9 @@ use gpui::{
 };
 use jetdiff_app::{RollbackRequest, location, rollback_request};
 use jetdiff_core::side::Side;
-use jetdiff_view::columns::display_width;
-use jetdiff_view::metrics::zoomed;
-use jetdiff_view::{
+use jetdiff_viewmodel::columns::display_width;
+use jetdiff_viewmodel::metrics::zoomed;
+use jetdiff_viewmodel::{
     Command, DiffMode, FileDiff, FoldId, Folding, Horizontal, KeyParser, Parsed, StripeMarker,
     Viewport, stripe_markers,
 };

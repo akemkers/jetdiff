@@ -4,7 +4,7 @@ Syntaksfarger med tree-sitter.
 
 ## Hvorfor
 
-Fargene skal ligne IntelliJ. Tokenene tilsvarer derfor IntelliJ sine `DEFAULT_*`-nøkler (`Keyword`, `String`, `Function` osv.), og temaet i `jetdiff-view` gir dem farge.
+Fargene skal ligne IntelliJ. Tokenene tilsvarer derfor IntelliJ sine `DEFAULT_*`-nøkler (`Keyword`, `String`, `Function` osv.), og temaet i `jetdiff-viewmodel` gir dem farge.
 
 Rust har egne nøkler i Rust-pluginen (`org.rust.STRUCT`, `ENUM_VARIANT` osv.), og mange av dem har farge der `DEFAULT_*` er vanlig tekst. De har egne tokens. Uten typeinfo gjettes de fra navnet: stor forbokstav er en struct, og bare enumene fra prelude blir enum.
 

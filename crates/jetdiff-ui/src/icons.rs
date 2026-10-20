@@ -4,7 +4,7 @@
 use std::borrow::Cow;
 
 use gpui::{AssetSource, SharedString};
-use jetdiff_view::Language;
+use jetdiff_viewmodel::Language;
 
 macro_rules! icons {
     ($($name:literal),*) => {

@@ -8,4 +8,4 @@ license.workspace = true
 notify = "8"
 jetdiff-changes = { path = "../jetdiff-changes" }
 jetdiff-git = { path = "../jetdiff-git" }
-jetdiff-view = { path = "../jetdiff-view" }
+jetdiff-viewmodel = { path = "../jetdiff-viewmodel" }

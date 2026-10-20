@@ -2,15 +2,15 @@
 //! `divider_separators`, lokal for divideren med samme y-akse som editorene.
 
 use gpui::{Bounds, ContentMask, Hsla, PathBuilder, Pixels, Window, fill, point, px, size};
-use jetdiff_view::divider::DIVIDER_WIDTH;
-use jetdiff_view::separator::stroke_width;
-use jetdiff_view::{
+use jetdiff_viewmodel::divider::DIVIDER_WIDTH;
+use jetdiff_viewmodel::separator::stroke_width;
+use jetdiff_viewmodel::{
     Cubic, FileDiff, Folding, PathSeg, Point, Viewport, divider_bands, divider_separators,
 };
 
 use crate::theme::UiTheme;
 
-/// Streker en sti fra `jetdiff-view`. `map` gir vindus-koordinater.
+/// Streker en sti fra `jetdiff-viewmodel`. `map` gir vindus-koordinater.
 pub fn stroke_path(
     window: &mut Window,
     segs: &[PathSeg],

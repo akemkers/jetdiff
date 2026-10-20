@@ -4,7 +4,7 @@ GPUI-visningen: diffen, filtreet og commit-lista.
 
 ## Hvorfor
 
-Dette er laget som tegner. Logikken for diffen ligger i `jetdiff-view`, og tilstanden rundt den (endringer, reload, tre, commits, watcher) i `jetdiff-app`. Her er bare det som trenger GPUI: tekst og former, mus og taster, animasjon, zoom, fokus, og å kjøre jobbene fra `jetdiff-app` i bakgrunnen.
+Dette er laget som tegner. Logikken for diffen ligger i `jetdiff-viewmodel`, og tilstanden rundt den (endringer, reload, tre, commits, watcher) i `jetdiff-app`. Her er bare det som trenger GPUI: tekst og former, mus og taster, animasjon, zoom, fokus, og å kjøre jobbene fra `jetdiff-app` i bakgrunnen.
 
 Modulene kjenner ikke hverandre. Delt tilstand, som valgt fil, ligger i små GPUI-entiteter som alle observerer. Treet skriver til `Selection` ved klikk, og diffen følger den. `J` og `K` i diffen sender et event som treet flytter valget for.
 
@@ -33,7 +33,7 @@ Application::new().with_assets(Assets).run(|cx| {
 
 `Settings` er en GPUI-global som alle visningene leser. `font_size` er der zoom starter, `collapse_unchanged` klapper sammen uendrede deler i nye filer, og `unified` er visningen ved oppstart.
 
-Tastene går gjennom `KeyParser` i `jetdiff-view`. Actions som zoom og panelbytte (`ZoomIn`, `ToggleView`, `FocusLeft`, `ToggleSidePanel` osv.) eksporteres, og den som lager vinduet binder dem til taster.
+Tastene går gjennom `KeyParser` i `jetdiff-viewmodel`. Actions som zoom og panelbytte (`ZoomIn`, `ToggleView`, `FocusLeft`, `ToggleSidePanel` osv.) eksporteres, og den som lager vinduet binder dem til taster.
 
 ```mermaid
 graph TD

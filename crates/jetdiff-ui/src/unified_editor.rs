@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use gpui::{App, Bounds, Hsla, Pixels, Point, ShapedLine, SharedString, Window, point, px};
 use jetdiff_core::side::Side;
-use jetdiff_view::{InlineHighlight, UnifiedDiff, UnifiedGeometry};
+use jetdiff_viewmodel::{InlineHighlight, UnifiedDiff, UnifiedGeometry};
 
 use crate::cache::LineCache;
 use crate::editor_paint::{

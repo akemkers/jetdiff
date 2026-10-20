@@ -24,4 +24,4 @@ graph LR
 
 Innholdet lastes før vinduet åpnes, så feil som ukjent commit skrives til terminalen med exit-kode 1. Feil i argumentene eller config-fila gir exit-kode 2.
 
-Tastebindinger som ikke går gjennom vim-parseren i `jetdiff-view` ligger i `bind_keys` i `main.rs`: zoom, panelbytte, filbytte, `b`, `?` og avslutt.
+Tastebindinger som ikke går gjennom vim-parseren i `jetdiff-viewmodel` ligger i `bind_keys` i `main.rs`: zoom, panelbytte, filbytte, `b`, `?` og avslutt.
