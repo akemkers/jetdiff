@@ -4,16 +4,14 @@ use std::time::Duration;
 
 use gpui::{Context, Render, SharedString, Task, Window, div, prelude::*, px};
 
+use jetdiff_app::Notice;
+
 use crate::settings::Settings;
 use crate::text::FAMILY;
 
 const DURATION: Duration = Duration::from_secs(3);
 
-#[derive(Clone, Copy)]
-pub enum Level {
-    Info,
-    Warning,
-}
+pub use jetdiff_app::Level;
 
 type Text = (SharedString, Level);
 
@@ -44,6 +42,14 @@ impl Message {
     pub fn pin(&mut self, text: impl Into<SharedString>, level: Level, cx: &mut Context<Self>) {
         self.pinned = Some((text.into(), level));
         cx.notify();
+    }
+
+    /// Fast beskjed fra `jetdiff-app`, eller ingen.
+    pub fn pin_notice(&mut self, notice: Option<Notice>, cx: &mut Context<Self>) {
+        match notice {
+            Some(n) => self.pin(n.text, n.level, cx),
+            None => self.unpin(cx),
+        }
     }
 
     pub fn unpin(&mut self, cx: &mut Context<Self>) {

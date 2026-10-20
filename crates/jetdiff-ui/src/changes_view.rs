@@ -1,16 +1,14 @@
 //! Filtre og diff side om side, med commitene under treet. Henter innholdet fra git når en
 //! fil eller commit velges, og på nytt når working tree endrer seg.
 
-use std::rc::Rc;
-
 use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
     Window, actions, div, prelude::*, px,
 };
-use jetdiff_changes::{FileChange, Status};
-use jetdiff_git::{Commit, Repo};
+use jetdiff_app::{Changes, Reloaded, Show, Shown, empty_diff};
+use jetdiff_changes::FileChange;
+use jetdiff_git::Repo;
 use jetdiff_view::metrics::FONT_SIZE;
-use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 
 use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
@@ -38,21 +36,8 @@ actions!(
     ]
 );
 
-/// Det som hentes fra git i bakgrunnen.
-struct Loaded {
-    commit: Option<String>,
-    repo: Repo,
-    changes: Vec<FileChange>,
-    commits: Vec<Commit>,
-}
-
 pub struct ChangesView {
-    repo: Repo,
-    /// Commiten som skal vises. `None` er working tree.
-    commit: Option<String>,
-    /// Commiten `changes` er fra. Blir lik `commit` når lastingen er ferdig.
-    loaded_commit: Option<String>,
-    changes: Rc<[FileChange]>,
+    changes: Changes,
     selection: Entity<Selection>,
     tree: Entity<ChangesTree>,
     diff: Entity<FileDiffView>,
@@ -66,8 +51,6 @@ pub struct ChangesView {
     commits_open: bool,
     width: PanelWidth,
     commits_height: PanelHeight,
-    /// Det diffen viser nå. Samme innhold etter en reload lar posisjonen stå.
-    shown: Option<(FileChange, Result<[String; 2], String>)>,
     _watcher: Option<Watcher>,
     _reload: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
@@ -75,10 +58,10 @@ pub struct ChangesView {
 
 impl ChangesView {
     pub fn new(repo: Repo, changes: Vec<FileChange>, cx: &mut Context<Self>) -> Self {
-        let changes: Rc<[FileChange]> = changes.into();
-        let first = jetdiff_changes::ChangeTree::new(&changes).first();
+        let changes = Changes::new(repo, changes);
+        let first = changes.first();
         let selection = cx.new(|_| Selection(first));
-        let tree = cx.new(|cx| ChangesTree::new(changes.clone(), selection.clone(), cx));
+        let tree = cx.new(|cx| ChangesTree::new(changes.changes().clone(), selection.clone(), cx));
         let message = cx.new(|_| Message::default());
         let diff =
             cx.new(|cx| FileDiffView::new(empty_diff(), Default::default(), message.clone(), cx));
@@ -91,6 +74,7 @@ impl ChangesView {
         ];
 
         let (mut commits, mut watcher) = (None, None);
+        let repo = changes.repo();
         if repo.is_work_tree() {
             let list = repo.commits().unwrap_or_else(|e| {
                 message.update(cx, |m, cx| m.show(e, Level::Warning, cx));
@@ -98,7 +82,7 @@ impl ChangesView {
             });
             let list = cx.new(|cx| CommitList::new(list, cx));
             subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectCommit, cx| {
-                this.commit = e.0.clone();
+                this.changes.select_commit(e.0.clone());
                 this.changed(Vec::new(), cx);
             }));
             commits = Some(list);
@@ -112,9 +96,6 @@ impl ChangesView {
         }
 
         let mut view = Self {
-            repo,
-            commit: None,
-            loaded_commit: None,
             changes,
             selection,
             tree,
@@ -127,7 +108,6 @@ impl ChangesView {
             commits_open: true,
             width: PanelWidth::default(),
             commits_height: PanelHeight::default(),
-            shown: None,
             _watcher: watcher,
             _reload: None,
             _subscriptions: subscriptions,
@@ -148,152 +128,98 @@ impl ChangesView {
 
     /// Oppdaterer diffen og lista med en gang, uten å vente på watcheren.
     fn rollback(&mut self, e: &Rollback, cx: &mut Context<Self>) {
-        let Some((change, Ok([left, _]))) = self.shown.clone() else {
-            return;
-        };
-        match self.repo.rollback(&change, e.lines.clone(), &e.before) {
-            Ok(after) => {
-                self.show(change, Ok([left, after]), cx);
+        match self.changes.rollback(&e.0) {
+            None => {}
+            Some(Ok(show)) => {
+                self.show(show, cx);
                 self.changed(Vec::new(), cx);
             }
-            Err(text) => self
+            Some(Err(text)) => self
                 .message
                 .update(cx, |m, cx| m.show(text, Level::Warning, cx)),
         }
     }
 
-    /// Git leses i bakgrunnen. En ny endring underveis avbryter den forrige. Commit-lista
-    /// hentes på nytt hver gang, siden working tree bestemmer hvilke commits den har.
+    /// Git leses i bakgrunnen. En ny endring underveis avbryter den forrige.
     fn changed(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
-        let root = self.repo.root().to_owned();
-        let commit = self.commit.clone();
+        let job = self.changes.reload();
         self._reload = Some(cx.spawn(async move |this, cx| {
             let loaded = cx
                 .background_executor()
-                .spawn(async move {
-                    let home = Repo::work_tree(&root)?;
-                    let commits = home.commits()?;
-                    let repo = match &commit {
-                        Some(hash) => Repo::commit(&root, hash)?,
-                        None => home,
-                    };
-                    let changes = repo.changes()?;
-                    Ok(Loaded {
-                        commit,
-                        repo,
-                        changes,
-                        commits,
-                    })
-                })
+                .spawn(async move { job.run() })
                 .await;
-            this.update(cx, |v, cx| v.reloaded(loaded, &paths, cx)).ok();
+            this.update(cx, |v, cx| {
+                let reloaded = v.changes.reloaded(loaded, &paths);
+                v.reloaded(reloaded, cx)
+            })
+            .ok();
         }));
     }
 
-    fn reloaded(
-        &mut self,
-        loaded: Result<Loaded, String>,
-        paths: &[String],
-        cx: &mut Context<Self>,
-    ) {
-        let Loaded {
-            commit,
-            repo,
-            changes,
-            commits,
-        } = match loaded {
-            Ok(l) => l,
-            Err(e) => {
+    fn reloaded(&mut self, reloaded: Reloaded, cx: &mut Context<Self>) {
+        match reloaded {
+            Reloaded::Failed { shown, error } => {
                 // Lista skal vise det som faktisk vises
-                self.commit = self.loaded_commit.clone();
                 if let Some(list) = &self.commits {
-                    let shown = self.commit.clone();
                     list.update(cx, |l, cx| l.set_selected(shown, cx));
                 }
                 self.message
-                    .update(cx, |m, cx| m.show(e, Level::Warning, cx));
-                return;
+                    .update(cx, |m, cx| m.show(error, Level::Warning, cx));
             }
-        };
-        if let Some(list) = &self.commits {
-            list.update(cx, |l, cx| l.set_commits(commits, cx));
-        }
-        // Bare working tree mot working tree er en oppdatering. En commit endrer seg ikke.
-        let same_work_tree = commit.is_none() && self.loaded_commit.is_none();
-        let touched = if same_work_tree && !paths.is_empty() {
-            jetdiff_changes::touched(&self.changes, &changes, paths)
-        } else {
-            0
-        };
-        let selected = self.shown.as_ref().map(|(c, _)| c.path.clone());
-        self.repo = repo;
-        self.loaded_commit = commit;
-        if *changes != *self.changes {
-            let changes: Rc<[FileChange]> = changes.into();
-            self.changes = changes.clone();
-            self.tree.update(cx, |t, cx| t.set_changes(changes, cx));
-        }
-        // Valgt fil beholdes så lenge den er med
-        let file = selected
-            .and_then(|p| self.changes.iter().position(|c| c.path == p))
-            .or_else(|| self.tree.read(cx).first());
-        self.selection.update(cx, |s, cx| s.set(file, cx));
-        if touched > 0 {
-            let text = match touched {
-                1 => "Oppdatert: 1 fil endret".to_owned(),
-                n => format!("Oppdatert: {n} filer endret"),
-            };
-            self.message
-                .update(cx, |m, cx| m.show(text, Level::Info, cx));
+            Reloaded::Done {
+                commits,
+                changes,
+                file,
+                notice,
+            } => {
+                if let Some(list) = &self.commits {
+                    list.update(cx, |l, cx| l.set_commits(commits, cx));
+                }
+                if let Some(changes) = changes {
+                    self.tree.update(cx, |t, cx| t.set_changes(changes, cx));
+                }
+                self.selection.update(cx, |s, cx| s.set(file, cx));
+                if let Some(n) = notice {
+                    self.message.update(cx, |m, cx| m.show(n.text, n.level, cx));
+                }
+            }
         }
     }
 
     fn load(&mut self, cx: &mut Context<Self>) {
-        let Some(change) = self.selection.read(cx).0.map(|i| self.changes[i].clone()) else {
-            self.shown = None;
-            self.message
-                .update(cx, |m, cx| m.pin("Ingen endringer", Level::Info, cx));
-            self.diff
-                .update(cx, |v, cx| v.set_diff(empty_diff(), Default::default(), cx));
-            cx.notify();
-            return;
-        };
-        let content = self.repo.read(&change);
-        self.show(change, content, cx);
+        let show = self.changes.load(self.selection.read(cx).0);
+        self.show(show, cx);
     }
 
     /// Er det samme fil som før, med nytt innhold, beholdes cursor og scroll.
-    fn show(
-        &mut self,
-        change: FileChange,
-        content: Result<[String; 2], String>,
-        cx: &mut Context<Self>,
-    ) {
-        let shown = Some((change.clone(), content.clone()));
-        if shown == self.shown {
-            return;
-        }
-        let same_file = self
-            .shown
-            .as_ref()
-            .is_some_and(|(c, _)| c.path == change.path);
-        self.shown = shown;
-        let (diff, notice) = build_diff(&change, content);
-        self.message.update(cx, |m, cx| match notice {
-            Some((text, level)) => m.pin(text, level, cx),
-            None => m.unpin(cx),
-        });
-        let paths = [change.left_path().to_owned(), change.path.clone()];
-        // Bare working tree kan skrives til, ikke en commit
-        let can_rollback = self.repo.is_work_tree();
-        self.diff.update(cx, |v, cx| {
-            v.set_can_rollback(can_rollback);
-            if same_file {
-                v.update_diff(diff, paths, cx)
-            } else {
-                v.set_diff(diff, paths, cx)
+    fn show(&mut self, show: Show, cx: &mut Context<Self>) {
+        match show {
+            Show::Unchanged => return,
+            Show::Empty(notice) => {
+                self.message
+                    .update(cx, |m, cx| m.pin(notice.text, notice.level, cx));
+                self.diff
+                    .update(cx, |v, cx| v.set_diff(empty_diff(), Default::default(), cx));
             }
-        });
+            Show::Diff(shown) => {
+                let Shown {
+                    diff,
+                    notice,
+                    paths,
+                    can_rollback,
+                    same_file,
+                } = *shown;
+                self.message.update(cx, |m, cx| m.pin_notice(notice, cx));
+                self.diff.update(cx, |v, cx| {
+                    v.set_can_rollback(can_rollback);
+                    if same_file {
+                        v.update_diff(diff, paths, cx)
+                    } else {
+                        v.set_diff(diff, paths, cx)
+                    }
+                });
+            }
+        }
         cx.notify();
     }
 
@@ -485,45 +411,10 @@ impl Render for ChangesView {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .children(self.shown.as_ref().map(|(change, _)| {
+                    .children(self.changes.shown().map(|change| {
                         file_header(&change.path, self.scale, &cx.global::<Settings>().theme)
                     }))
                     .child(div().flex_1().min_h_0().child(self.diff.clone())),
             )
     }
-}
-
-/// Diffen for en fil, eller en tom diff og hvorfor den ikke kan vises.
-fn build_diff(
-    change: &FileChange,
-    content: Result<[String; 2], String>,
-) -> (FileDiff, Option<(String, Level)>) {
-    let warning = |text: String| Some((text, Level::Warning));
-    match content {
-        Err(e) => (empty_diff(), warning(e)),
-        Ok([l, r]) if l.contains('\0') || r.contains('\0') => {
-            (empty_diff(), warning("Binærfil kan ikke vises".to_owned()))
-        }
-        Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
-            Ok(mut diff) => {
-                let lang = Language::from_path(&change.path)
-                    .or_else(|| Language::from_path(change.left_path()));
-                if let Some(lang) = lang {
-                    diff.highlight_syntax(lang);
-                }
-                // Ved flytting eller bare endret filmodus er diffen ellers tom uten forklaring
-                let identical = l == r && !matches!(change.status, Status::Added | Status::Deleted);
-                let notice = identical.then(|| ("Innholdet er likt".to_owned(), Level::Info));
-                (diff, notice)
-            }
-            Err(_) => (
-                empty_diff(),
-                warning("Filen er for stor til å vises".to_owned()),
-            ),
-        },
-    }
-}
-
-fn empty_diff() -> FileDiff {
-    FileDiff::new("", "", ComparisonPolicy::Default).expect("tom diff er aldri for stor")
 }

@@ -1,7 +1,6 @@
 //! Diffen av én fil, split eller unified. `DiffMode` eier cursor, folding og scroll-målet.
 //! Her ligger det som trenger GPUI: taster, mus, animasjon mot målet og zoom.
 
-use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
@@ -9,6 +8,7 @@ use gpui::{
     MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent,
     SharedString, Window, actions, canvas, div, prelude::*, px,
 };
+use jetdiff_app::{RollbackRequest, location, rollback_request};
 use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
 use jetdiff_view::metrics::zoomed;
@@ -30,17 +30,8 @@ actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom, ToggleView]);
 
 const SIDES: [Side; 2] = [Side::Left, Side::Right];
 
-fn idx(side: Side) -> usize {
-    side.select(0, 1)
-}
-
 /// Brukeren vil rulle tilbake en endring. Sendes til den som kan skrive fila.
-pub struct Rollback {
-    /// Høyre side slik den vises, for å oppdage om fila er endret siden.
-    pub before: String,
-    /// Linjene i endringen, per side.
-    pub lines: [Range<usize>; 2],
-}
+pub struct Rollback(pub RollbackRequest);
 
 /// Ligger over diffen. Bare én om gangen.
 enum Overlay {
@@ -244,10 +235,7 @@ impl FileDiffView {
                 return;
             }
             Command::CopyLocation => {
-                let c = self.mode.location();
-                let path = &self.paths[idx(c.side)];
-                if !path.is_empty() {
-                    let location = format!("{path}:{}", c.line + 1);
+                if let Some(location) = location(&self.mode, &self.paths) {
                     cx.write_to_clipboard(ClipboardItem::new_string(location.clone()));
                     self.show_message(format!("Kopierte {location}"), cx);
                 }
@@ -296,24 +284,13 @@ impl FileDiffView {
     /// Sjekker at endringen kan rulles tilbake og åpner dialogen. `on_key_down` sender
     /// `Rollback` på Enter.
     fn rollback(&mut self, cx: &mut Context<Self>) {
-        let diff = self.mode.diff().clone();
-        if !self.can_rollback {
-            self.show_message("Bare lokale endringer kan rulles tilbake", cx);
-            return;
+        match rollback_request(&self.mode, self.can_rollback) {
+            Ok(request) => {
+                self.overlay = Some(Overlay::Confirm(Rollback(request)));
+                cx.notify();
+            }
+            Err(text) => self.show_message(text, cx),
         }
-        if diff.single_side().is_some() {
-            self.show_message("Hele fila er ny eller slettet", cx);
-            return;
-        }
-        let Some(block) = self.mode.cursor_block() else {
-            self.show_message("Ingen endring på linja", cx);
-            return;
-        };
-        self.overlay = Some(Overlay::Confirm(Rollback {
-            before: diff.text(Side::Right).to_owned(),
-            lines: diff.blocks()[block].lines.clone(),
-        }));
-        cx.notify();
     }
 
     /// Kommer som action, så `?` virker også når treet har fokus. Avbryter rollback, som

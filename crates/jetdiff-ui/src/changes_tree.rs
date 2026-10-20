@@ -8,13 +8,12 @@ use gpui::{
     Resource, ScrollStrategy, Subscription, UniformListScrollHandle, Window, div, img, prelude::*,
     px, uniform_list,
 };
-use jetdiff_changes::{ChangeTree, FileChange, Row, RowKind, Status};
+use jetdiff_app::{FileTree, count_label, file_name};
+use jetdiff_changes::{ChangeTree, FileChange, RowKind, Status};
 use jetdiff_view::columns::display_width;
 
 use crate::icons::{chevron_icon, file_icon, folder_icon};
-use crate::list::{
-    GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key, row_bg, step,
-};
+use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key, row_bg};
 use crate::settings::Settings;
 use crate::text::FAMILY;
 use crate::text::TextStyle;
@@ -35,17 +34,13 @@ impl Selection {
 }
 
 pub struct ChangesTree {
-    changes: Rc<[FileChange]>,
-    tree: ChangeTree,
-    rows: Rc<[Row]>,
+    tree: FileTree,
     selection: Entity<Selection>,
     scroll: UniformListScrollHandle,
     /// Følger zoomen i diffen, som hele UI-et i IntelliJ.
     scale: f32,
     /// Bredden innholdet trenger, uskalert. Regnes ut på nytt når endringene byttes.
     content_width: Option<f32>,
-    /// Raden j og k flytter. Enter åpner den.
-    cursor: usize,
     focus: FocusHandle,
     _selection: Subscription,
 }
@@ -56,17 +51,13 @@ impl ChangesTree {
         selection: Entity<Selection>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let tree = ChangeTree::new(&changes);
         let observe = cx.observe(&selection, |this, _, cx| this.reveal(cx));
         Self {
-            rows: tree.rows().into(),
-            changes,
-            tree,
+            tree: FileTree::new(changes),
             selection,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
             content_width: None,
-            cursor: 0,
             focus: cx.focus_handle(),
             _selection: observe,
         }
@@ -78,24 +69,16 @@ impl ChangesTree {
     }
 
     pub fn set_changes(&mut self, changes: Rc<[FileChange]>, cx: &mut Context<Self>) {
-        self.tree.rebuild(&changes);
-        self.rows = self.tree.rows().into();
-        self.changes = changes;
+        self.tree.set_changes(changes);
         self.content_width = None;
-        self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
         cx.notify();
-    }
-
-    pub fn first(&self) -> Option<usize> {
-        self.tree.first()
     }
 
     pub fn step(&mut self, forward: bool, cx: &mut Context<Self>) {
         let Some(file) = self.selection.read(cx).0 else {
             return;
         };
-        let next = self.tree.step(file, forward);
-        if next != file {
+        if let Some(next) = self.tree.next_file(file, forward) {
             self.selection.update(cx, |s, cx| s.set(Some(next), cx));
         }
     }
@@ -105,25 +88,17 @@ impl ChangesTree {
         let Some(file) = self.selection.read(cx).0 else {
             return;
         };
-        self.tree.reveal(file, &self.changes);
-        self.rows = self.tree.rows().into();
-        if let Some(i) = self.rows.iter().position(|r| r.kind == RowKind::File(file)) {
-            self.cursor = i;
-            self.scroll.scroll_to_item(i, ScrollStrategy::Top);
+        if let Some(row) = self.tree.reveal(file) {
+            self.scroll.scroll_to_item(row, ScrollStrategy::Top);
         }
         cx.notify();
     }
 
     /// Mapper klappes sammen eller opp, filer velges.
-    fn open(&mut self, row: usize, cx: &mut Context<Self>) {
-        self.cursor = row;
-        match &self.rows[row].kind {
-            RowKind::Dir { path, .. } => {
-                self.tree.toggle(&path.clone());
-                self.rows = self.tree.rows().into();
-                cx.notify();
-            }
-            &RowKind::File(file) => self.selection.update(cx, |s, cx| s.set(Some(file), cx)),
+    fn open(&mut self, file: Option<usize>, cx: &mut Context<Self>) {
+        match file {
+            Some(file) => self.selection.update(cx, |s, cx| s.set(Some(file), cx)),
+            None => cx.notify(),
         }
     }
 
@@ -131,7 +106,7 @@ impl ChangesTree {
     pub fn content_width(&mut self, window: &Window) -> f32 {
         *self.content_width.get_or_insert_with(|| {
             let char_width = TextStyle::new(TEXT_SIZE, window).char_width;
-            content_width(&self.changes, char_width)
+            content_width(self.tree.changes(), char_width)
         })
     }
 
@@ -148,14 +123,16 @@ impl ChangesTree {
             return;
         };
         cx.stop_propagation();
-        match key {
-            ListKey::Down | ListKey::Up => {
-                self.cursor = step(self.cursor, matches!(key, ListKey::Down), self.rows.len())
+        let row = match key {
+            ListKey::Down => self.tree.move_cursor(true),
+            ListKey::Up => self.tree.move_cursor(false),
+            ListKey::Open if !self.tree.rows().is_empty() => {
+                let file = self.tree.open_cursor();
+                return self.open(file, cx);
             }
-            ListKey::Open if !self.rows.is_empty() => return self.open(self.cursor, cx),
             ListKey::Open => return,
-        }
-        self.scroll.scroll_to_item(self.cursor, ScrollStrategy::Top);
+        };
+        self.scroll.scroll_to_item(row, ScrollStrategy::Top);
         cx.notify();
     }
 
@@ -166,7 +143,7 @@ impl ChangesTree {
         focused: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let row = &self.rows[i];
+        let row = &self.tree.rows()[i];
         let theme = cx.global::<Settings>().theme;
         let dark = theme.dark;
         let s = |v: f32| px(v * self.scale);
@@ -189,13 +166,16 @@ impl ChangesTree {
             .when_some(
                 row_bg(
                     &theme,
-                    i == self.cursor,
+                    i == self.tree.cursor(),
                     selected.is_some_and(|f| row.kind == RowKind::File(f)),
                     focused,
                 ),
                 |d, bg| d.bg(bg),
             )
-            .on_click(cx.listener(move |this, _, _, cx| this.open(i, cx)));
+            .on_click(cx.listener(move |this, _, _, cx| {
+                let file = this.tree.open(i);
+                this.open(file, cx)
+            }));
         match &row.kind {
             RowKind::Dir {
                 name,
@@ -213,7 +193,7 @@ impl ChangesTree {
                         .child(count_label(*count)),
                 ),
             &RowKind::File(f) => {
-                let change = &self.changes[f];
+                let change = &self.tree.changes()[f];
                 let name = file_name(&change.path);
                 // Plassen der mappene har pila, så ikonene står under hverandre
                 base.child(div().w(s(ICON_SIZE)).flex_none())
@@ -250,7 +230,7 @@ impl Render for ChangesTree {
             .child(
                 uniform_list(
                     "changes",
-                    self.rows.len(),
+                    self.tree.rows().len(),
                     cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                         let selected = this.selection.read(cx).0;
                         range
@@ -262,15 +242,6 @@ impl Render for ChangesTree {
                 .track_scroll(self.scroll.clone()),
             )
     }
-}
-
-fn count_label(count: usize) -> String {
-    let files = if count == 1 { "fil" } else { "filer" };
-    format!("{count} {files}")
-}
-
-fn file_name(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or_default()
 }
 
 /// Bredden som får plass til alle rader med alle mapper åpne, uskalert. Fonten er monospace.

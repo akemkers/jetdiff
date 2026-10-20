@@ -2858,6 +2858,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "jetdiff-app"
+version = "0.1.0"
+dependencies = [
+ "jetdiff-changes",
+ "jetdiff-git",
+ "jetdiff-view",
+ "notify",
+]
+
+[[package]]
 name = "jetdiff-changes"
 version = "0.1.0"
 
@@ -2900,11 +2910,11 @@ name = "jetdiff-ui"
 version = "0.1.0"
 dependencies = [
  "gpui",
+ "jetdiff-app",
  "jetdiff-changes",
  "jetdiff-core",
  "jetdiff-git",
  "jetdiff-view",
- "notify",
 ]
 
 [[package]]
