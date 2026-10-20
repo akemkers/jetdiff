@@ -14,6 +14,7 @@ pub mod metrics;
 pub mod model;
 pub mod nav;
 pub mod scroll;
+mod scrolloff;
 pub mod separator;
 pub mod state;
 pub mod stripe;
