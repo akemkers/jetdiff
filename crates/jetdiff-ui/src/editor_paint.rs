@@ -12,7 +12,7 @@ use jetdiff_view::model::SyntaxSpan;
 use jetdiff_view::{InlineHighlight, SideGeometry, StripeMarker, thumb_range};
 
 use crate::text::TextStyle;
-use crate::theme::UiTheme;
+use crate::theme::{UiDiffColors, UiTheme};
 
 pub fn rect(x: Range<f32>, top: f32, bottom: f32) -> Bounds<Pixels> {
     Bounds::new(
@@ -34,6 +34,69 @@ pub fn run(len: usize, style: &TextStyle, color: Hsla) -> TextRun {
 
 pub fn mask(bounds: Bounds<Pixels>) -> Option<ContentMask<Pixels>> {
     Some(ContentMask { bounds })
+}
+
+/// Bakgrunn for hele editoren, og 1px strek ved separatoren i gutteren.
+pub fn paint_editor_background(
+    geom: &SideGeometry,
+    top: f32,
+    bottom: f32,
+    theme: &UiTheme,
+    window: &mut Window,
+) {
+    let gutter = geom.gutter_layout;
+    window.paint_quad(fill(rect(geom.bounds(), top, bottom), theme.editor_bg));
+    window.paint_quad(fill(
+        rect(geom.gutter.clone(), top, bottom),
+        theme.editor_bg,
+    ));
+    let separator = geom.gutter_x(gutter.separator..gutter.separator + 1.);
+    window.paint_quad(fill(rect(separator, top, bottom), theme.indent_guide));
+}
+
+/// Diff-farge for en endring: full farge i nummerområdet. Ytterste 3px av gutteren og hele
+/// teksten får ignored-farge når endringen bare er whitespace.
+pub fn paint_change(
+    geom: &SideGeometry,
+    top: f32,
+    bottom: f32,
+    colors: &UiDiffColors,
+    ignored: bool,
+    window: &mut Window,
+) {
+    let gutter = geom.gutter_layout;
+    let separator = geom.gutter_x(gutter.separator..gutter.width);
+    let outer = separator.start.min(geom.text.start)..separator.end.max(geom.text.end);
+    let text_color = if ignored {
+        colors.ignored
+    } else {
+        colors.background
+    };
+    let numbers = geom.gutter_x(0.0..gutter.separator);
+    window.paint_quad(fill(rect(numbers, top, bottom), colors.background));
+    window.paint_quad(fill(rect(outer, top, bottom), text_color));
+}
+
+/// Markert linje, over diff-bakgrunnene så den ikke forsvinner i endringer. Med fokus
+/// markeres også nummeret, som er lettest å finne igjen etter et hopp.
+pub fn paint_caret_row(
+    geom: &SideGeometry,
+    top: f32,
+    bottom: f32,
+    active: bool,
+    theme: &UiTheme,
+    window: &mut Window,
+) {
+    let color = if active {
+        theme.row_highlight
+    } else {
+        theme.row_highlight.opacity(0.4)
+    };
+    window.paint_quad(fill(rect(geom.text.clone(), top, bottom), color));
+    if active {
+        let numbers = geom.gutter_x(0.0..geom.gutter_layout.separator);
+        window.paint_quad(fill(rect(numbers, top, bottom), theme.gutter_highlight));
+    }
 }
 
 /// Én linje shapet med syntaksfarger og tabs ekspandert.

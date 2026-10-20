@@ -27,7 +27,7 @@ pub use command::Command;
 pub use cursor::Cursor;
 pub use divider::{Cubic, DividerBand, DividerSeparator, Point, divider_bands, divider_separators};
 pub use folding::{Connector, FoldId, Folding};
-pub use geometry::{SideGeometry, side_geometry};
+pub use geometry::{SideGeometry, UnifiedGeometry, side_geometry};
 pub use jetdiff_core::ComparisonPolicy;
 pub use jetdiff_core::side::Side;
 pub use jetdiff_syntax::{Language, Token};

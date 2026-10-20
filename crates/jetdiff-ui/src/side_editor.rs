@@ -9,7 +9,10 @@ use jetdiff_view::{FileDiff, Folding, LineLayout, SideGeometry};
 
 use crate::cache::LineCache;
 use crate::divider::stroke_path;
-use crate::editor_paint::{ShapedText, StripeRects, mask, rect, shape_number};
+use crate::editor_paint::{
+    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_editor_background, rect,
+    shape_number,
+};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -59,7 +62,8 @@ impl SideEditor<'_> {
     pub fn paint(&self, cache: &mut SideCache, window: &mut Window, cx: &mut App) -> f32 {
         let visible = self.visible();
         let widest = window.with_content_mask(mask(self.area(self.geom.bounds())), |window| {
-            self.paint_background(window);
+            let bottom = self.top + self.height;
+            paint_editor_background(self.geom, self.top, bottom, self.theme, window);
             self.paint_block_backgrounds(&visible, window);
             // Over diff-bakgrunnene, ellers forsvinner den i endringer
             self.paint_caret_row(&visible, window);
@@ -113,31 +117,15 @@ impl SideEditor<'_> {
         }
     }
 
-    fn paint_background(&self, window: &mut Window) {
-        let geom = self.geom;
-        let gutter = geom.gutter_layout;
-        window.paint_quad(fill(self.area(geom.bounds()), self.theme.editor_bg));
-        window.paint_quad(fill(self.area(geom.gutter.clone()), self.theme.editor_bg));
-        // New UI: 1px strek ved separatoren, males før diff-markørene så den skjules i endringer
-        let separator = geom.gutter_x(gutter.separator..gutter.separator + 1.);
-        window.paint_quad(fill(self.area(separator), self.theme.indent_guide));
-    }
-
     /// Per blokk, ikke per linje, så en stor endring blir ett rektangel.
     fn paint_block_backgrounds(&self, visible: &Visible, window: &mut Window) {
         let geom = self.geom;
         let side = geom.side;
-        let gutter = geom.gutter_layout;
         let layout = self.layout();
         let (first, last) = (*visible.logical.start(), *visible.logical.end());
         let blocks = self.diff.blocks();
         let start = blocks.partition_point(|block| block.lines(side).end < first);
         let whole = geom.text.start.min(geom.gutter.start)..geom.text.end.max(geom.gutter.end);
-        let outer = {
-            // Ytterste 3px av gutteren og hele tekstområdet
-            let separator = geom.gutter_x(gutter.separator..gutter.width);
-            separator.start.min(geom.text.start)..separator.end.max(geom.text.end)
-        };
 
         for block in &blocks[start..] {
             let lines = block.lines(side);
@@ -151,16 +139,7 @@ impl SideEditor<'_> {
                 window.paint_quad(fill(rect(whole.clone(), top, bottom), colors.background));
                 continue;
             }
-            let text_color = if block.ignored() {
-                colors.ignored
-            } else {
-                colors.background
-            };
-            window.paint_quad(fill(
-                rect(geom.gutter_x(0.0..gutter.separator), top, bottom),
-                colors.background,
-            ));
-            window.paint_quad(fill(rect(outer.clone(), top, bottom), text_color));
+            paint_change(geom, top, bottom, colors, block.ignored(), window);
         }
     }
 
@@ -169,23 +148,16 @@ impl SideEditor<'_> {
         if !visible.logical.contains(&line) {
             return;
         }
-        let geom = self.geom;
         let top = self.screen_y(self.layout().line_top(line));
         let bottom = top + self.style.line_height();
-        let color = if self.caret.active {
-            self.theme.row_highlight
-        } else {
-            self.theme.row_highlight.opacity(0.4)
-        };
-        window.paint_quad(fill(rect(geom.text.clone(), top, bottom), color));
-        // Linjenummeret er lettest å finne igjen etter et hopp
-        if self.caret.active {
-            let numbers = geom.gutter_x(0.0..geom.gutter_layout.separator);
-            window.paint_quad(fill(
-                rect(numbers, top, bottom),
-                self.theme.gutter_highlight,
-            ));
-        }
+        paint_caret_row(
+            self.geom,
+            top,
+            bottom,
+            self.caret.active,
+            self.theme,
+            window,
+        );
     }
 
     /// `DiffLineSeparatorRenderer`: bølge over gutter og tekst, med fasen fra divideren.

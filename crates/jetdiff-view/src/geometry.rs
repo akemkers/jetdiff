@@ -183,6 +183,43 @@ pub fn side_geometry(
     ]
 }
 
+/// `GAP_BETWEEN_AREAS` mellom gammel og ny nummerkolonne i unified.
+const UNIFIED_NUMBER_GAP: f32 = 5.;
+
+/// Unified: én editor uten speiling, med gammel og ny nummerkolonne. Begge høyrejusteres i
+/// sin kolonne (`EditorGutterComponentImpl.paintLineNumbers`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnifiedGeometry {
+    pub editor: SideGeometry,
+    /// Høyre kant av gammel kolonne, lokal i gutteren.
+    old_numbers_end: f32,
+}
+
+impl UnifiedGeometry {
+    /// `calcLineNumberAreaWidth`: gammel kolonne har minstebredden, ny bare sitt største
+    /// nummer.
+    pub fn new(diff: &FileDiff, number_char_width: f32, x: f32, width: f32) -> Self {
+        let numbers_width = |side: Side| {
+            let digits = diff.line_count(side).to_string().len();
+            (digits as f32 * number_char_width).round()
+        };
+        let old = numbers_width(Side::Left).max(MIN_NUMBERS_WIDTH);
+        let gutter = gutter_layout(old + UNIFIED_NUMBER_GAP + numbers_width(Side::Right));
+        Self {
+            editor: SideGeometry::new(Side::Right, false, x, width, gutter),
+            old_numbers_end: gutter.numbers.0 + old,
+        }
+    }
+
+    pub fn old_number_x(&self, text_width: f32) -> f32 {
+        self.editor.gutter_x(0.0..self.old_numbers_end).end - text_width
+    }
+
+    pub fn new_number_x(&self, text_width: f32) -> f32 {
+        self.editor.number_x(text_width)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,6 +275,22 @@ mod tests {
         assert_eq!(right.bounds(), 100. ..900.);
         assert!(!right.mirrored);
         assert!(left.bounds().is_empty());
+    }
+
+    #[test]
+    fn unified_har_to_nummerkolonner() {
+        use crate::ComparisonPolicy;
+        let old: String = (0..9).map(|i| format!("{i}\n")).collect();
+        let new: String = (0..120).map(|i| format!("{i}\n")).collect();
+        let diff = FileDiff::new(&old, &new, ComparisonPolicy::Default).unwrap();
+        // 10 linjer gir to sifre, 121 gir tre. 7px per siffer.
+        let g = UnifiedGeometry::new(&diff, 7., 100., 800.);
+        assert!(!g.editor.mirrored);
+        assert_eq!(g.editor.bounds(), 100. ..900.);
+        // Gammel kolonne: 8..22, gap 5, ny kolonne: 27..48
+        assert_eq!(g.editor.gutter_layout.numbers, (8., 48.));
+        assert_eq!(g.old_number_x(7.), 115.);
+        assert_eq!(g.new_number_x(7.), 141.);
     }
 
     #[test]

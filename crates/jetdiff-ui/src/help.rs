@@ -52,6 +52,7 @@ const ALL: [(&str, &[Keys]); 4] = [
     (
         "Annet",
         &[
+            ("v", "split/unified"),
             ("y", "kopier fil:linje"),
             ("r", "rull tilbake endring"),
             ("Cmd +/-/0", "zoom"),
