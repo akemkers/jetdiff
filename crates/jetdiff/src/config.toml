@@ -9,6 +9,9 @@ font_size = 14
 # false viser hele fila, uten å klappe sammen uendrede deler.
 collapse_unchanged = true
 
+# split eller unified. v bytter mens appen kjører.
+view = "split"
+
 [side_panel]
 # true viser filtreet og commitene ved oppstart. b viser og skjuler dem.
 open = false

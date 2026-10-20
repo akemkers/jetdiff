@@ -29,6 +29,8 @@ pub struct Config {
     #[serde(deserialize_with = "font_size")]
     pub font_size: f32,
     pub collapse_unchanged: bool,
+    #[serde(rename = "view", deserialize_with = "view")]
+    pub unified: bool,
     pub side_panel: SidePanel,
 }
 
@@ -96,6 +98,14 @@ fn font_size<'de, D: Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
     }
 }
 
+fn view<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    match String::deserialize(d)?.as_str() {
+        "split" => Ok(false),
+        "unified" => Ok(true),
+        _ => Err(D::Error::custom("må være split eller unified")),
+    }
+}
+
 fn create(path: &Path) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -116,7 +126,7 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\ncollapse_unchanged = false\n[side_panel]\nopen = true\n";
+    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\ncollapse_unchanged = false\nview = \"unified\"\n[side_panel]\nopen = true\n";
 
     #[test]
     fn malen_er_gyldig() {
@@ -124,6 +134,7 @@ mod tests {
         assert_eq!(config.theme, UiTheme::mocha());
         assert_eq!(config.font_size, 14.);
         assert!(config.collapse_unchanged);
+        assert!(!config.unified);
         assert!(!config.side_panel.open);
     }
 
@@ -140,7 +151,14 @@ mod tests {
         assert_eq!(config.theme, UiTheme::dark());
         assert_eq!(config.font_size, 16.);
         assert!(!config.collapse_unchanged);
+        assert!(config.unified);
         assert!(config.side_panel.open);
+    }
+
+    #[test]
+    fn ukjent_visning_er_feil() {
+        let err = parse(&OK.replace("unified", "side-by-side")).unwrap_err();
+        assert!(err.contains("må være split eller unified"), "{err}");
     }
 
     #[test]

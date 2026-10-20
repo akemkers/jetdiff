@@ -21,6 +21,7 @@ Application::new().with_assets(Assets).run(|cx| {
         theme: UiTheme::mocha(),
         font_size: 14.,
         collapse_unchanged: true,
+        unified: false,
         side_panel_open: false,
     });
     // Én fil:
@@ -30,7 +31,7 @@ Application::new().with_assets(Assets).run(|cx| {
 });
 ```
 
-`Settings` er en GPUI-global som alle visningene leser. `font_size` er der zoom starter, og `collapse_unchanged` klapper sammen uendrede deler i nye filer.
+`Settings` er en GPUI-global som alle visningene leser. `font_size` er der zoom starter, `collapse_unchanged` klapper sammen uendrede deler i nye filer, og `unified` er visningen ved oppstart.
 
 Tastene går gjennom `KeyParser` i `jetdiff-view`. Actions som zoom og panelbytte (`ZoomIn`, `FocusLeft`, `ToggleSidePanel` osv.) eksporteres, og den som lager vinduet binder dem til taster.
 

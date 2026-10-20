@@ -92,7 +92,7 @@ impl FileDiffView {
         message: Entity<Message>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let unified = false;
+        let unified = cx.global::<Settings>().unified;
         Self {
             max_cols: max_cols(&diff),
             mode: diff_mode(diff, unified, cx),

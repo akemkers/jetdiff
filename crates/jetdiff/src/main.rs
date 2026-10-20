@@ -222,6 +222,7 @@ fn main() -> ExitCode {
                 theme: config.theme,
                 font_size: config.font_size,
                 collapse_unchanged: config.collapse_unchanged,
+                unified: config.unified,
                 side_panel_open: config.side_panel.open,
             });
             match content {
