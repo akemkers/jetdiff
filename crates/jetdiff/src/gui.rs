@@ -1,0 +1,98 @@
+//! GPUI-vinduet.
+
+use gpui::{
+    App, AppContext, Application, Bounds, Context, Focusable, KeyBinding, Render, WindowBounds,
+    WindowOptions, actions, px, size,
+};
+use jetdiff_app::{AppCommand, BINDINGS};
+use jetdiff_ui::{
+    Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp,
+    NextFile, PrevFile, ResetZoom, Settings, ToggleHelp, ToggleSidePanel, ToggleView, UiTheme,
+    ZoomIn, ZoomOut, load_font,
+};
+
+use crate::Content;
+use crate::config::Config;
+
+actions!(jetdiff, [Quit]);
+
+pub fn run(content: Content, title: String, config: Config) {
+    Application::new()
+        .with_assets(Assets)
+        .run(move |cx: &mut App| {
+            bind_keys(cx);
+            load_font(cx);
+            cx.set_global(Settings {
+                theme: UiTheme::new(&config.theme),
+                font_size: config.font_size,
+                collapse_unchanged: config.collapse_unchanged,
+                unified: config.unified,
+                side_panel_open: config.side_panel.open,
+            });
+            match content {
+                Content::File(diff, paths) => open(cx, title, move |cx| {
+                    FileDiffView::standalone(*diff, paths, cx)
+                }),
+                Content::Changes(repo, changes) => {
+                    open(cx, title, move |cx| ChangesView::new(repo, changes, cx))
+                }
+            }
+            cx.on_window_closed(|cx| cx.quit()).detach();
+            cx.activate(true);
+        });
+}
+
+fn bind_keys(cx: &mut App) {
+    // Resten av tastene går gjennom vim-parseren i `FileDiffView`
+    cx.bind_keys(BINDINGS.iter().map(|&(keys, cmd)| key_binding(keys, cmd)));
+    cx.on_action(|_: &Quit, cx| cx.quit());
+}
+
+fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
+    match cmd {
+        AppCommand::ZoomIn => KeyBinding::new(keys, ZoomIn, None),
+        AppCommand::ZoomOut => KeyBinding::new(keys, ZoomOut, None),
+        AppCommand::ResetZoom => KeyBinding::new(keys, ResetZoom, None),
+        AppCommand::FocusLeft => KeyBinding::new(keys, FocusLeft, None),
+        AppCommand::FocusDown => KeyBinding::new(keys, FocusDown, None),
+        AppCommand::FocusUp => KeyBinding::new(keys, FocusUp, None),
+        AppCommand::FocusRight => KeyBinding::new(keys, FocusRight, None),
+        AppCommand::ToggleSidePanel => KeyBinding::new(keys, ToggleSidePanel, None),
+        AppCommand::ToggleView => KeyBinding::new(keys, ToggleView, None),
+        AppCommand::NextFile => KeyBinding::new(keys, NextFile, None),
+        AppCommand::PrevFile => KeyBinding::new(keys, PrevFile, None),
+        AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),
+        AppCommand::HideHelp => KeyBinding::new(keys, HideHelp, None),
+        AppCommand::Quit => KeyBinding::new(keys, Quit, None),
+    }
+}
+
+fn open<V: Render + Focusable>(
+    cx: &mut App,
+    title: String,
+    build: impl FnOnce(&mut Context<V>) -> V + 'static,
+) {
+    // Nær skjermstørrelsen, så zoom-animasjonen på macOS blir kort
+    let screen = cx.primary_display().map(|d| d.bounds().size);
+    let start = screen.map_or(size(px(1400.), px(900.)), |s| {
+        size(s.width * 0.95, s.height * 0.95)
+    });
+    let bounds = Bounds::centered(None, start, cx);
+    cx.open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Maximized(bounds)),
+            titlebar: Some(gpui::TitlebarOptions {
+                title: Some(title.into()),
+                ..Default::default()
+            }),
+            focus: true,
+            ..Default::default()
+        },
+        |window, cx| {
+            let view = cx.new(build);
+            window.focus(&view.focus_handle(cx));
+            view
+        },
+    )
+    .expect("kunne ikke åpne vindu");
+}

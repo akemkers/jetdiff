@@ -1,0 +1,20 @@
+//! Terminalvisningen.
+
+use jetdiff_tui::Settings;
+
+use crate::Content;
+use crate::config::Config;
+
+pub fn run(content: Content, config: Config) -> Result<(), String> {
+    let settings = Settings {
+        theme: config.theme,
+        collapse_unchanged: config.collapse_unchanged,
+        unified: config.unified,
+        side_panel_open: config.side_panel.open,
+    };
+    match content {
+        Content::File(diff, paths) => jetdiff_tui::run_file(*diff, paths, settings),
+        Content::Changes(repo, changes) => jetdiff_tui::run_changes(repo, changes, settings),
+    }
+    .map_err(|e| e.to_string())
+}
