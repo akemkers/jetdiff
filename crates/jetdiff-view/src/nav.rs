@@ -65,7 +65,7 @@ pub fn target_for_block(
 
 /// `SyncScrollSupport.getTargetOffsets` med `preferredTopShift = -1`. Små endringer havner
 /// 1/3 ned, samme punkt som sync-ankeret, så sync flytter ingenting etter hoppet.
-fn target_offsets(
+pub(crate) fn target_offsets(
     layouts: &[LineLayout; 2],
     start_lines: [usize; 2],
     end_lines: [usize; 2],

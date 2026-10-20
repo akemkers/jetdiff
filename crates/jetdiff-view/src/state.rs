@@ -35,14 +35,14 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    fn instant() -> Self {
+    pub(crate) fn instant() -> Self {
         Self {
             changed: true,
             ..Self::default()
         }
     }
 
-    fn animated() -> Self {
+    pub(crate) fn animated() -> Self {
         Self {
             animate: true,
             ..Self::instant()
@@ -286,6 +286,19 @@ impl DiffState {
         self.master = side;
         let y = self.scroll.y(side);
         self.scroll.y[idx(side)] = self.layout(side, vp).clamp_scroll(y, vp.height);
+        self.scroll.sync_from(&self.diff, &self.folding, side, vp);
+        self.follow(vp, false);
+    }
+
+    /// Cursoren settes, og linja havner `offset` piksler under toppen av viewporten. For
+    /// bytte fra unified, så teksten under cursoren står i ro.
+    pub fn place_cursor(&mut self, cursor: Cursor, offset: f32, vp: Viewport) {
+        let side = self.diff.single_side().unwrap_or(cursor.side);
+        self.cursor = Cursor::new(side, self.clamp_line(side, cursor.line));
+        self.master = side;
+        let layout = self.layout(side, vp);
+        let y = layout.line_top(self.cursor.line) - offset;
+        self.scroll.y[idx(side)] = layout.clamp_scroll(y, vp.height);
         self.scroll.sync_from(&self.diff, &self.folding, side, vp);
         self.follow(vp, false);
     }

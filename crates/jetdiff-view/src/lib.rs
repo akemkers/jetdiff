@@ -19,6 +19,7 @@ pub mod separator;
 pub mod state;
 pub mod stripe;
 pub mod theme;
+pub mod unified;
 
 pub use anim::ScrollAnimation;
 pub use command::Command;
@@ -37,3 +38,4 @@ pub use separator::PathSeg;
 pub use state::{DiffState, Horizontal, Outcome};
 pub use stripe::{StripeMarker, stripe_markers, thumb_range};
 pub use theme::{Rgba, SyntaxStyle, Theme};
+pub use unified::{Row, UnifiedDiff, UnifiedState};
