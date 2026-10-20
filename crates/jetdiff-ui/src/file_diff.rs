@@ -4,7 +4,6 @@
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
-use std::time::Instant;
 
 use gpui::{
     App, Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable,
@@ -15,8 +14,8 @@ use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
 use jetdiff_view::metrics::zoomed;
 use jetdiff_view::{
-    Command, DiffState, FileDiff, FoldId, Folding, Horizontal, KeyParser, Parsed, ScrollAnimation,
-    ScrollState, StripeMarker, Viewport, stripe_markers,
+    Command, DiffState, FileDiff, FoldId, Folding, Horizontal, KeyParser, Parsed, StripeMarker,
+    Viewport, stripe_markers,
 };
 
 use crate::editor_paint::StripeRects;
@@ -24,6 +23,7 @@ use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
 use crate::keystroke::to_key;
 use crate::message::{Level, Message};
 use crate::rollback_dialog::rollback_dialog;
+use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
 use crate::side_editor::{CaretRow, SideCache};
 use crate::split::{self, SplitPainter};
@@ -31,9 +31,6 @@ use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
 actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom]);
-
-/// Varighet på animert hopp til endring.
-const NAV_ANIMATION_MS: f32 = 170.;
 
 /// Linjer utenfor viewporten som beholdes shapet per side.
 const CACHE_CAPACITY: usize = 2000;
@@ -64,11 +61,6 @@ pub struct Zoomed {
     pub font_size: f32,
 }
 
-struct Animation {
-    anim: ScrollAnimation,
-    start: Instant,
-}
-
 /// Det paint trenger å dele med hendelsene: siste bounds og shapede linjer.
 struct Shared {
     bounds: Cell<Option<Bounds<Pixels>>>,
@@ -81,9 +73,8 @@ pub struct FileDiffView {
     state: DiffState,
     font_size: f32,
     style: Option<TextStyle>,
-    /// Det som vises nå. Under en animasjon ligger den etter `state.scroll`, som er målet.
-    shown: ScrollState,
-    animation: Option<Animation>,
+    /// Det som vises nå. Målet er `state.scroll`.
+    scroll: ScrollAnimator,
     keys: KeyParser,
     initialized: bool,
     viewport_height: f32,
@@ -119,8 +110,7 @@ impl FileDiffView {
             state: diff_state(diff, cx),
             font_size: cx.global::<Settings>().font_size,
             style: None,
-            shown: ScrollState::default(),
-            animation: None,
+            scroll: ScrollAnimator::default(),
             keys: KeyParser::default(),
             initialized: false,
             viewport_height: 0.,
@@ -151,8 +141,7 @@ impl FileDiffView {
         self.paths = paths;
         self.max_cols = max_cols(&diff);
         self.state = diff_state(diff, cx);
-        self.shown = ScrollState::default();
-        self.animation = None;
+        self.scroll = ScrollAnimator::default();
         self.keys.reset();
         self.initialized = false;
         *self.shared.caches.borrow_mut() = new_caches();
@@ -176,7 +165,7 @@ impl FileDiffView {
         self.shared.widest.set(0.);
         let max_x = self.max_scroll_x();
         self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
-        self.shown = self.state.scroll;
+        self.scroll.jump(self.state.scroll);
         self.update_markers();
         cx.notify();
     }
@@ -233,8 +222,8 @@ impl FileDiffView {
 
     /// Fullfører en animasjon der den står, før noe annet endrer scroll.
     fn stop_animation(&mut self) {
-        if self.animation.take().is_some() {
-            self.state.scroll = self.shown;
+        if let Some(shown) = self.scroll.stop() {
+            self.state.scroll = shown;
         }
     }
 
@@ -289,10 +278,9 @@ impl FileDiffView {
             self.update_markers();
         }
         if out.animate {
-            self.animate();
+            self.scroll.animate(self.state.scroll);
         } else {
-            self.animation = None;
-            self.shown = self.state.scroll;
+            self.scroll.jump(self.state.scroll);
         }
         cx.notify();
     }
@@ -346,18 +334,6 @@ impl FileDiffView {
             .update(cx, |m, cx| m.show(text, Level::Info, cx));
     }
 
-    /// Fra det som vises til målet. Midt i en animasjon starter den nye der den gamle står.
-    fn animate(&mut self) {
-        if self.shown == self.state.scroll {
-            self.animation = None;
-            return;
-        }
-        self.animation = Some(Animation {
-            anim: ScrollAnimation::new(self.shown, self.state.scroll, NAV_ANIMATION_MS),
-            start: Instant::now(),
-        });
-    }
-
     /// `EditorFontSizeAction`: ny fontstørrelse, og cursorlinja holdes på samme sted.
     fn zoom(&mut self, size: f32, window: &mut Window) {
         if size == self.font_size {
@@ -367,7 +343,6 @@ impl FileDiffView {
             self.font_size = size;
             return;
         };
-        self.animation = None;
         self.font_size = size;
         self.ensure_style(window);
         let Some(vp) = self.viewport() else {
@@ -377,7 +352,7 @@ impl FileDiffView {
         self.state.rescale(old.0, vp, char_width / old.1);
         let max_x = self.max_scroll_x();
         self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
-        self.shown = self.state.scroll;
+        self.scroll.jump(self.state.scroll);
     }
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -413,7 +388,7 @@ impl FileDiffView {
             &state.folding,
             style,
             bounds,
-            self.shown.y,
+            self.scroll.shown().y,
             position,
         )
     }
@@ -464,7 +439,7 @@ impl FileDiffView {
             let x = self.state.scroll.x - dx;
             self.state.scroll.scroll_x_to(x, max_x);
         }
-        self.shown = self.state.scroll;
+        self.scroll.jump(self.state.scroll);
         cx.notify();
     }
 
@@ -485,7 +460,7 @@ impl FileDiffView {
             let id = self.fold_at(ev.position);
             Rc::make_mut(&mut self.state.folding).set_hovered(id);
         }
-        self.shown = self.state.scroll;
+        self.scroll.jump(self.state.scroll);
         cx.notify();
     }
 
@@ -509,17 +484,10 @@ impl FileDiffView {
             self.initialized = true;
             // `InitialScrollPositionSupport` faller tilbake til første endring
             self.state.init(vp);
-            self.shown = self.state.scroll;
+            self.scroll.jump(self.state.scroll);
         }
-        if let Some(a) = &self.animation {
-            let elapsed = a.start.elapsed().as_secs_f32() * 1000.;
-            let (state, done) = a.anim.sample(elapsed);
-            self.shown = state;
-            if done {
-                self.animation = None;
-            } else {
-                window.request_animation_frame();
-            }
+        if self.scroll.step() {
+            window.request_animation_frame();
         }
     }
 
@@ -532,9 +500,8 @@ impl FileDiffView {
         let Some(vp) = self.viewport() else {
             return;
         };
-        self.animation = None;
         self.state.resize(vp);
-        self.shown = self.state.scroll;
+        self.scroll.jump(self.state.scroll);
     }
 
     /// `None` før stilen er laget.
@@ -542,12 +509,13 @@ impl FileDiffView {
         let style = self.style.clone()?;
         // Den andre siden viser overført linje svakere, så man ser hvor H og L lander.
         // IntelliJ har caret row bare på aktiv side.
+        let shown = self.scroll.shown();
         let cursor = self.state.cursor;
         let other = self.state.transferred_cursor();
         let carets = SIDES.map(|side| {
-            let shown = if side == cursor.side { cursor } else { other };
+            let caret = if side == cursor.side { cursor } else { other };
             CaretRow {
-                line: shown.line,
+                line: caret.line,
                 active: focused && side == cursor.side,
             }
         });
@@ -557,8 +525,8 @@ impl FileDiffView {
             theme,
             style,
             markers: self.markers.clone(),
-            scroll_y: self.shown.y.map(|y| snap(y, scale)),
-            scroll_x: snap(self.shown.x, scale),
+            scroll_y: shown.y.map(|y| snap(y, scale)),
+            scroll_x: snap(shown.x, scale),
             carets,
         })
     }

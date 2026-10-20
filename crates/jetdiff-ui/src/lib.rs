@@ -15,6 +15,7 @@ mod list;
 mod message;
 mod panel_size;
 mod rollback_dialog;
+mod scroll_animator;
 mod settings;
 mod side_editor;
 mod split;
