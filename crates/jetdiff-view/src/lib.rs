@@ -1,4 +1,4 @@
-//! Visningsmodell for side-by-side diff av én fil. Ingen GUI-avhengighet, all geometri er
+//! Visningsmodell for diffen av én fil, split eller unified. Ingen GUI-avhengighet, all geometri er
 //! piksler som UI-laget tegner rett ut.
 
 pub mod anim;

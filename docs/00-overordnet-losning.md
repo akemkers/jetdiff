@@ -5,6 +5,7 @@ GPU-akselerert diffviewer i Rust + GPUI, modellert etter JetBrains. Detaljene li
 - `01-diff-algoritme.md` - pipeline, heuristikker, ord-diff
 - `02-rendering.md` - trakt, farger, gutter, folding-bølger
 - `03-scroll-folding-struktur.md` - sync scroll, folding, commit-view, tre
+- `04-unified-diff.md` - unified viewer: rader, linjenumre, farger og bytte fra split
 
 ## Rammer
 
@@ -26,9 +27,12 @@ jetdiff-syntax   tree-sitter med egne queries, tokens tilsvarer IntelliJ sine DE
 jetdiff-view     view-modell, fortsatt uten GUI
   model          FileDiff: blokker, linjer, syntaks per side
   state          markert linje, kommandoer, scroll og folding samlet
+  unified        rader over FileDiff og egen tilstand, ingen folding
+  mode           split eller unified, og byttet mellom dem
+  scrolloff      hvor cursoren kan stå, felles for begge visningene
   scroll         master scroll_y, slave beregnes i samme frame (1/3-anker)
   folding        felles tilstand for begge sider
-  geometry       gutter, tekst og scrollbar per side, én side alene for nye og slettede filer
+  geometry       gutter, tekst og scrollbar per side, og unified med to nummerkolonner
   keys           tastesekvenser til kommandoer
 
 jetdiff-changes  FileChange { path, old_path, status } og tremodellen: mapper først,
@@ -37,9 +41,13 @@ jetdiff-changes  FileChange { path, old_path, status } og tremodellen: mapper f�
 jetdiff-git      git-CLI: endringer for en commit eller working tree, og filinnhold
 
 jetdiff-ui       GPUI
-  side_editor    tekst, gutter, bakgrunner, ord-markering, error stripe
+  side_editor    én side i split: bakgrunner, folds, tekst og linjenumre
   divider        bezier-trakt og fold-koblinger
-  file_diff      to editorer + divider
+  split          to editorer + divider, og treff for musa
+  unified_editor én editor med gammelt og nytt nummer, og treff for musa
+  painter        velger split eller unified for tegning og mus
+  editor_paint   det begge tegner likt: tekst, ord-markering, error stripe
+  file_diff      taster, mus, zoom og scroll-animasjon for diffen
   changes_tree   filtreet med ikoner og status-farger
   changes_view   treet + én fil, som commit-dialogen i IntelliJ
   theme          fargetabell fra JetBrains (light og dark)
@@ -58,6 +66,7 @@ Skillet mellom `view` og `ui` er det viktigste. All logikk for scrolling, foldin
 | Diff-kjerne | Porte IntelliJ sin Myers-kjerne (ca. 650 linjer) | Gir samme resultat som JetBrains og golden-tester mot IntelliJ. `imara-diff` kan være alternativ bak en trait |
 | Offsets | UTF-8 byte | IntelliJ bruker UTF-16, vi konverterer i golden-testene |
 | Side-by-side | Ikke-aligned med trakt | Trakten er poenget. 1/3-anker og heltallssteg i tomme blokker hindrer hakking |
+| Unified | Rader som peker inn i `FileDiff`, ingen folding | Syntaks og ord-markering gjenbrukes. Nye og slettede filer vises alltid unified, så split slipper å vise én side alene |
 | Commit-view | Tre + én fil | Som commit-dialogen i IntelliJ. Beholder trakten og sync scroll |
 | Git | `git`-CLI | Samme resultat som `git diff`, med brukerens config og rename-deteksjon |
 | Syntax | tree-sitter, begge filer i sin helhet | Slettede linjer får riktig syntaks |

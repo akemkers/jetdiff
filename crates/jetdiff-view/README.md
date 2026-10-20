@@ -1,6 +1,6 @@
 # jetdiff-view
 
-Visningsmodellen for diffen av én fil: scroll, folding, markert linje, taster og geometri.
+Visningsmodellen for diffen av én fil, split eller unified: scroll, folding, markert linje, taster og geometri.
 
 ## Hvorfor
 
@@ -12,29 +12,38 @@ Det meste av det som gjør diffen i IntelliJ god, er logikk og ikke tegning. Sid
 
 ```rust
 use jetdiff_view::{
-    ComparisonPolicy, DiffState, FileDiff, Folding, KeyParser, Language, Parsed,
+    ComparisonPolicy, DiffMode, FileDiff, Folding, KeyParser, Language, Parsed,
 };
 
 let mut diff = FileDiff::new(left, right, ComparisonPolicy::Default)?;
 diff.highlight_syntax(Language::Rust);
 let folding = Folding::new(&diff);
 
-let mut state = DiffState::new(diff.into(), folding.into());
-state.init(viewport);
+// Nye og slettede filer blir unified uansett
+let mut mode = DiffMode::new(diff.into(), folding.into(), unified);
+mode.init(viewport);
 
 let mut keys = KeyParser::default();
 if let Parsed::Command(cmd) = keys.feed(key) {
-    state.execute(cmd, viewport, horizontal);
+    mode.execute(cmd, viewport, horizontal);
 }
-// state.scroll er målet. UI-et animerer dit og tegner.
+// mode.scroll() er målet. UI-et animerer dit og tegner.
+
+// `v`: cursoren blir på samme linje og høyde
+mode.toggle(Folding::new(mode.diff()).into(), viewport);
 ```
 
 ```mermaid
 graph TD
     key[tastetrykk] --> keys[keys: KeyParser]
     keys --> cmd[Command]
-    cmd --> state[state: DiffState]
+    cmd --> mode[mode: DiffMode]
+    mode --> state[state: DiffState]
+    mode --> unified[unified: UnifiedState]
     model[model: FileDiff] --> state
+    model --> unified
+    scrolloff[scrolloff] --> state
+    scrolloff --> unified
     folding[folding] --> state
     state --> scroll[scroll: sync scroll]
     state --> cursor[cursor: markert linje]
@@ -46,10 +55,13 @@ graph TD
 ```
 
 - `model`: blokker, linjer og syntaks per side
-- `state`: samler markert linje, folding og scroll, og utfører `Command`
+- `mode`: split eller unified, og byttet mellom dem
+- `state`: split. Samler markert linje, folding og scroll, og utfører `Command`
+- `unified`: rader over `FileDiff` der slettede linjer står over de nye, og tilstanden for dem. Ingen folding
+- `scrolloff`: hvor cursoren kan stå uten å scrolle, felles for begge
 - `scroll`: master-siden scroller, den andre regnes ut i samme frame
 - `folding`: uendrede linjer foldes, felles for begge sider
-- `layout`, `geometry`: vertikal og horisontal plassering per side
+- `layout`, `geometry`: vertikal og horisontal plassering per side, og unified med to nummerkolonner
 - `divider`, `separator`, `stripe`: trakten, bølgen på folds og error stripe
 - `keys`, `command`: keymap og kommandoene det gir
 - `theme`, `metrics`: farger og linjehøyde som IntelliJ

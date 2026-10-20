@@ -2,7 +2,7 @@
 
 En rask diff-viewer for macOS, med diffen fra JetBrains-IDE-ene. Rendres på GPU-en med [GPUI](https://www.gpui.rs).
 
-Den viser lokale endringer, en commit eller to filer side om side, med trakt mellom sidene, ord-markering, folding av uendrede linjer og syntaksfarger. Diff-algoritmen er portert fra IntelliJ og gir samme resultat. Alt er for lesing, ingenting kan redigeres.
+Den viser lokale endringer, en commit eller to filer side om side, med trakt mellom sidene, ord-markering, folding av uendrede linjer og syntaksfarger. `v` bytter til unified, der slettede linjer står over de nye i én editor. Diff-algoritmen er portert fra IntelliJ og gir samme resultat. Alt er for lesing, ingenting kan redigeres.
 
 ![Lokale endringer med filtre og commits](docs/screenshots/endringer.png)
 
@@ -30,13 +30,13 @@ jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 
 Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
-Til venstre er et tre over endrede filer. Nye og slettede filer vises som én side, binærfiler vises ikke. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
+Til venstre er et tre over endrede filer. Nye og slettede filer vises alltid unified, binærfiler vises ikke. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
 
 For lokale endringer ligger commitene under treet: branchens commits mot `origin/main`, eller de siste når branchen ikke har egne. Maks 50. Klikk på en commit for å se den, og på raden øverst for å gå tilbake. Klikk på «Filer» eller «Commits» for å klappe seksjonen sammen.
 
 Lokale endringer lastes inn på nytt når filer endres. Valgt fil beholdes, og diffen starter på toppen hvis innholdet er endret.
 
-Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer.
+Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer. Unified har ikke folding.
 
 Syntaksfarger for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML og Markdown. Språket velges fra filendelsen.
 
@@ -48,6 +48,7 @@ Leses fra `$XDG_CONFIG_HOME/jetdiff/config.toml`, eller `~/.config/jetdiff/confi
 theme = "catppuccin-mocha"
 font_size = 14             # mellom 8 og 40, Cmd-0 går tilbake hit
 collapse_unchanged = true  # false viser hele fila
+view = "split"             # eller "unified", v bytter mens appen kjører
 
 [side_panel]
 open = false               # true viser filtreet og commitene ved oppstart
@@ -70,9 +71,10 @@ Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert l
 | `gg` `G`                            | Første og siste linje                                                                           |
 | `d` `u`, Ctrl+d Ctrl+u              | Halv side ned og opp                                                                            |
 | `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Neste og forrige endring                                                                        |
-| `H` `L`                             | Til venstre og høyre side                                                                       |
-| `o`                                 | Åpne fold ved markert linje ett nivå                                                            |
-| `f`                                 | Åpne alle folds, eller lukk alle hvis ingen er lukket                                           |
+| `H` `L`                             | Til venstre og høyre side. Bare split                                                           |
+| `o`                                 | Åpne fold ved markert linje ett nivå. Bare split                                                |
+| `f`                                 | Åpne alle folds, eller lukk alle hvis ingen er lukket. Bare split                               |
+| `v`                                 | Bytt mellom split og unified for alle filer. Markert linje blir stående der den er              |
 | `y`                                 | Kopier `fil:linje` for markert linje. Linja er i nyeste versjon, også fra venstre side          |
 | `r`                                 | Rull tilbake endringen på markert linje til venstre side, etter Enter. Bare lokale endringer    |
 | Cmd/Ctrl+Pluss, Minus, 0            | Zoom inn, ut og tilbake til 14pt. Treet følger med                                              |

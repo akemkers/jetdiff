@@ -33,7 +33,7 @@ Application::new().with_assets(Assets).run(|cx| {
 
 `Settings` er en GPUI-global som alle visningene leser. `font_size` er der zoom starter, `collapse_unchanged` klapper sammen uendrede deler i nye filer, og `unified` er visningen ved oppstart.
 
-Tastene går gjennom `KeyParser` i `jetdiff-view`. Actions som zoom og panelbytte (`ZoomIn`, `FocusLeft`, `ToggleSidePanel` osv.) eksporteres, og den som lager vinduet binder dem til taster.
+Tastene går gjennom `KeyParser` i `jetdiff-view`. Actions som zoom og panelbytte (`ZoomIn`, `ToggleView`, `FocusLeft`, `ToggleSidePanel` osv.) eksporteres, og den som lager vinduet binder dem til taster.
 
 ```mermaid
 graph TD
@@ -45,16 +45,23 @@ graph TD
     sel -- observeres --> cv
     commits -- SelectCommit --> cv
     watcher -- filer endret --> cv
-    fdv --> se[SideEditor x2]
-    fdv --> div[divider]
+    fdv --> painter[painter]
+    painter --> split[split]
+    painter --> unified[unified_editor]
+    split --> se[SideEditor x2]
+    split --> div[divider]
     fdv --> help[KeyHelp]
     fdv --> msg[(Message)]
 ```
 
 - `changes_view`: treet og commitene til venstre, diffen til høyre. Henter fra git og laster på nytt når filer endres
-- `file_diff`: to `SideEditor` med divider mellom, og tastene
+- `file_diff`: diffen av én fil, split eller unified. Taster, mus, zoom og scroll-animasjon
+- `painter`: velger split eller unified for tegning og mus
+- `split`: to `SideEditor` med divider mellom
+- `unified_editor`: én editor med gammelt og nytt linjenummer
+- `editor_paint`: det begge visningene tegner likt
 - `help`: tastelinja og popupen med alle tastene
-- `side_editor`: tekst, gutter, bakgrunner, ord-markering og error stripe
+- `side_editor`: én side i split: bakgrunner, folds, tekst og linjenumre
 - `divider`: tegner trakten og fold-koblingene
 - `changes_tree`, `commit_list`: listene i sidepanelet
 - `message`: kort info eller fast advarsel over tastelinja
