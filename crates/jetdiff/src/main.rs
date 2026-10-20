@@ -21,8 +21,8 @@ use gpui::{
 use jetdiff_git::{PullRequest, Repo};
 use jetdiff_ui::{
     Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp,
-    LOCAL_CHANGES, NextFile, PrevFile, ResetZoom, Settings, ToggleHelp, ToggleSidePanel, ZoomIn,
-    ZoomOut, load_font,
+    LOCAL_CHANGES, NextFile, PrevFile, ResetZoom, Settings, ToggleHelp, ToggleSidePanel,
+    ToggleView, ZoomIn, ZoomOut, load_font,
 };
 use jetdiff_view::{ComparisonPolicy, FileDiff, Language};
 
@@ -76,6 +76,7 @@ fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-k", FocusUp, None),
         KeyBinding::new("ctrl-l", FocusRight, None),
         KeyBinding::new("b", ToggleSidePanel, None),
+        KeyBinding::new("v", ToggleView, None),
         KeyBinding::new("tab", NextFile, None),
         KeyBinding::new("J", NextFile, None),
         KeyBinding::new("shift-tab", PrevFile, None),
@@ -221,6 +222,7 @@ fn main() -> ExitCode {
                 theme: config.theme,
                 font_size: config.font_size,
                 collapse_unchanged: config.collapse_unchanged,
+                unified: config.unified,
                 side_panel_open: config.side_panel.open,
             });
             match content {

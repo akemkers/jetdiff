@@ -1,37 +1,32 @@
-//! To editorer med divider mellom. `DiffState` eier cursor, folding og scroll-målet. Her
-//! ligger det som trenger GPUI: taster, mus, animasjon mot målet og zoom.
+//! Diffen av én fil, split eller unified. `DiffMode` eier cursor, folding og scroll-målet.
+//! Her ligger det som trenger GPUI: taster, mus, animasjon mot målet og zoom.
 
-use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
-use std::time::Instant;
 
 use gpui::{
-    App, Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    KeyDownEvent, Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render,
-    ScrollWheelEvent, SharedString, Window, actions, canvas, div, prelude::*, px, relative,
+    App, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent,
+    SharedString, Window, actions, canvas, div, prelude::*, px,
 };
 use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
 use jetdiff_view::metrics::zoomed;
 use jetdiff_view::{
-    Command, DiffState, FileDiff, FoldId, Folding, Horizontal, Key, KeyCode, KeyParser, Parsed,
-    ScrollAnimation, ScrollState, SideGeometry, StripeMarker, Viewport, stripe_markers,
+    Command, DiffMode, FileDiff, FoldId, Folding, Horizontal, KeyParser, Parsed, StripeMarker,
+    Viewport, stripe_markers,
 };
 
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
+use crate::keystroke::to_key;
 use crate::message::{Level, Message};
+use crate::painter::{self, Hit, Painter, Shared};
+use crate::rollback_dialog::rollback_dialog;
+use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
-use crate::side_editor::{CaretRow, SideCache, SideEditor, StripeRects};
-use crate::text::{FAMILY, TextStyle};
+use crate::text::TextStyle;
 
-actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom]);
-
-/// Varighet på animert hopp til endring.
-const NAV_ANIMATION_MS: f32 = 170.;
-
-/// Linjer utenfor viewporten som beholdes shapet per side.
-const CACHE_CAPACITY: usize = 2000;
+actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom, ToggleView]);
 
 const SIDES: [Side; 2] = [Side::Left, Side::Right];
 
@@ -59,32 +54,20 @@ pub struct Zoomed {
     pub font_size: f32,
 }
 
-struct Animation {
-    anim: ScrollAnimation,
-    start: Instant,
-}
-
-/// Det paint trenger å dele med hendelsene: siste bounds og shapede linjer.
-struct Shared {
-    bounds: Cell<Option<Bounds<Pixels>>>,
-    caches: RefCell<[SideCache; 2]>,
-    stripes: RefCell<[StripeRects; 2]>,
-    widest: Cell<f32>,
-}
-
 pub struct FileDiffView {
-    state: DiffState,
+    mode: DiffMode,
     font_size: f32,
     style: Option<TextStyle>,
-    /// Det som vises nå. Under en animasjon ligger den etter `state.scroll`, som er målet.
-    shown: ScrollState,
-    animation: Option<Animation>,
+    /// Det som vises nå. Målet er `mode.scroll()`.
+    scroll: ScrollAnimator,
     keys: KeyParser,
     initialized: bool,
     viewport_height: f32,
     markers: Rc<[Vec<StripeMarker>; 2]>,
     /// Lengste linje i tegn, regnet én gang. Gir maks horisontal scroll uten å shape alt.
     max_cols: usize,
+    /// Split og unified for alle filer, til `v` bytter.
+    unified: bool,
     /// Høyre side er en fil i working tree, så endringer kan rulles tilbake.
     can_rollback: bool,
     overlay: Option<Overlay>,
@@ -94,43 +77,6 @@ pub struct FileDiffView {
     message: Entity<Message>,
     shared: Rc<Shared>,
     focus: FocusHandle,
-}
-
-/// GPUI-tast til vår `Key`. `key_char` har shift og alt med, så `G`, `$` og `[` på norsk
-/// tastatur kommer riktig. Med ctrl er `key_char` tom, og `key` er grunntasten.
-fn to_key(k: &Keystroke) -> Key {
-    let m = k.modifiers;
-    let single = |s: &str| {
-        let mut chars = s.chars();
-        match (chars.next(), chars.next()) {
-            (Some(c), None) => Some(c),
-            _ => None,
-        }
-    };
-    let code = match k.key.as_str() {
-        "up" => KeyCode::Up,
-        "down" => KeyCode::Down,
-        "left" => KeyCode::Left,
-        "right" => KeyCode::Right,
-        f if let Some(n) = f.strip_prefix('f').and_then(|n| n.parse().ok()) => KeyCode::F(n),
-        key => {
-            let typed = if m.control {
-                None
-            } else {
-                k.key_char.as_deref().and_then(single)
-            };
-            match typed.or_else(|| single(key)) {
-                Some(c) => KeyCode::Char(c),
-                None => KeyCode::Other,
-            }
-        }
-    };
-    Key {
-        code,
-        ctrl: m.control,
-        shift: m.shift,
-        cmd: m.platform,
-    }
 }
 
 impl FileDiffView {
@@ -146,13 +92,14 @@ impl FileDiffView {
         message: Entity<Message>,
         cx: &mut Context<Self>,
     ) -> Self {
+        let unified = cx.global::<Settings>().unified;
         Self {
             max_cols: max_cols(&diff),
-            state: diff_state(diff, cx),
+            mode: diff_mode(diff, unified, cx),
+            unified,
             font_size: cx.global::<Settings>().font_size,
             style: None,
-            shown: ScrollState::default(),
-            animation: None,
+            scroll: ScrollAnimator::default(),
             keys: KeyParser::default(),
             initialized: false,
             viewport_height: 0.,
@@ -161,12 +108,7 @@ impl FileDiffView {
             overlay: None,
             paths,
             message,
-            shared: Rc::new(Shared {
-                bounds: Cell::new(None),
-                caches: RefCell::new(new_caches()),
-                stripes: RefCell::new([StripeRects::default(), StripeRects::default()]),
-                widest: Cell::new(0.),
-            }),
+            shared: Rc::new(Shared::new()),
             focus: cx.focus_handle(),
         }
     }
@@ -182,13 +124,11 @@ impl FileDiffView {
         }
         self.paths = paths;
         self.max_cols = max_cols(&diff);
-        self.state = diff_state(diff, cx);
-        self.shown = ScrollState::default();
-        self.animation = None;
+        self.mode = diff_mode(diff, self.unified, cx);
+        self.scroll = ScrollAnimator::default();
         self.keys.reset();
         self.initialized = false;
-        *self.shared.caches.borrow_mut() = new_caches();
-        self.shared.widest.set(0.);
+        self.shared.clear();
         self.update_markers();
         cx.notify();
     }
@@ -203,14 +143,43 @@ impl FileDiffView {
         self.max_cols = max_cols(&diff);
         self.stop_animation();
         let folding = folding(&diff, cx);
-        self.state.replace_diff(Rc::new(diff), Rc::new(folding), vp);
-        *self.shared.caches.borrow_mut() = new_caches();
-        self.shared.widest.set(0.);
-        let max_x = self.max_scroll_x();
-        self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
-        self.shown = self.state.scroll;
+        self.mode
+            .replace_diff(Rc::new(diff), Rc::new(folding), self.unified, vp);
+        self.shared.clear();
+        self.clamp_scroll_x();
+        self.scroll.jump(self.mode.scroll());
         self.update_markers();
         cx.notify();
+    }
+
+    /// `v`: bytter mellom split og unified for alle filer. Cursoren blir på samme linje og
+    /// høyde.
+    pub(crate) fn toggle_view(&mut self, _: &ToggleView, _: &mut Window, cx: &mut Context<Self>) {
+        // Nye og slettede filer vises alltid unified, så `v` gjør ingenting der
+        if self.mode.diff().single_side().is_some() {
+            return;
+        }
+        self.unified = !self.unified;
+        self.stop_animation();
+        let diff = self.mode.diff().clone();
+        let folding = Rc::new(folding(&diff, cx));
+        match self.viewport().filter(|_| self.initialized) {
+            Some(vp) => self.mode.toggle(folding, vp),
+            // Ingenting er vist ennå, så `step` lander på første endring
+            None => self.mode = DiffMode::new(diff, folding, self.unified),
+        }
+        self.update_markers();
+        self.clamp_scroll_x();
+        self.scroll.jump(self.mode.scroll());
+        self.show_message(if self.unified { "Unified" } else { "Split" }, cx);
+        cx.notify();
+    }
+
+    /// Tekstbredden er ulik i split og unified, og innholdet kan ha blitt kortere.
+    fn clamp_scroll_x(&mut self) {
+        let max_x = self.max_scroll_x();
+        let scroll = self.mode.scroll_mut();
+        scroll.scroll_x_to(scroll.x, max_x);
     }
 
     fn viewport(&self) -> Option<Viewport> {
@@ -230,26 +199,21 @@ impl FileDiffView {
             return;
         }
         let style = TextStyle::new(self.font_size, window);
-        // Nøkkelen har fontstørrelsen, så zoom tømmer cachen
-        let mut caches = self.shared.caches.borrow_mut();
-        for cache in caches.iter_mut() {
-            cache.set_key(style.cache_key());
-        }
-        drop(caches);
-        self.shared.widest.set(0.);
+        self.shared.set_style(&style);
         self.style = Some(style);
         self.update_markers();
     }
 
-    /// Stripen følger visuelle linjer, så den må regnes på nytt når foldene endres.
+    /// Stripen følger visuelle linjer, så den må regnes på nytt når foldene endres. Unified
+    /// regner sine markører når stripen tegnes.
     fn update_markers(&mut self) {
-        let Some(style) = &self.style else {
+        self.shared.clear_stripes();
+        let (Some(style), DiffMode::Split(state)) = (&self.style, &self.mode) else {
             return;
         };
         let lh = style.line_height();
-        let (diff, folding) = (&self.state.diff, &self.state.folding);
+        let (diff, folding) = (&state.diff, &state.folding);
         self.markers = Rc::new(SIDES.map(|s| stripe_markers(diff, folding, s, lh)));
-        *self.shared.stripes.borrow_mut() = Default::default();
     }
 
     fn horizontal(&self) -> Horizontal {
@@ -257,7 +221,7 @@ impl FileDiffView {
             return Horizontal::default();
         };
         Horizontal {
-            text_width: self.text_width(style, bounds),
+            text_width: painter::text_width(&self.mode, style, bounds),
             char_width: style.char_width,
             max_x: self.max_scroll_x(),
         }
@@ -265,8 +229,8 @@ impl FileDiffView {
 
     /// Fullfører en animasjon der den står, før noe annet endrer scroll.
     fn stop_animation(&mut self) {
-        if self.animation.take().is_some() {
-            self.state.scroll = self.shown;
+        if let Some(shown) = self.scroll.stop() {
+            *self.mode.scroll_mut() = shown;
         }
     }
 
@@ -280,7 +244,7 @@ impl FileDiffView {
                 return;
             }
             Command::CopyLocation => {
-                let c = self.state.location();
+                let c = self.mode.location();
                 let path = &self.paths[idx(c.side)];
                 if !path.is_empty() {
                     let location = format!("{path}:{}", c.line + 1);
@@ -302,9 +266,10 @@ impl FileDiffView {
         let Some(vp) = self.viewport() else {
             return;
         };
-        let out = self.state.execute(cmd, vp, self.horizontal());
-        if cmd == Command::ToggleFolds && out.changed {
-            let closed = self.state.folding.visible(Side::Left).next().is_some();
+        let out = self.mode.execute(cmd, vp, self.horizontal());
+        if let (Command::ToggleFolds, true, DiffMode::Split(state)) = (cmd, out.changed, &self.mode)
+        {
+            let closed = state.folding.visible(Side::Left).next().is_some();
             self.show_message(
                 if closed {
                     "Folds lukket"
@@ -321,10 +286,9 @@ impl FileDiffView {
             self.update_markers();
         }
         if out.animate {
-            self.animate();
+            self.scroll.animate(self.mode.scroll());
         } else {
-            self.animation = None;
-            self.shown = self.state.scroll;
+            self.scroll.jump(self.mode.scroll());
         }
         cx.notify();
     }
@@ -332,7 +296,7 @@ impl FileDiffView {
     /// Sjekker at endringen kan rulles tilbake og åpner dialogen. `on_key_down` sender
     /// `Rollback` på Enter.
     fn rollback(&mut self, cx: &mut Context<Self>) {
-        let diff = &self.state.diff;
+        let diff = self.mode.diff().clone();
         if !self.can_rollback {
             self.show_message("Bare lokale endringer kan rulles tilbake", cx);
             return;
@@ -341,7 +305,7 @@ impl FileDiffView {
             self.show_message("Hele fila er ny eller slettet", cx);
             return;
         }
-        let Some(block) = self.state.cursor_block() else {
+        let Some(block) = self.mode.cursor_block() else {
             self.show_message("Ingen endring på linja", cx);
             return;
         };
@@ -378,18 +342,6 @@ impl FileDiffView {
             .update(cx, |m, cx| m.show(text, Level::Info, cx));
     }
 
-    /// Fra det som vises til målet. Midt i en animasjon starter den nye der den gamle står.
-    fn animate(&mut self) {
-        if self.shown == self.state.scroll {
-            self.animation = None;
-            return;
-        }
-        self.animation = Some(Animation {
-            anim: ScrollAnimation::new(self.shown, self.state.scroll, NAV_ANIMATION_MS),
-            start: Instant::now(),
-        });
-    }
-
     /// `EditorFontSizeAction`: ny fontstørrelse, og cursorlinja holdes på samme sted.
     fn zoom(&mut self, size: f32, window: &mut Window) {
         if size == self.font_size {
@@ -399,17 +351,15 @@ impl FileDiffView {
             self.font_size = size;
             return;
         };
-        self.animation = None;
         self.font_size = size;
         self.ensure_style(window);
         let Some(vp) = self.viewport() else {
             return;
         };
         let char_width = self.style.as_ref().map_or(old.1, |s| s.char_width);
-        self.state.rescale(old.0, vp, char_width / old.1);
-        let max_x = self.max_scroll_x();
-        self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
-        self.shown = self.state.scroll;
+        self.mode.rescale(old.0, vp, char_width / old.1);
+        self.clamp_scroll_x();
+        self.scroll.jump(self.mode.scroll());
     }
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -437,49 +387,29 @@ impl FileDiffView {
         }
     }
 
-    /// Side og logisk linje under musa, `None` i divideren.
-    fn hit(&self, position: Point<Pixels>) -> Option<(Side, usize)> {
-        let (vp, bounds, style) = (
-            self.viewport()?,
-            self.shared.bounds.get()?,
-            self.style.as_ref()?,
-        );
-        let geoms = side_geometry(&self.state.diff, style, bounds);
-        let x = f32::from(position.x);
-        let side = SIDES
-            .into_iter()
-            .find(|&s| geoms[idx(s)].bounds().contains(&x))?;
-        let layout = self.state.folding.layout(side, vp.line_height);
-        let y = f32::from(position.y - bounds.origin.y) + self.shown.y(side);
-        let line = layout.y_to_logical_line(y).min(layout.line_count() - 1);
-        Some((side, line))
+    fn hit(&self, position: Point<Pixels>) -> Option<Hit> {
+        let (bounds, style) = (self.shared.bounds.get()?, self.style.as_ref()?);
+        painter::hit(&self.mode, style, bounds, self.scroll.shown().y, position)
     }
 
+    /// Bare split har folds.
     fn fold_at(&self, position: Point<Pixels>) -> Option<FoldId> {
-        let (side, line) = self.hit(position)?;
-        self.state.folding.fold_at_line(side, line)
+        let (Some(Hit::Split(side, line)), DiffMode::Split(state)) =
+            (self.hit(position), &self.mode)
+        else {
+            return None;
+        };
+        state.folding.fold_at_line(side, line)
     }
 
     /// `FoldingModelSupport.MyMouseListener`: hover gjelder blokken på begge sider.
     fn on_mouse_move(&mut self, ev: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
         let id = self.fold_at(ev.position);
-        if self.state.folding.hovered() != id {
-            Rc::make_mut(&mut self.state.folding).set_hovered(id);
+        if let DiffMode::Split(state) = &mut self.mode
+            && state.folding.hovered() != id
+        {
+            Rc::make_mut(&mut state.folding).set_hovered(id);
             cx.notify();
-        }
-    }
-
-    fn side_at(&self, x: Pixels) -> Side {
-        if let Some(side) = self.state.diff.single_side() {
-            return side;
-        }
-        let Some(bounds) = self.shared.bounds.get() else {
-            return self.state.master;
-        };
-        if x < bounds.center().x {
-            Side::Left
-        } else {
-            Side::Right
         }
     }
 
@@ -488,14 +418,7 @@ impl FileDiffView {
             return 0.;
         };
         let content = (self.max_cols + 1) as f32 * style.char_width;
-        content.max(self.shared.widest.get()) - self.text_width(style, bounds)
-    }
-
-    /// Sidene er like brede, så venstre side holder når begge vises.
-    fn text_width(&self, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
-        let side = self.state.diff.single_side().unwrap_or(Side::Left);
-        let g = &side_geometry(&self.state.diff, style, bounds)[idx(side)];
-        g.text.end - g.text_x
+        content.max(self.shared.widest.get()) - painter::text_width(&self.mode, style, bounds)
     }
 
     fn on_scroll(&mut self, ev: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -506,14 +429,15 @@ impl FileDiffView {
         let (dx, dy) = (f32::from(delta.x), f32::from(delta.y));
         self.stop_animation();
         if dy != 0. {
-            self.state.wheel(self.side_at(ev.position.x), -dy, vp);
+            let bounds = self.shared.bounds.get();
+            painter::wheel(&mut self.mode, bounds, ev.position.x, -dy, vp);
         }
         if dx != 0. {
             let max_x = self.max_scroll_x();
-            let x = self.state.scroll.x - dx;
-            self.state.scroll.scroll_x_to(x, max_x);
+            let scroll = self.mode.scroll_mut();
+            scroll.scroll_x_to(scroll.x - dx, max_x);
         }
-        self.shown = self.state.scroll;
+        self.scroll.jump(self.mode.scroll());
         cx.notify();
     }
 
@@ -523,18 +447,26 @@ impl FileDiffView {
         window.focus(&self.focus);
         self.keys.reset();
         self.overlay = None;
-        let Some((side, line)) = self.hit(ev.position) else {
+        let Some(hit) = self.hit(ev.position) else {
             return;
         };
         self.stop_animation();
-        self.state.click(side, line);
-        if self.state.folding.fold_at_line(side, line).is_some() {
-            self.execute(Command::FoldOpen, window, cx);
-            // Musa står fortsatt på linja, som nå kan være neste nivå
-            let id = self.fold_at(ev.position);
-            Rc::make_mut(&mut self.state.folding).set_hovered(id);
+        match (hit, &mut self.mode) {
+            (Hit::Split(side, line), DiffMode::Split(state)) => {
+                state.click(side, line);
+                if state.folding.fold_at_line(side, line).is_some() {
+                    self.execute(Command::FoldOpen, window, cx);
+                    // Musa står fortsatt på linja, som nå kan være neste nivå
+                    let id = self.fold_at(ev.position);
+                    if let DiffMode::Split(state) = &mut self.mode {
+                        Rc::make_mut(&mut state.folding).set_hovered(id);
+                    }
+                }
+            }
+            (Hit::Unified(row), DiffMode::Unified(state)) => state.click(row),
+            _ => {}
         }
-        self.shown = self.state.scroll;
+        self.scroll.jump(self.mode.scroll());
         cx.notify();
     }
 
@@ -557,18 +489,11 @@ impl FileDiffView {
         if !self.initialized {
             self.initialized = true;
             // `InitialScrollPositionSupport` faller tilbake til første endring
-            self.state.init(vp);
-            self.shown = self.state.scroll;
+            self.mode.init(vp);
+            self.scroll.jump(self.mode.scroll());
         }
-        if let Some(a) = &self.animation {
-            let elapsed = a.start.elapsed().as_secs_f32() * 1000.;
-            let (state, done) = a.anim.sample(elapsed);
-            self.shown = state;
-            if done {
-                self.animation = None;
-            } else {
-                window.request_animation_frame();
-            }
+        if self.scroll.step() {
+            window.request_animation_frame();
         }
     }
 
@@ -581,15 +506,14 @@ impl FileDiffView {
         let Some(vp) = self.viewport() else {
             return;
         };
-        self.animation = None;
-        self.state.resize(vp);
-        self.shown = self.state.scroll;
+        self.mode.resize(vp);
+        self.scroll.jump(self.mode.scroll());
     }
 }
 
-fn diff_state(diff: FileDiff, cx: &App) -> DiffState {
+fn diff_mode(diff: FileDiff, unified: bool, cx: &App) -> DiffMode {
     let folding = folding(&diff, cx);
-    DiffState::new(Rc::new(diff), Rc::new(folding))
+    DiffMode::new(Rc::new(diff), Rc::new(folding), unified)
 }
 
 fn folding(diff: &FileDiff, cx: &App) -> Folding {
@@ -605,23 +529,6 @@ fn max_cols(diff: &FileDiff) -> usize {
         .map(|(s, l)| display_width(diff.line(s, l)))
         .max()
         .unwrap_or(0)
-}
-
-fn new_caches() -> [SideCache; 2] {
-    [
-        SideCache::new(CACHE_CAPACITY),
-        SideCache::new(CACHE_CAPACITY),
-    ]
-}
-
-fn side_geometry(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> [SideGeometry; 2] {
-    let (x, width) = (f32::from(bounds.origin.x), f32::from(bounds.size.width));
-    jetdiff_view::side_geometry(diff, style.number_char_width, x, width)
-}
-
-/// Snapper til hele device-piksler så kanter og tekst ikke blir uskarpe midt i en scroll.
-fn snap(y: f32, scale: f32) -> f32 {
-    (y * scale).round() / scale
 }
 
 impl EventEmitter<Zoomed> for FileDiffView {}
@@ -647,28 +554,24 @@ impl Render for FileDiffView {
         self.resize(height);
         self.step(window);
 
-        let scale = window.scale_factor();
-        let scroll_y = self.shown.y.map(|y| snap(y, scale));
-        let scroll_x = snap(self.shown.x, scale);
-        let diff = self.state.diff.clone();
-        let folding = self.state.folding.clone();
         let theme = cx.global::<Settings>().theme;
-        let style = self.style.clone();
-        let markers = self.markers.clone();
-        let shared = self.shared.clone();
-
-        // Den andre siden viser overført linje svakere, så man ser hvor H og L lander.
-        // IntelliJ har caret row bare på aktiv side.
         let focused = self.focus.is_focused(window) && window.is_window_active();
-        let cursor = self.state.cursor;
-        let other = self.state.transferred_cursor();
-        let carets = SIDES.map(|s| {
-            let c = if s == cursor.side { cursor } else { other };
-            CaretRow {
-                line: c.line,
-                active: focused && s == cursor.side,
-            }
+        let painter = self.style.clone().map(|style| {
+            let shown = self.scroll.shown();
+            let scale = window.scale_factor();
+            Painter::new(
+                &self.mode,
+                &self.markers,
+                style,
+                shown,
+                focused,
+                scale,
+                theme,
+            )
         });
+        let hovered =
+            matches!(&self.mode, DiffMode::Split(state) if state.folding.hovered().is_some());
+        let shared = self.shared.clone();
 
         let keys = KeyHelp { theme };
         let footer = div()
@@ -676,37 +579,9 @@ impl Render for FileDiffView {
             .flex_none()
             .child(keys.bar())
             .child(self.message.clone());
-        let overlay = self.overlay.as_ref().map(|o| match o {
+        let overlay = self.overlay.as_ref().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
-            Overlay::Confirm(_) => div()
-                .absolute()
-                .inset_0()
-                .flex()
-                .items_start()
-                .justify_center()
-                .pt(relative(0.2))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(6.))
-                        .px(px(16.))
-                        .py(px(12.))
-                        .bg(theme.editor_bg)
-                        .border_1()
-                        .border_color(theme.line_number)
-                        .rounded(px(6.))
-                        .shadow_lg()
-                        .font_family(FAMILY)
-                        .text_size(px(13.))
-                        .text_color(theme.editor_fg)
-                        .child("Rull tilbake endringen?")
-                        .child(
-                            div()
-                                .text_color(theme.line_number)
-                                .child("[Enter] yes / [Esc] no"),
-                        ),
-                ),
+            Overlay::Confirm(_) => rollback_dialog(&theme),
         });
 
         div()
@@ -722,70 +597,18 @@ impl Render for FileDiffView {
             .on_action(cx.listener(Self::reset_zoom))
             .on_action(cx.listener(Self::toggle_help))
             .on_action(cx.listener(Self::hide_help))
+            .on_action(cx.listener(Self::toggle_view))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
-            .when(folding.hovered().is_some(), |d| d.cursor_pointer())
+            .when(hovered, |d| d.cursor_pointer())
             .child(
                 canvas(
                     |_, _, _| {},
                     move |bounds, _, window, cx| {
-                        let Some(style) = style else {
-                            return;
-                        };
-                        let old = shared.bounds.replace(Some(bounds));
-                        if old.map(|b| b.size.height) != Some(bounds.size.height) {
-                            window.refresh();
+                        if let Some(painter) = &painter {
+                            painter.paint(bounds, &shared, window, cx);
                         }
-                        let top = f32::from(bounds.origin.y);
-                        let height = f32::from(bounds.size.height);
-                        let geoms = side_geometry(&diff, &style, bounds);
-                        let mut caches = shared.caches.borrow_mut();
-                        let mut stripes = shared.stripes.borrow_mut();
-                        let mut widest = shared.widest.get();
-                        let single = diff.single_side();
-                        for (i, geom) in geoms.iter().enumerate() {
-                            let side = SIDES[i];
-                            if single.is_some_and(|s| s != side) {
-                                continue;
-                            }
-                            if stripes[i].track_height != height {
-                                let content =
-                                    folding.layout(side, style.line_height()).content_height();
-                                stripes[i] = StripeRects::new(&markers[i], content, height, &theme);
-                            }
-                            let editor = SideEditor {
-                                diff: &diff,
-                                folding: &folding,
-                                geom,
-                                theme: &theme,
-                                style: &style,
-                                top,
-                                height,
-                                scroll_y: scroll_y[i],
-                                scroll_x,
-                                caret: carets[i],
-                                stripe: &stripes[i],
-                            };
-                            widest = widest.max(editor.paint(&mut caches[i], window, cx));
-                        }
-                        shared.widest.set(widest);
-                        if single.is_some() {
-                            return;
-                        }
-                        crate::divider::Divider {
-                            diff: &diff,
-                            folding: &folding,
-                            theme: &theme,
-                            x: geoms[0].gutter.end,
-                            top,
-                            viewport: Viewport {
-                                height,
-                                line_height: style.line_height(),
-                            },
-                            scroll_y,
-                        }
-                        .paint(window);
                     },
                 )
                 .flex_1()
@@ -793,59 +616,5 @@ impl Render for FileDiffView {
             )
             .child(footer)
             .children(overlay)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::Modifiers;
-
-    fn stroke(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> Keystroke {
-        Keystroke {
-            modifiers,
-            key: key.into(),
-            key_char: key_char.map(Into::into),
-        }
-    }
-
-    #[test]
-    fn taster_fra_gpui() {
-        let none = Modifiers::default();
-        let shift = Modifiers {
-            shift: true,
-            ..none
-        };
-        let ctrl = Modifiers {
-            control: true,
-            ..none
-        };
-        let alt = Modifiers { alt: true, ..none };
-        assert_eq!(
-            to_key(&stroke("g", Some("G"), shift)).code,
-            KeyCode::Char('G')
-        );
-        assert_eq!(to_key(&stroke("d", None, ctrl)), Key::ctrl('d'));
-        // Norsk Alt+8 gir `[`
-        assert_eq!(
-            to_key(&stroke("8", Some("["), alt)).code,
-            KeyCode::Char('[')
-        );
-        assert_eq!(to_key(&stroke("f7", None, shift)).code, KeyCode::F(7));
-        assert_eq!(
-            to_key(&stroke("f", Some("f"), none)).code,
-            KeyCode::Char('f')
-        );
-        assert_eq!(to_key(&stroke("tab", None, none)).code, KeyCode::Other);
-        assert_eq!(to_key(&stroke("home", None, none)).code, KeyCode::Other);
-        let cmd = to_key(&stroke(
-            "=",
-            None,
-            Modifiers {
-                platform: true,
-                ..none
-            },
-        ));
-        assert!(cmd.cmd);
     }
 }

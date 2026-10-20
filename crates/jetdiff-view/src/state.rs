@@ -13,15 +13,10 @@ use crate::layout::{LineLayout, Viewport};
 use crate::model::{FileDiff, idx};
 use crate::nav::{next_block, prev_block, target_for_block};
 use crate::scroll::{PositionKeeper, ScrollState};
-
-/// Vim sin `scrolloff`, så det alltid er kontekst rundt cursoren. IntelliJ har 0.
-const SCROLLOFF: usize = 8;
+use crate::scrolloff;
 
 /// `h` og `l` scroller så mange tegn.
 const SCROLL_COLUMNS: f32 = 4.;
-
-/// Liten margin mot flyttallsfeil når scroll står på en linjegrense.
-const EPS: f32 = 1e-3;
 
 /// Horisontal geometri fra UI-et, som kjenner tekstbredden.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -40,14 +35,14 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    fn instant() -> Self {
+    pub(crate) fn instant() -> Self {
         Self {
             changed: true,
             ..Self::default()
         }
     }
 
-    fn animated() -> Self {
+    pub(crate) fn animated() -> Self {
         Self {
             animate: true,
             ..Self::instant()
@@ -65,20 +60,10 @@ pub struct DiffState {
     pub cursor: Cursor,
 }
 
-/// Hele linjer i viewporten.
-fn screen_lines(vp: Viewport) -> usize {
-    (vp.height / vp.line_height + EPS).floor().max(0.) as usize
-}
-
-/// Vim klemmer scrolloff til halve vinduet, så cursoren alltid har et sted å stå.
-fn scrolloff(vp: Viewport) -> usize {
-    SCROLLOFF.min(screen_lines(vp).saturating_sub(1) / 2)
-}
-
 impl DiffState {
     pub fn new(diff: Rc<FileDiff>, folding: Rc<Folding>) -> Self {
         // `getCurrentSide` er RIGHT som default i SimpleDiffViewer
-        let side = diff.single_side().unwrap_or(Side::Right);
+        let side = Side::Right;
         Self {
             diff,
             folding,
@@ -130,60 +115,14 @@ impl DiffState {
         self.set_line(line);
     }
 
-    /// Første og siste hele visuelle linje med tekst i viewporten.
-    fn full_lines(&self, sy: f32, vp: Viewport) -> (usize, usize) {
-        let last_line = self.layout(self.cursor.side, vp).visual_line_count() - 1;
-        let first = ((sy / vp.line_height - EPS).ceil().max(0.) as usize).min(last_line);
-        let last = ((sy + vp.height) / vp.line_height + EPS).floor() as usize;
-        (first, last.saturating_sub(1).clamp(first, last_line))
+    fn cursor_range(&self, scroll_y: f32, viewport: Viewport) -> (usize, usize) {
+        scrolloff::cursor_range(&self.layout(self.cursor.side, viewport), scroll_y, viewport)
     }
 
-    /// Visuelle linjer cursoren kan stå på uten at det scrolles. Øverst og nederst i
-    /// fila slippes scrolloff, ellers kunne cursoren aldri nå første og siste linje.
-    fn cursor_range(&self, sy: f32, vp: Viewport) -> (usize, usize) {
-        let layout = self.layout(self.cursor.side, vp);
-        let so = scrolloff(vp);
-        let last = layout.visual_line_count() - 1;
-        let (first_full, last_full) = self.full_lines(sy, vp);
-        let top = if sy <= EPS { 0 } else { so };
-        let bottom = if sy >= layout.max_scroll(vp.height) - EPS {
-            0
-        } else {
-            so
-        };
-        let min = (first_full + top).min(last);
-        let max = last_full.saturating_sub(bottom).max(min);
-        (min, max)
-    }
-
-    /// Minste scroll som gir cursoren scrolloff. Er hoppet langt, sentreres linja som
-    /// vim sin `scroll_cursor_halfway`.
-    fn follow_y(&self, sy: f32, vp: Viewport, allow_center: bool) -> f32 {
-        let layout = self.layout(self.cursor.side, vp);
-        let lh = vp.line_height;
-        let so = scrolloff(vp) as f32;
-        let cv = self.cursor_visual(vp) as f32;
-        let lo = (cv + 1. + so) * lh - vp.height;
-        let hi = (cv - so) * lh;
-        let mut y = sy;
-        if y < lo - EPS {
-            y = lo;
-        }
-        if y > hi + EPS {
-            y = hi;
-        }
-        // Vim sentrerer når det må scrolles en hel skjerm ned eller en halv opp
-        let far = (y > sy && y - sy >= vp.height) || (y < sy && sy - y >= vp.height / 2.);
-        if allow_center && far {
-            y = self.centered_y(vp);
-        }
-        layout.clamp_scroll(y, vp.height)
-    }
-
-    fn centered_y(&self, vp: Viewport) -> f32 {
-        let cv = self.cursor_visual(vp) as f32;
-        let above = (screen_lines(vp).saturating_sub(1) / 2) as f32;
-        (cv - above) * vp.line_height
+    fn follow_y(&self, scroll_y: f32, viewport: Viewport, allow_center: bool) -> f32 {
+        let layout = self.layout(self.cursor.side, viewport);
+        let cursor = self.cursor_visual(viewport);
+        scrolloff::follow_y(&layout, cursor, scroll_y, viewport, allow_center)
     }
 
     /// Cursoren eier master-siden. Slave følger via sync.
@@ -281,7 +220,7 @@ impl DiffState {
 
     /// `d` og `u`: scroll og cursor flyttes like mange linjer, vim sin `scroll`.
     fn half_page(&mut self, dir: isize, vp: Viewport) -> Outcome {
-        let n = (screen_lines(vp) / 2).max(1);
+        let n = (scrolloff::screen_lines(vp) / 2).max(1);
         let side = self.cursor.side;
         let sy = self.scroll.y(side);
         let cv = self.cursor_visual(vp);
@@ -342,7 +281,7 @@ impl DiffState {
     pub fn replace_diff(&mut self, diff: Rc<FileDiff>, folding: Rc<Folding>, vp: Viewport) {
         self.folding = folding;
         self.diff = diff;
-        let side = self.diff.single_side().unwrap_or(self.cursor.side);
+        let side = self.cursor.side;
         self.cursor = Cursor::new(side, self.clamp_line(side, self.cursor.line));
         self.master = side;
         let y = self.scroll.y(side);
@@ -351,9 +290,22 @@ impl DiffState {
         self.follow(vp, false);
     }
 
-    /// Markert linje i nyeste versjon. Slettede filer har bare venstre side.
+    /// Cursoren settes, og linja havner `offset` piksler under toppen av viewporten. For
+    /// bytte fra unified, så teksten under cursoren står i ro.
+    pub fn place_cursor(&mut self, cursor: Cursor, offset: f32, vp: Viewport) {
+        let side = cursor.side;
+        self.cursor = Cursor::new(side, self.clamp_line(side, cursor.line));
+        self.master = side;
+        let layout = self.layout(side, vp);
+        let y = layout.line_top(self.cursor.line) - offset;
+        self.scroll.y[idx(side)] = layout.clamp_scroll(y, vp.height);
+        self.scroll.sync_from(&self.diff, &self.folding, side, vp);
+        self.follow(vp, false);
+    }
+
+    /// Markert linje i nyeste versjon.
     pub fn location(&self) -> Cursor {
-        if self.cursor.side == Side::Right || self.diff.single_side().is_some() {
+        if self.cursor.side == Side::Right {
             self.cursor
         } else {
             self.transferred_cursor()
@@ -363,7 +315,7 @@ impl DiffState {
     /// `MyFocusOppositePaneAction`: cursoren flyttes, siden blir master, og så
     /// `scrollToCaret(MAKE_VISIBLE)`.
     fn focus_side(&mut self, side: Side, vp: Viewport) -> Outcome {
-        if self.diff.single_side().is_some() || self.cursor.side == side {
+        if self.cursor.side == side {
             return Outcome::default();
         }
         self.cursor = self.transferred_cursor();
@@ -532,20 +484,11 @@ mod tests {
     }
 
     #[test]
-    fn scrolloff_klemmes_i_lite_vindu() {
+    fn j_i_lite_vindu_holder_scrolloff() {
         let small = Viewport {
             height: 50.,
             line_height: LH,
         };
-        assert_eq!(scrolloff(small), 2);
-        assert_eq!(scrolloff(VP), 8);
-        assert_eq!(
-            scrolloff(Viewport {
-                height: 5.,
-                line_height: LH
-            }),
-            0
-        );
         let mut s = plain();
         for _ in 0..30 {
             s.execute(MoveDown, small, NO_X);
@@ -634,16 +577,6 @@ mod tests {
         assert_eq!(s.location(), Cursor::new(R, 1));
         s.click(R, 0);
         assert_eq!(s.location(), Cursor::new(R, 0));
-        let s = state("a\nb\n", "", false);
-        assert_eq!(s.location(), Cursor::new(L, 0));
-    }
-
-    #[test]
-    fn slettet_fil_vises_alene() {
-        let mut s = state("a\nb\n", "", false);
-        assert_eq!((s.cursor.side, s.master), (L, L));
-        run(&mut s, FocusSide(R));
-        assert_eq!(s.cursor.side, L);
     }
 
     #[test]

@@ -10,6 +10,8 @@ pub struct Settings {
     pub font_size: f32,
     /// Nye filer vises med uendrede deler klappet sammen.
     pub collapse_unchanged: bool,
+    /// Visningen ved oppstart. `v` bytter.
+    pub unified: bool,
     pub side_panel_open: bool,
 }
 

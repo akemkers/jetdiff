@@ -77,7 +77,7 @@ pub fn stripe_markers(
 
 /// Slutt-offset er uten siste linjeskift, så sluttlinja er `end - 1` og markøren slutter
 /// på toppen av den. Tom range ligger på `start`, klemt til siste linje.
-fn marker_y(layout: &LineLayout, lines: std::ops::Range<usize>) -> (f32, f32) {
+pub(crate) fn marker_y(layout: &LineLayout, lines: std::ops::Range<usize>) -> (f32, f32) {
     let last = layout.line_count() - 1;
     let start = lines.start.min(last);
     let end = if lines.is_empty() {

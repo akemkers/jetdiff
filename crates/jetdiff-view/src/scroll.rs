@@ -125,21 +125,15 @@ fn transfer_visual_line(
 /// `ScrollHelper.syncVerticalScroll` og `doScrollVertically` uten anker og animasjon.
 /// Ankeret ligger 1/3 ned i viewporten. Når slave står i en tom blokk flyttes den bare
 /// ved hele linjer, så den ikke vibrerer mens master scroller gjennom en ren insert.
-#[allow(clippy::too_many_arguments)]
 fn sync_vertical_scroll(
     mapping: &LineMapping,
     master: Side,
     master_layout: &LineLayout,
     slave_layout: &LineLayout,
-    master_empty: bool,
     master_y: f32,
     slave_y: f32,
     viewport_height: f32,
 ) -> f32 {
-    // `master.getDocument().getTextLength() == 0`: ingen sync
-    if master_empty {
-        return slave_y;
-    }
     let lh = master_layout.line_height();
     let transfer =
         |visual| transfer_visual_line(mapping, master, master_layout, slave_layout, visual);
@@ -231,7 +225,6 @@ impl ScrollState {
             master,
             &master_layout,
             &slave_layout,
-            diff.text(master).is_empty(),
             self.y(master),
             self.y(slave),
             viewport.height,
@@ -452,16 +445,7 @@ mod tests {
 
     fn sync_folded(d: &FileDiff, f: &Folding, master: Side, master_y: f32, slave_y: f32) -> f32 {
         let (ml, sl) = (f.layout(master, 20.), f.layout(master.other(), 20.));
-        sync_vertical_scroll(
-            d.mapping(),
-            master,
-            &ml,
-            &sl,
-            d.text(master).is_empty(),
-            master_y,
-            slave_y,
-            VP.height,
-        )
+        sync_vertical_scroll(d.mapping(), master, &ml, &sl, master_y, slave_y, VP.height)
     }
 
     /// Endringer på linjene 10, 40 og 90 av 100. Kollapset: folds 0..6, 15..36, 45..86 og
@@ -648,12 +632,6 @@ mod tests {
             Folding::none(&d).layout(L, 20.).max_scroll(VP.height)
         );
         assert_eq!(sync(&d, L, 0., 500.), 0.);
-    }
-
-    #[test]
-    fn tom_master_synker_ikke() {
-        let d = diff("", &lines("a", 50));
-        assert_eq!(sync(&d, L, 0., 123.), 123.);
     }
 
     #[test]
