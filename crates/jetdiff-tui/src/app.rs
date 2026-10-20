@@ -13,18 +13,19 @@ use jetdiff_app::{
 use jetdiff_changes::FileChange;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::{FileDiff, Theme};
-use ratatui::DefaultTerminal;
 use ratatui::Frame;
 use ratatui::crossterm::event::{self, Event, KeyEventKind, MouseButton, MouseEventKind};
+use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
+use ratatui::crossterm::{execute, queue};
 use ratatui::layout::Rect;
 
-use crate::Settings;
 use crate::clipboard;
 use crate::diff_view::{DiffView, Effect, Overlay};
 use crate::input::to_key;
 use crate::message::Message;
 use crate::panel::{Click, ListKey, Panel, Section, list_key};
 use crate::widgets;
+use crate::{Settings, Term};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
@@ -106,9 +107,11 @@ impl App {
         app
     }
 
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+    pub fn run(mut self, terminal: &mut Term) -> io::Result<()> {
         while !self.quit {
+            queue!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
             terminal.draw(|frame| self.draw(frame))?;
+            execute!(terminal.backend_mut(), EndSynchronizedUpdate)?;
             if event::poll(POLL)? {
                 loop {
                     self.event(event::read()?)?;
