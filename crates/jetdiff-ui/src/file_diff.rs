@@ -9,23 +9,26 @@ use std::time::Instant;
 use gpui::{
     App, Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable,
     KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render,
-    ScrollWheelEvent, SharedString, Window, actions, canvas, div, prelude::*, px, relative,
+    ScrollWheelEvent, SharedString, Window, actions, canvas, div, prelude::*, px,
 };
 use jetdiff_core::side::Side;
 use jetdiff_view::columns::display_width;
 use jetdiff_view::metrics::zoomed;
 use jetdiff_view::{
     Command, DiffState, FileDiff, FoldId, Folding, Horizontal, KeyParser, Parsed, ScrollAnimation,
-    ScrollState, SideGeometry, StripeMarker, Viewport, stripe_markers,
+    ScrollState, StripeMarker, Viewport, stripe_markers,
 };
 
 use crate::editor_paint::StripeRects;
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
 use crate::keystroke::to_key;
 use crate::message::{Level, Message};
+use crate::rollback_dialog::rollback_dialog;
 use crate::settings::Settings;
-use crate::side_editor::{CaretRow, SideCache, SideEditor};
-use crate::text::{FAMILY, TextStyle};
+use crate::side_editor::{CaretRow, SideCache};
+use crate::split_paint::{SplitPainter, side_geometry};
+use crate::text::TextStyle;
+use crate::theme::UiTheme;
 
 actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom]);
 
@@ -550,6 +553,32 @@ impl FileDiffView {
         self.state.resize(vp);
         self.shown = self.state.scroll;
     }
+
+    /// `None` før stilen er laget.
+    fn split_painter(&self, focused: bool, scale: f32, theme: UiTheme) -> Option<SplitPainter> {
+        let style = self.style.clone()?;
+        // Den andre siden viser overført linje svakere, så man ser hvor H og L lander.
+        // IntelliJ har caret row bare på aktiv side.
+        let cursor = self.state.cursor;
+        let other = self.state.transferred_cursor();
+        let carets = SIDES.map(|side| {
+            let shown = if side == cursor.side { cursor } else { other };
+            CaretRow {
+                line: shown.line,
+                active: focused && side == cursor.side,
+            }
+        });
+        Some(SplitPainter {
+            diff: self.state.diff.clone(),
+            folding: self.state.folding.clone(),
+            theme,
+            style,
+            markers: self.markers.clone(),
+            scroll_y: self.shown.y.map(|y| snap(y, scale)),
+            scroll_x: snap(self.shown.x, scale),
+            carets,
+        })
+    }
 }
 
 fn diff_state(diff: FileDiff, cx: &App) -> DiffState {
@@ -577,11 +606,6 @@ fn new_caches() -> [SideCache; 2] {
         SideCache::new(CACHE_CAPACITY),
         SideCache::new(CACHE_CAPACITY),
     ]
-}
-
-fn side_geometry(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> [SideGeometry; 2] {
-    let (x, width) = (f32::from(bounds.origin.x), f32::from(bounds.size.width));
-    jetdiff_view::side_geometry(diff, style.number_char_width, x, width)
 }
 
 /// Snapper til hele device-piksler så kanter og tekst ikke blir uskarpe midt i en scroll.
@@ -612,28 +636,10 @@ impl Render for FileDiffView {
         self.resize(height);
         self.step(window);
 
-        let scale = window.scale_factor();
-        let scroll_y = self.shown.y.map(|y| snap(y, scale));
-        let scroll_x = snap(self.shown.x, scale);
-        let diff = self.state.diff.clone();
-        let folding = self.state.folding.clone();
         let theme = cx.global::<Settings>().theme;
-        let style = self.style.clone();
-        let markers = self.markers.clone();
-        let shared = self.shared.clone();
-
-        // Den andre siden viser overført linje svakere, så man ser hvor H og L lander.
-        // IntelliJ har caret row bare på aktiv side.
         let focused = self.focus.is_focused(window) && window.is_window_active();
-        let cursor = self.state.cursor;
-        let other = self.state.transferred_cursor();
-        let carets = SIDES.map(|s| {
-            let c = if s == cursor.side { cursor } else { other };
-            CaretRow {
-                line: c.line,
-                active: focused && s == cursor.side,
-            }
-        });
+        let painter = self.split_painter(focused, window.scale_factor(), theme);
+        let shared = self.shared.clone();
 
         let keys = KeyHelp { theme };
         let footer = div()
@@ -641,37 +647,9 @@ impl Render for FileDiffView {
             .flex_none()
             .child(keys.bar())
             .child(self.message.clone());
-        let overlay = self.overlay.as_ref().map(|o| match o {
+        let overlay = self.overlay.as_ref().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
-            Overlay::Confirm(_) => div()
-                .absolute()
-                .inset_0()
-                .flex()
-                .items_start()
-                .justify_center()
-                .pt(relative(0.2))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(6.))
-                        .px(px(16.))
-                        .py(px(12.))
-                        .bg(theme.editor_bg)
-                        .border_1()
-                        .border_color(theme.line_number)
-                        .rounded(px(6.))
-                        .shadow_lg()
-                        .font_family(FAMILY)
-                        .text_size(px(13.))
-                        .text_color(theme.editor_fg)
-                        .child("Rull tilbake endringen?")
-                        .child(
-                            div()
-                                .text_color(theme.line_number)
-                                .child("[Enter] yes / [Esc] no"),
-                        ),
-                ),
+            Overlay::Confirm(_) => rollback_dialog(&theme),
         });
 
         div()
@@ -690,67 +668,28 @@ impl Render for FileDiffView {
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
-            .when(folding.hovered().is_some(), |d| d.cursor_pointer())
+            .when(self.state.folding.hovered().is_some(), |d| {
+                d.cursor_pointer()
+            })
             .child(
                 canvas(
                     |_, _, _| {},
                     move |bounds, _, window, cx| {
-                        let Some(style) = style else {
+                        let Some(painter) = painter else {
                             return;
                         };
                         let old = shared.bounds.replace(Some(bounds));
-                        if old.map(|b| b.size.height) != Some(bounds.size.height) {
+                        if old.map(|old| old.size.height) != Some(bounds.size.height) {
                             window.refresh();
                         }
-                        let top = f32::from(bounds.origin.y);
-                        let height = f32::from(bounds.size.height);
-                        let geoms = side_geometry(&diff, &style, bounds);
-                        let mut caches = shared.caches.borrow_mut();
-                        let mut stripes = shared.stripes.borrow_mut();
-                        let mut widest = shared.widest.get();
-                        let single = diff.single_side();
-                        for (i, geom) in geoms.iter().enumerate() {
-                            let side = SIDES[i];
-                            if single.is_some_and(|s| s != side) {
-                                continue;
-                            }
-                            if stripes[i].track_height != height {
-                                let content =
-                                    folding.layout(side, style.line_height()).content_height();
-                                stripes[i] = StripeRects::new(&markers[i], content, height, &theme);
-                            }
-                            let editor = SideEditor {
-                                diff: &diff,
-                                folding: &folding,
-                                geom,
-                                theme: &theme,
-                                style: &style,
-                                top,
-                                height,
-                                scroll_y: scroll_y[i],
-                                scroll_x,
-                                caret: carets[i],
-                                stripe: &stripes[i],
-                            };
-                            widest = widest.max(editor.paint(&mut caches[i], window, cx));
-                        }
-                        shared.widest.set(widest);
-                        if single.is_some() {
-                            return;
-                        }
-                        crate::divider::Divider {
-                            diff: &diff,
-                            folding: &folding,
-                            theme: &theme,
-                            x: geoms[0].gutter.end,
-                            top,
-                            viewport: Viewport {
-                                height,
-                                line_height: style.line_height(),
-                            },
-                            scroll_y,
-                        }
-                        .paint(window);
+                        let widest = painter.paint(
+                            bounds,
+                            &mut shared.caches.borrow_mut(),
+                            &mut shared.stripes.borrow_mut(),
+                            window,
+                            cx,
+                        );
+                        shared.widest.set(shared.widest.get().max(widest));
                     },
                 )
                 .flex_1()
