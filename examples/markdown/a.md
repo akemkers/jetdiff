@@ -1,18 +1,18 @@
-# Kurs-app
+# Quote App
 
-Viser kurser for **norske aksjer**.
+Shows quotes for **Norwegian stocks**.
 
-## Kom i gang
+## Getting started
 
-Installer avhengigheter og start:
+Install dependencies and start:
 
 ```sh
 npm install
 npm run dev
 ```
 
-Se [dokumentasjonen](https://example.com/docs) for mer.
+See [the documentation](https://example.com/docs) for more.
 
-## Lisens
+## License
 
 MIT

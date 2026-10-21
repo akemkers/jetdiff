@@ -1,9 +1,9 @@
-//! Liten tokenizer som slår sammen like tegn.
+//! A small tokenizer that merges equal characters.
 
 use std::collections::HashMap;
 use std::ops::Range;
 
-/// Et token med byte-intervall.
+/// A token with a byte range.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: Kind,
@@ -51,7 +51,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tall_slås_sammen() {
+    fn numbers_are_merged() {
         assert_eq!(tokenize("12")[0].range, 0..2);
     }
 }

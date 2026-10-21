@@ -1,8 +1,8 @@
-//! Liten tokenizer.
+//! A small tokenizer.
 
 use std::collections::HashMap;
 
-/// Et token med posisjon.
+/// A token with a position.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: Kind,
@@ -46,7 +46,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tall() {
+    fn number() {
         assert_eq!(tokenize("1")[0].kind, Kind::Number);
     }
 }

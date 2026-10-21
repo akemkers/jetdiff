@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bygger golden-generatoren og skriver fixtures/*/expected.json.
+# Builds the golden generator and writes fixtures/*/expected.json.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"

@@ -1,8 +1,8 @@
-# Deploy av kurs-api
-name: kurs-api
+# Deployment of quote-api
+name: quote-api
 replicas: 2
 image:
-  repository: ghcr.io/eksempel/kurs-api
+  repository: ghcr.io/example/quote-api
   tag: "1.4.2"
 env:
   - name: LOG_LEVEL
