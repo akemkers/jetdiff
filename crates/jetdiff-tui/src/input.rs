@@ -1,4 +1,4 @@
-//! Crossterm-tast til `Key` fra `jetdiff-viewmodel`.
+//! Crossterm key to `Key` from `jetdiff-viewmodel`.
 
 use jetdiff_viewmodel::{Key, KeyCode};
 use ratatui::crossterm::event::{KeyCode as Code, KeyEvent, KeyModifiers};
@@ -13,7 +13,7 @@ pub fn to_key(event: KeyEvent) -> Key {
         Code::Left => KeyCode::Left,
         Code::Right => KeyCode::Right,
         Code::Tab => KeyCode::Tab,
-        // Shift-Tab kommer som egen kode uten shift i alle terminaler
+        // Shift-Tab comes as its own code without shift in all terminals
         Code::BackTab => {
             return Key {
                 shift: true,
@@ -42,7 +42,7 @@ mod tests {
     }
 
     #[test]
-    fn taster_fra_crossterm() {
+    fn keys_from_crossterm() {
         assert_eq!(
             key(Code::Char('G'), KeyModifiers::SHIFT).code,
             KeyCode::Char('G')

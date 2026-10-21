@@ -1,4 +1,4 @@
-//! Terminalvisningen.
+//! The terminal view.
 
 use jetdiff_tui::Settings;
 

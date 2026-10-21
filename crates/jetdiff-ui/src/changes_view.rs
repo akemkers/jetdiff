@@ -1,5 +1,5 @@
-//! Filtre og diff side om side, med commitene under treet. Henter innholdet fra git når en
-//! fil eller commit velges, og på nytt når working tree endrer seg.
+//! File tree and diff side by side, with the commit list under the tree. Fetches the content from git when a
+//! file or commit is selected, and again when Local changes change on disk.
 
 use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
@@ -22,7 +22,7 @@ use crate::settings::Settings;
 use crate::text::FAMILY;
 use crate::watcher::Watcher;
 
-// Vim sine vindustaster og filbytte. Treet og commitene er til venstre, diffen til høyre.
+// Vim's window keys and file switching. The tree and the commit list are on the left, the diff on the right.
 actions!(
     jetdiff,
     [
@@ -42,11 +42,11 @@ pub struct ChangesView {
     tree: Entity<ChangesTree>,
     diff: Entity<FileDiffView>,
     message: Entity<Message>,
-    /// Bare for working tree.
+    /// Only for Local changes.
     commits: Option<Entity<CommitList>>,
     scale: f32,
     panel_open: bool,
-    /// Seksjonene i sidepanelet kan klappes sammen til bare overskriften.
+    /// The sections in the side panel can be collapsed to just the heading.
     files_open: bool,
     commits_open: bool,
     width: PanelWidth,
@@ -89,7 +89,7 @@ impl ChangesView {
             match Watcher::new(repo.root(), cx, Self::changed) {
                 Ok(w) => watcher = Some(w),
                 Err(e) => {
-                    let text = format!("Følger ikke endringer: {e}");
+                    let text = format!("Can't watch for changes: {e}");
                     message.update(cx, |m, cx| m.show(text, Level::Warning, cx));
                 }
             }
@@ -126,7 +126,7 @@ impl ChangesView {
         }
     }
 
-    /// Oppdaterer diffen og lista med en gang, uten å vente på watcheren.
+    /// Updates the diff and the list at once, without waiting for the watcher.
     fn rollback(&mut self, e: &Rollback, cx: &mut Context<Self>) {
         match self.changes.rollback(&e.0) {
             None => {}
@@ -140,7 +140,7 @@ impl ChangesView {
         }
     }
 
-    /// Git leses i bakgrunnen. En ny endring underveis avbryter den forrige.
+    /// Git is read in the background. A new change on the way cancels the previous one.
     fn changed(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
         let job = self.changes.reload();
         self._reload = Some(cx.spawn(async move |this, cx| {
@@ -159,7 +159,7 @@ impl ChangesView {
     fn reloaded(&mut self, reloaded: Reloaded, cx: &mut Context<Self>) {
         match reloaded {
             Reloaded::Failed { shown, error } => {
-                // Lista skal vise det som faktisk vises
+                // The list should show what is actually shown
                 if let Some(list) = &self.commits {
                     list.update(cx, |l, cx| l.set_selected(shown, cx));
                 }
@@ -191,7 +191,7 @@ impl ChangesView {
         self.show(show, cx);
     }
 
-    /// Er det samme fil som før, med nytt innhold, beholdes cursor og scroll.
+    /// If it is the same file as before, with new content, the cursor and scroll are kept.
     fn show(&mut self, show: Show, cx: &mut Context<Self>) {
         match show {
             Show::Unchanged => return,
@@ -223,7 +223,7 @@ impl ChangesView {
         cx.notify();
     }
 
-    /// Treet og commit-lista, bare de som er åpne.
+    /// The tree and the commit list, only the ones that are open.
     fn open_panes(&self, cx: &App) -> (Option<FocusHandle>, Option<FocusHandle>) {
         if !self.panel_open {
             return (None, None);
@@ -275,7 +275,7 @@ impl ChangesView {
         }
     }
 
-    /// Overskrift med + eller −. Klikk klapper seksjonen sammen eller opp.
+    /// Heading with + or −. A click collapses or expands the section.
     fn heading(
         &self,
         title: &'static str,
@@ -299,7 +299,7 @@ impl ChangesView {
             .on_click(cx.listener(move |this, _, window, cx| {
                 let open = toggle(this);
                 *open = !*open;
-                // Fokus i en lukket seksjon går til diffen
+                // Focus in a closed section goes to the diff
                 let tree = this.tree.focus_handle(cx);
                 let commits = this.commits.as_ref().map(|c| c.focus_handle(cx));
                 let hidden = (!this.files_open && tree.is_focused(window))
@@ -311,7 +311,7 @@ impl ChangesView {
             }))
     }
 
-    /// Treet med commitene under. Bredden følger treet.
+    /// The tree with the commit list under it. The width follows the tree.
     fn side_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let viewport = window.viewport_size();
         let unscaled = |v: gpui::Pixels| f32::from(v) / self.scale;
@@ -329,7 +329,7 @@ impl ChangesView {
             .border_color(theme.indent_guide)
             .font_family(FAMILY)
             .text_size(px(TEXT_SIZE * self.scale))
-            .child(self.heading("Filer", self.files_open, cx, |this| &mut this.files_open))
+            .child(self.heading("Files", self.files_open, cx, |this| &mut this.files_open))
             .when(self.files_open, |d| {
                 d.child(div().flex_1().min_h_0().child(self.tree.clone()))
             });
@@ -345,7 +345,7 @@ impl ChangesView {
                 .when(self.commits_open, |d| {
                     d.child(div().flex_1().min_h_0().child(commits))
                 });
-            // Lukket legger seksjonen seg nederst. Uten treet tar commitene resten.
+            // When closed, the section moves to the bottom. Without the tree, the commit list takes the rest.
             panel = match (self.files_open, self.commits_open) {
                 (true, true) => {
                     let height = self.commits_height.resolve(unscaled(viewport.height));
@@ -384,7 +384,7 @@ impl Render for ChangesView {
             .on_action(cx.listener(|this, _: &PrevFile, _, cx| {
                 this.tree.update(cx, |t, cx| t.step(false, cx))
             }))
-            // Zoom, hjelpen og visningen virker også når treet eller commitene har fokus
+            // Zoom, help and diff mode also work when the tree or the commit list has focus
             .on_action(cx.listener(|this, a: &ZoomIn, w, cx| {
                 this.diff.update(cx, |d, cx| d.zoom_in(a, w, cx))
             }))

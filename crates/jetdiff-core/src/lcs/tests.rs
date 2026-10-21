@@ -24,11 +24,7 @@ fn assert_valid<T: Eq + std::fmt::Debug>(a: &[T], b: &[T], changes: &Changes) {
         last = (r.end1, r.end2);
     }
     for u in changes.unchanged() {
-        assert_eq!(
-            u.end1 - u.start1,
-            u.end2 - u.start2,
-            "unchanged is not 1:1"
-        );
+        assert_eq!(u.end1 - u.start1, u.end2 - u.start2, "unchanged is not 1:1");
         assert_eq!(
             a[u.start1..u.end1],
             b[u.start2..u.end2],

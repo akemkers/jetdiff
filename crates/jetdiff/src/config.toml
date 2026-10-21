@@ -1,21 +1,21 @@
-# Innstillinger for jetdiff.
+# Settings for jetdiff.
 
-# catppuccin-mocha, jetbrains-dark eller jetbrains-light.
+# catppuccin-mocha, jetbrains-dark or jetbrains-light.
 theme = "catppuccin-mocha"
 
-# Mellom 8 og 40. Cmd-0 går tilbake hit.
+# Between 8 and 40. Cmd-0 goes back to this.
 font_size = 14
 
-# false viser hele fila, uten å klappe sammen uendrede deler.
+# false shows the whole file, without folding unchanged parts.
 collapse_unchanged = true
 
-# split eller unified. v bytter mens appen kjører.
+# split or unified. v switches while the app is running.
 view = "split"
 
 [side_panel]
-# true viser filtreet og commitene ved oppstart. b viser og skjuler dem.
+# true shows the file tree and the commit list at startup. b shows and hides them.
 open = false
 
 [terminal]
-# Filikoner i terminalvisningen. Krever en Nerd Font, se README.
+# File icons in the terminal view. Requires a Nerd Font, see the README.
 icons = true

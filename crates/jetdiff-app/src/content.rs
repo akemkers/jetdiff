@@ -1,4 +1,4 @@
-//! Fra git-innhold til `FileDiff`.
+//! From git content to `FileDiff`.
 
 use jetdiff_changes::{FileChange, Status};
 use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
@@ -39,7 +39,7 @@ pub fn build_diff(
         Err(e) => (empty_diff(), Some(Notice::warning(e))),
         Ok([l, r]) if l.contains('\0') || r.contains('\0') => (
             empty_diff(),
-            Some(Notice::warning("Binærfil kan ikke vises")),
+            Some(Notice::warning("Binary file can't be shown")),
         ),
         Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
             Ok(mut diff) => {
@@ -48,20 +48,23 @@ pub fn build_diff(
                 if let Some(lang) = lang {
                     diff.highlight_syntax(lang);
                 }
-                // Ved flytting eller bare endret filmodus er diffen ellers tom uten forklaring
+                // When moved, or with only the file mode changed, the diff would otherwise be empty without explanation
                 let identical = l == r && !matches!(change.status, Status::Added | Status::Deleted);
-                (diff, identical.then(|| Notice::info("Innholdet er likt")))
+                (
+                    diff,
+                    identical.then(|| Notice::info("The content is identical")),
+                )
             }
             Err(_) => (
                 empty_diff(),
-                Some(Notice::warning("Filen er for stor til å vises")),
+                Some(Notice::warning("The file is too big to show")),
             ),
         },
     }
 }
 
 pub fn empty_diff() -> FileDiff {
-    FileDiff::new("", "", ComparisonPolicy::Default).expect("tom diff er aldri for stor")
+    FileDiff::new("", "", ComparisonPolicy::Default).expect("an empty diff is never too big")
 }
 
 #[cfg(test)]
@@ -81,23 +84,23 @@ mod tests {
     }
 
     #[test]
-    fn beskjed_når_diffen_ikke_kan_vises() {
+    fn message_when_diff_cannot_be_shown() {
         let m = change("a.rs", Status::Modified);
         let text = |l: &str, r: &str| Ok([l.to_owned(), r.to_owned()]);
         assert_eq!(notice(&m, text("a\n", "b\n")), None);
         assert_eq!(
             notice(&m, text("a\n", "a\n")),
-            Some(Notice::info("Innholdet er likt"))
+            Some(Notice::info("The content is identical"))
         );
         assert_eq!(
             notice(&m, text("a\0", "b")),
-            Some(Notice::warning("Binærfil kan ikke vises"))
+            Some(Notice::warning("Binary file can't be shown"))
         );
         assert_eq!(
-            notice(&m, Err("borte".into())),
-            Some(Notice::warning("borte"))
+            notice(&m, Err("gone".into())),
+            Some(Notice::warning("gone"))
         );
-        // En tom ny fil er ikke «lik»
+        // An empty added file is not «identical»
         assert_eq!(notice(&change("a.rs", Status::Added), text("", "")), None);
     }
 }

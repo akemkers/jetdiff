@@ -1,9 +1,9 @@
-//! jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
+//! jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]
 //!
-//! Uten argumenter vises lokale endringer, på en branch mot der den gikk ut fra main.
-//! En mappe viser lokale endringer der. Med én commit vises den mot forelderen.
-//! En PR-lenke hentes inn i repoet du står i. Innstillingene
-//! ligger i config-fila, se `config.rs`. `--tui` viser diffen i terminalen.
+//! Without arguments, Local changes are shown, on a branch against where it branched off main.
+//! A folder shows Local changes there. With one commit, it is shown against its parent.
+//! A PR link is fetched into the repo you are in. The settings
+//! are in the config file; see `config.rs`. `--tui` shows the diff in the terminal.
 
 mod config;
 #[cfg(feature = "gui")]
@@ -12,7 +12,7 @@ mod gui;
 mod tui;
 
 #[cfg(not(any(feature = "gui", feature = "tui")))]
-compile_error!("jetdiff trenger minst én av featurene gui og tui");
+compile_error!("jetdiff needs at least one of the features gui and tui");
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -46,20 +46,20 @@ fn parse_args() -> Result<(Source, Frontend), String> {
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--tui" => tui = true,
-            flag if flag.starts_with("--") => return Err(format!("ukjent flagg: {flag}")),
+            flag if flag.starts_with("--") => return Err(format!("unknown flag: {flag}")),
             _ => paths.push(arg),
         }
     }
     Ok((parse_source(&paths)?, frontend(tui)?))
 }
 
-/// Vinduet når GPUI er bygd inn, ellers terminalen.
+/// The window when GPUI is built in, otherwise the terminal.
 fn frontend(tui: bool) -> Result<Frontend, String> {
     match tui {
         #[cfg(feature = "tui")]
         true => Ok(Frontend::Tui),
         #[cfg(not(feature = "tui"))]
-        true => Err("bygd uten featuren tui".into()),
+        true => Err("built without the tui feature".into()),
         #[cfg(feature = "gui")]
         false => Ok(Frontend::Gui),
         #[cfg(not(feature = "gui"))]
@@ -72,23 +72,23 @@ fn parse_source(paths: &[String]) -> Result<Source, String> {
         [] => Ok(Source::WorkTree(".".into())),
         [url] if url.starts_with("https://") => PullRequest::parse(url)
             .map(Source::PullRequest)
-            .ok_or_else(|| format!("ikke en PR-lenke: {url}")),
+            .ok_or_else(|| format!("not a PR link: {url}")),
         [dir] if Path::new(dir).is_dir() => Ok(Source::WorkTree(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
         [left, right] => Ok(Source::Files(left.clone(), right.clone())),
-        _ => Err(
-            "bruk: jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]".into(),
-        ),
+        _ => {
+            Err("usage: jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]".into())
+        }
     }
 }
 
 fn read(path: &str) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
-    // Binærfiler og feil encoding vises med erstatningstegn i stedet for å feile
+    // Binary files and wrong encoding are shown with replacement characters instead of failing
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-/// Det vinduet skal vise, klart før appen starter så feil kan skrives til terminalen.
+/// What the window should show, ready before the app starts so errors can be written to the terminal.
 pub enum Content {
     File(Box<FileDiff>, [String; 2]),
     Changes(Repo, Vec<jetdiff_changes::FileChange>),
@@ -104,26 +104,26 @@ fn load(source: &Source) -> Result<(Content, String), String> {
         }
         Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
         Source::PullRequest(pr) => {
-            let text = format!("Henter PR #{} fra {}", pr.number, pr.slug);
+            let text = format!("Fetching PR #{} from {}", pr.number, pr.slug);
             let repo = with_progress(&text, || Repo::pull_request(Path::new("."), pr))?;
             (repo, format!("PR #{}", pr.number))
         }
         Source::WorkTree(dir) => (Repo::work_tree(dir)?, LOCAL_CHANGES.to_owned()),
     };
-    // Flere vinduer åpne samtidig må kunne skilles i tittelen
+    // Several windows open at the same time must be told apart in the title
     let title = format!("{}: {title}", repo.name());
     let changes = repo.changes()?;
     Ok((Content::Changes(repo, changes), title))
 }
 
-/// Viser at `work` jobber, med spinner og tid i en terminal.
+/// Shows that `work` is working, with a spinner and time in a terminal.
 fn with_progress<T>(text: &str, work: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
     let start = Instant::now();
-    let seconds = || format!("{:.1} s", start.elapsed().as_secs_f32()).replace('.', ",");
+    let seconds = || format!("{:.1} s", start.elapsed().as_secs_f32());
     if !std::io::stderr().is_terminal() {
         eprintln!("{text} ...");
         let out = work()?;
-        eprintln!("Ferdig på {}", seconds());
+        eprintln!("Done in {}", seconds());
         return Ok(out);
     }
     let done = AtomicBool::new(false);
@@ -157,8 +157,8 @@ fn with_progress<T>(text: &str, work: impl FnOnce() -> Result<T, String>) -> Res
 fn file_diff(left: &str, right: &str) -> Result<FileDiff, String> {
     let (l, r) = (read(left)?, read(right)?);
     let mut diff = FileDiff::new(&l, &r, ComparisonPolicy::Default)
-        .map_err(|_| "filene er for store til å diffes".to_owned())?;
-    // Høyre side først, venstre kan være en midlertidig fil fra git difftool
+        .map_err(|_| "the files are too big to diff".to_owned())?;
+    // Right first; Left can be a temporary file from git difftool
     if let Some(lang) = Language::from_path(right).or_else(|| Language::from_path(left)) {
         diff.highlight_syntax(lang);
     }

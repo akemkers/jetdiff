@@ -1,6 +1,6 @@
-//! Koden i diffen: radene som synes, i split eller unified, og scrollbaren til høyre. Begge
-//! visningene er rader fra `UnifiedDiff`, og scroll rundes til hele rader. Panelet og linjene
-//! rundt ligger i `panel.rs` og `widgets.rs`.
+//! The code in the diff: the visible rows, in Split or Unified, and the scrollbar on the right. Both
+//! diff modes are rows from `UnifiedDiff`, and scroll is rounded to whole rows. The panel and the lines
+//! around it are in `panel.rs` and `widgets.rs`.
 
 mod change;
 mod painter;
@@ -14,7 +14,7 @@ use ratatui::layout::Rect;
 
 use self::painter::Painter;
 
-/// Raden på skjermraden `screen`, `None` under siste rad.
+/// The row on the screen row `screen`, `None` below the last row.
 pub fn row_at(layout: &LineLayout, scroll_y: f32, screen: u16) -> Option<usize> {
     let row = layout.y_to_logical_line(scroll_y.round() + screen as f32);
     (row < layout.line_count()).then_some(row)

@@ -1,5 +1,5 @@
-//! Trakten mellom sidene. Geometrien kommer ferdig fra `divider_bands` og
-//! `divider_separators`, lokal for divideren med samme y-akse som sidene.
+//! The diff divider between the sides. The geometry comes ready from `divider_bands` and
+//! `divider_separators`, local to the divider with the same y axis as the sides.
 
 use gpui::{Bounds, ContentMask, Hsla, PathBuilder, Pixels, Window, fill, point, px, size};
 use jetdiff_viewmodel::divider::DIVIDER_WIDTH;
@@ -10,7 +10,7 @@ use jetdiff_viewmodel::{
 
 use crate::theme::UiTheme;
 
-/// Streker en sti fra `jetdiff-viewmodel`. `map` gir vindus-koordinater.
+/// Strokes a path from `jetdiff-viewmodel`. `map` gives window coordinates.
 pub fn stroke_path(
     window: &mut Window,
     segs: &[PathSeg],
@@ -71,7 +71,7 @@ impl Divider<'_> {
                     window.paint_path(path, color);
                 }
 
-                // Bratte bånd blir aldri tynnere enn 1px
+                // Steep bands never get thinner than 1px
                 let mut b = PathBuilder::stroke(px(1.));
                 b.move_to(p(band.mid.p0));
                 curve(&mut b, &band.mid);

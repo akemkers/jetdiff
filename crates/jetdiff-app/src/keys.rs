@@ -1,4 +1,4 @@
-//! Tastene utenfor diffen. Diffens egne taster er `KeyParser` i `jetdiff-viewmodel`.
+//! The keys outside the diff. The diff's own keys are `KeyParser` in `jetdiff-viewmodel`.
 
 use jetdiff_viewmodel::{Key, KeyCode};
 
@@ -20,8 +20,8 @@ pub enum AppCommand {
     Quit,
 }
 
-/// I GPUI sin syntaks. `secondary` er Cmd på macOS og Ctrl ellers. GPUI matcher på tegnet som
-/// skrives, så Pluss er `+` på norsk og `=` på US.
+/// In GPUI's syntax. `secondary` is Cmd on macOS and Ctrl elsewhere. GPUI matches on the character that
+/// is typed, so Plus is `+` on Norwegian and `=` on US.
 pub const BINDINGS: &[(&str, AppCommand)] = &[
     ("secondary-+", AppCommand::ZoomIn),
     ("secondary-=", AppCommand::ZoomIn),
@@ -82,7 +82,7 @@ fn parse(binding: &str) -> Option<Key> {
     Some(key)
 }
 
-/// Shift er alt med i tegnet, som `J`.
+/// Shift is already in the character, like `J`.
 fn matches(binding: Key, key: Key) -> bool {
     let shift = matches!(key.code, KeyCode::Char(_)) || binding.shift == key.shift;
     binding.code == key.code && binding.ctrl == key.ctrl && binding.cmd == key.cmd && shift
@@ -93,14 +93,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn alle_bindinger_kan_leses() {
+    fn all_bindings_can_be_read() {
         for (binding, _) in BINDINGS {
             assert!(parse(binding).is_some(), "{binding}");
         }
     }
 
     #[test]
-    fn taster_til_kommandoer() {
+    fn keys_to_commands() {
         let secondary = |c| {
             let mut k = Key::char(c);
             if cfg!(target_os = "macos") {

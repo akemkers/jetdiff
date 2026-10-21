@@ -1,5 +1,5 @@
-//! Split-visningen: to `SplitSide` med trakten mellom. Tegning, og hvor på skjermen sidene
-//! og linjene er. Nye og slettede filer vises alltid unified.
+//! The Split view: two `SplitSide` with the diff divider between them. Drawing, and where on screen the sides
+//! and lines are. Added and deleted files are always shown Unified.
 
 use std::rc::Rc;
 
@@ -15,7 +15,7 @@ use crate::theme::UiTheme;
 
 const SIDES: [Side; 2] = [Side::Left, Side::Right];
 
-/// Det som skal tegnes i én frame. Lages i `render` og tegnes i canvas-en.
+/// What to draw in one frame. Made in `render` and drawn in the canvas.
 pub struct SplitPainter {
     pub diff: Rc<FileDiff>,
     pub folding: Rc<Folding>,
@@ -28,7 +28,7 @@ pub struct SplitPainter {
 }
 
 impl SplitPainter {
-    /// Returnerer bredden av den bredeste synlige linja, for maks horisontal scroll.
+    /// Returns the width of the widest visible line, for max horizontal scroll.
     pub fn paint(
         &self,
         bounds: Bounds<Pixels>,
@@ -90,7 +90,7 @@ fn index(side: Side) -> usize {
     side.select(0, 1)
 }
 
-/// Side og logisk linje under musa, `None` i divideren.
+/// Side and logical line under the mouse, `None` in the divider.
 pub fn hit(
     diff: &FileDiff,
     folding: &Folding,
@@ -110,7 +110,7 @@ pub fn hit(
     Some((side, line))
 }
 
-/// Siden musehjulet scroller. Divideren regnes til nærmeste side.
+/// The side the mouse wheel scrolls. The divider counts as the nearest side.
 pub fn side_at(bounds: Bounds<Pixels>, x: Pixels) -> Side {
     if x < bounds.center().x {
         Side::Left
@@ -119,7 +119,7 @@ pub fn side_at(bounds: Bounds<Pixels>, x: Pixels) -> Side {
     }
 }
 
-/// Bredden teksten har på én side. Sidene er like brede, så venstre side holder.
+/// The width the text has on one side. The sides are equally wide, so Left is enough.
 pub fn text_width(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
     let [geom, _] = &side_geometry(diff, style, bounds);
     geom.text.end - geom.text_x

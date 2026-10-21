@@ -1,4 +1,4 @@
-//! `jetdiff_viewmodel::Theme` oversatt til GPUI-farger én gang, så paint slipper konvertering.
+//! `jetdiff_viewmodel::Theme` translated to GPUI colors once, so paint skips the conversion.
 
 use gpui::{Font, FontStyle, FontWeight, Hsla};
 use jetdiff_viewmodel::theme::DiffColors;
@@ -66,7 +66,7 @@ impl UiSyntax {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiTheme {
-    /// Velger `_dark`-ikonene.
+    /// Picks the `_dark` icons.
     pub dark: bool,
     pub editor_bg: Hsla,
     pub editor_fg: Hsla,

@@ -572,7 +572,7 @@ mod tests {
 
     #[test]
     fn cursor_location_is_in_newest_version() {
-        let mut s = state("x\nny1\nny2\nfelles\n", "x\nfelles\n", false);
+        let mut s = state("x\nnew1\nnew2\ncommon\n", "x\ncommon\n", false);
         s.click(L, 3);
         assert_eq!(s.location(), Cursor::new(R, 1));
         s.click(R, 0);
@@ -582,8 +582,8 @@ mod tests {
     #[test]
     fn switching_side_transfers_the_line() {
         // Left has three more lines in the hunk
-        let a = "x\nny1\nny2\nny3\nfelles æøå\ny\n";
-        let b = "x\nfelles æøå\ny\n";
+        let a = "x\nnew1\nnew2\nnew3\ncommon æøå\ny\n";
+        let b = "x\ncommon æøå\ny\n";
         let mut s = state(a, b, false);
         s.click(L, 4);
         assert!(!run(&mut s, FocusSide(L)).animate);
