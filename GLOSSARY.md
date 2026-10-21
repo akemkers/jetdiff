@@ -98,6 +98,10 @@ _Avoid_: notice, toast
 The band between the sides in Split, connecting each hunk on Left to the same hunk on Right.
 _Avoid_: funnel
 
+**Fold link**:
+The line across the diff divider joining a closed fold on Left to the same fold on Right.
+_Avoid_: connector
+
 **Hunk minimap**:
 Coloured marks in the scrollbar showing where the hunks are in the file.
 _Avoid_: error stripe, minimap, hunk markers
