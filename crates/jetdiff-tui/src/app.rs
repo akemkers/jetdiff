@@ -390,7 +390,6 @@ impl App {
         match repo.panel.click(y) {
             Some(Click::Heading(section)) => {
                 repo.panel.toggle(section);
-                // Fokus i en lukket seksjon går til diffen
                 if self.focus == Focus::Panel(section) && !repo.panel.is_open(section) {
                     self.focus = Focus::Diff;
                 }
