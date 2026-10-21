@@ -27,6 +27,9 @@ use ratatui::crossterm::terminal::SetTitle;
 use crate::app::App;
 use crate::backend::TermBackend;
 
+/// Rader per hakk på scrollhjulet, i diffen og i panelet.
+const WHEEL_ROWS: usize = 3;
+
 pub struct Settings {
     pub theme: Theme,
     pub unified: bool,

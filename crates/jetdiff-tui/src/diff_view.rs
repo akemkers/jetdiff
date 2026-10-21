@@ -10,10 +10,9 @@ use jetdiff_viewmodel::{
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use crate::WHEEL_ROWS;
 use crate::geometry;
 use crate::paint::{paint, row_at};
-
-const WHEEL_ROWS: f32 = 3.;
 
 pub enum Overlay {
     /// Enter bekrefter, alt annet avbryter.
@@ -211,8 +210,8 @@ impl DiffView {
 
     pub fn wheel(&mut self, down: bool) {
         if let Some(viewport) = self.viewport() {
-            self.state
-                .wheel(if down { WHEEL_ROWS } else { -WHEEL_ROWS }, viewport);
+            let rows = WHEEL_ROWS as f32;
+            self.state.wheel(if down { rows } else { -rows }, viewport);
         }
     }
 

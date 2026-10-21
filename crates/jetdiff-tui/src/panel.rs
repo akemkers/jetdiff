@@ -11,6 +11,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
+use crate::WHEEL_ROWS;
 use crate::color::color;
 use crate::icons::{Icon, file_icon, folder_icon};
 
@@ -180,9 +181,9 @@ impl Panel {
             if (list.area.y..list.area.bottom()).contains(&y) {
                 let max = len.saturating_sub(list.area.height as usize);
                 list.scroll = if down {
-                    (list.scroll + 3).min(max)
+                    (list.scroll + WHEEL_ROWS).min(max)
                 } else {
-                    list.scroll.saturating_sub(3)
+                    list.scroll.saturating_sub(WHEEL_ROWS)
                 };
             }
         }
