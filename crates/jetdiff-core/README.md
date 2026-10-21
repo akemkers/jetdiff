@@ -49,4 +49,4 @@ JETDIFF_FIXTURES=/path/to/fixtures cargo test --test golden
 
 New case: create `fixtures/<name>/a.txt` and `b.txt`, run `tools/golden/gen.sh` and then `cargo test`. See [`fixtures/README.md`](../../fixtures/README.md) and [`tools/golden/README.md`](../../tools/golden/README.md).
 
-Research on the algorithm is in [`docs/research/01-diff-algoritme.md`](../../docs/research/01-diff-algoritme.md).
+Research on the algorithm is in [`docs/research/01-diff-algorithm.md`](../../docs/research/01-diff-algorithm.md).
