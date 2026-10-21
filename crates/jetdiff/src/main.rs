@@ -1,10 +1,9 @@
-//! jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
+//! jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 //!
 //! Uten argumenter vises lokale endringer, på en branch mot der den gikk ut fra main.
 //! En mappe viser lokale endringer der. Med én commit vises den mot forelderen.
 //! En PR-lenke hentes inn i repoet du står i. Innstillingene
-//! ligger i config-fila, se `config.rs`. `--gui` og `--tui` velger visning. Uten dem brukes
-//! terminalen over SSH og uten skjerm.
+//! ligger i config-fila, se `config.rs`. `--tui` viser diffen i terminalen.
 
 mod config;
 #[cfg(feature = "gui")]
@@ -42,55 +41,30 @@ enum Frontend {
 }
 
 fn parse_args() -> Result<(Source, Frontend), String> {
-    let mut frontend = None;
+    let mut tui = false;
     let mut paths = Vec::new();
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
-            "--gui" => frontend = Some(gui()?),
-            "--tui" => frontend = Some(tui()?),
+            "--tui" => tui = true,
             flag if flag.starts_with("--") => return Err(format!("ukjent flagg: {flag}")),
             _ => paths.push(arg),
         }
     }
-    Ok((
-        parse_source(&paths)?,
-        frontend.unwrap_or_else(default_frontend),
-    ))
+    Ok((parse_source(&paths)?, frontend(tui)?))
 }
 
-fn gui() -> Result<Frontend, String> {
-    #[cfg(feature = "gui")]
-    return Ok(Frontend::Gui);
-    #[cfg(not(feature = "gui"))]
-    Err("bygd uten featuren gui".into())
-}
-
-fn tui() -> Result<Frontend, String> {
-    #[cfg(feature = "tui")]
-    return Ok(Frontend::Tui);
-    #[cfg(not(feature = "tui"))]
-    Err("bygd uten featuren tui".into())
-}
-
-fn default_frontend() -> Frontend {
-    #[cfg(all(feature = "gui", feature = "tui"))]
-    return if has_display() {
-        Frontend::Gui
-    } else {
-        Frontend::Tui
-    };
-    #[cfg(not(all(feature = "gui", feature = "tui")))]
-    gui().or_else(|_| tui()).expect("minst én feature")
-}
-
-#[cfg(all(feature = "gui", feature = "tui"))]
-fn has_display() -> bool {
-    let var = |name| std::env::var_os(name).is_some();
-    // Også med X-forwarding, som er tregt
-    if var("SSH_CONNECTION") {
-        return false;
+/// Vinduet når GPUI er bygd inn, ellers terminalen.
+fn frontend(tui: bool) -> Result<Frontend, String> {
+    match tui {
+        #[cfg(feature = "tui")]
+        true => Ok(Frontend::Tui),
+        #[cfg(not(feature = "tui"))]
+        true => Err("bygd uten featuren tui".into()),
+        #[cfg(feature = "gui")]
+        false => Ok(Frontend::Gui),
+        #[cfg(not(feature = "gui"))]
+        false => Ok(Frontend::Tui),
     }
-    cfg!(target_os = "macos") || var("WAYLAND_DISPLAY") || var("DISPLAY")
 }
 
 fn parse_source(paths: &[String]) -> Result<Source, String> {
@@ -102,7 +76,9 @@ fn parse_source(paths: &[String]) -> Result<Source, String> {
         [dir] if Path::new(dir).is_dir() => Ok(Source::WorkTree(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
         [left, right] => Ok(Source::Files(left.clone(), right.clone())),
-        _ => Err("bruk: jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]".into()),
+        _ => Err(
+            "bruk: jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]".into(),
+        ),
     }
 }
 

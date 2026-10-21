@@ -31,7 +31,7 @@ Uten en slik font blir ikonene tomme firkanter. Skru dem av med `icons = false` 
 ## Bruk
 
 ```
-jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
+jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 ```
 
 - Uten argumenter: det som ikke er committet, også nye filer git ikke kjenner. Alltid mot HEAD
@@ -39,7 +39,7 @@ jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 - `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
 - `<pr-lenke>`: en PR på GitHub, f.eks. `https://github.com/eier/repo/pull/12`, som den vises der. Må kjøres i repoet PR-en hører til, og henter den fra `origin`. Krever `gh`
 - `<venstre> <høyre>`: to filer
-- `--gui`, `--tui`: velger visning. Uten dem brukes terminalen over SSH og når det ikke er noen skjerm
+- `--tui`: viser diffen i terminalen i stedet for i et vindu. Bygd uten `gui` er terminalen standard
 
 Tittelen på vinduet, eller terminalen, starter med mappenavnet til repoet, så flere vinduer kan skilles.
 

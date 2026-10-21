@@ -9,10 +9,10 @@ Alt annet er biblioteker som ikke antar noe om appen rundt. Det er fordi diff-vi
 ## Bruk
 
 ```
-cargo run --release -p jetdiff -- [--gui | --tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
+cargo run --release -p jetdiff -- [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 ```
 
-`gui.rs` og `tui.rs` ligger bak featurene med samme navn. Med begge velger `default_frontend` terminalen over SSH og uten `DISPLAY`/`WAYLAND_DISPLAY`.
+`gui.rs` og `tui.rs` ligger bak featurene med samme navn. `--tui` velger terminalen, ellers brukes vinduet når `gui` er bygd inn.
 
 Se hoved-[README](../../README.md) for argumentene, innstillingene og tastene.
 
