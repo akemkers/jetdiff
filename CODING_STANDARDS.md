@@ -1,28 +1,28 @@
-# Kodestandard
+# Coding standards
 
-Hvordan koden i jetdiff er organisert. Målet er at en fil kan leses uten å kjenne resten, og at man finner fram ved å lese navnene.
+How the code in jetdiff is organized. The goal is that a file can be read without knowing the rest, and that you find your way by reading the names.
 
-## Små filer med ett ansvar
+## Small files with one responsibility
 
-En fil gjør én ting. Samler en fil flere typer eller ansvar, deles den i en mappe med én fil per ansvar. Rust-vanen er større filer, men her deler vi tidlig, fordi store filer er vanskelige å få oversikt over og gir for lite abstraksjon.
+A file does one thing. If a file gathers several types or responsibilities, it is split into a folder with one file per responsibility. The Rust habit is larger files, but here we split early, because large files are hard to get an overview of and give too little abstraction.
 
-En modul med undermoduler er en fil og en mappe med samme navn. Ikke bruk `mod.rs`.
+A module with submodules is a file and a folder with the same name. Don't use `mod.rs`.
 
 ```
-code_viewer.rs        setter sammen: velger split eller unified og tegner
+code_viewer.rs        puts it together: picks Split or Unified and draws
 code_viewer/
-  painter.rs          byggeklossene: linje, linjenummer, fyll, markert rad, skillelinje
-  split.rs            to sider med skillelinje
-  unified.rs          én linje med to linjenumre
-  scrollbar.rs        tommel og markører
-  change.rs           endringen en rad hører til
+  painter.rs          the building blocks: line, line number, fill, cursor row, separator line
+  split.rs            two sides with a separator line
+  unified.rs          one line with two line numbers
+  scrollbar.rs        thumb and hunk minimap marks
+  change.rs           the hunk a row belongs to
 ```
 
-Grupper etter domene. Lag ikke filer som `utils.rs` eller `types.rs`.
+Group by domain. Don't make files like `utils.rs` or `types.rs`.
 
-## Inngangsfila setter sammen
+## The entry file puts it together
 
-Fila som har navnet til modulen, sier hva som skjer, og overlater detaljene til undermodulene. Den skal kunne leses som en oppskrift:
+The file that has the module's name says what happens, and leaves the details to the submodules. It should read like a recipe:
 
 ```rust
 pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf: &mut Buffer) {
@@ -36,52 +36,56 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
 }
 ```
 
-Blander en funksjon hva som skjer med hvordan det gjøres, får stegene egne funksjoner med navn.
+If a function mixes what happens with how it is done, the steps get their own named functions.
 
-## Lite grensesnitt
+## Small interface
 
-Bare det resten av craten trenger er `pub`. `code_viewer` viser fram `paint` og `row_at`, og alt annet er privat.
+Only what the rest of the crate needs is `pub`. `code_viewer` exposes `paint` and `row_at`, and everything else is private.
 
-Typer som undermodulene deler, får `pub(super)`. Da ser modulen og undermodulene dem, men ikke resten av craten.
+Types that the submodules share get `pub(super)`. Then the module and its submodules see them, but not the rest of the crate.
 
-## Tilstand bak metoder
+## State behind methods
 
-Felt er private. Andre filer spør gjennom metoder i stedet for å gå inn i strukturen:
+Fields are private. Other files ask through methods instead of reaching into the structure:
 
 ```rust
-// Ikke slik: split.rs vet hvordan tilstanden ser ut
+// Not like this: split.rs knows what the state looks like
 let state = painter.state;
 let marked = index == state.row;
 
-// Slik: painter.rs er den eneste som vet det
+// Like this: painter.rs is the only one that knows
 for visible in painter.visible_rows(area) {
     if visible.marked { ... }
 }
 ```
 
-Da kan tilstanden endres ett sted. Prisen er noen metoder som stort sett sender videre, og det er verdt det.
+Then the state can be changed in one place. The price is a few methods that mostly pass things on, and it's worth it.
 
-## Navn
+## Names
 
-- Bruk begrepene i `GLOSSARY.md` i nye navn, kommentarer og UI-tekst. Ord under _Avoid_ skal ikke inn i ny kode
-- Ingen forkortelser. Bruk beskrivende navn: `viewport`, ikke `vp`, og `anchor_left`, ikke `al`. Det gjelder også parametre i closures: `|commits|`, ikke `|c|`. Unntakene er `e` for feil og `i` som løkketeller, som er vanlige i Rust
-- Navnet sier hva noe er eller gjør. `Painter` tegner, mens `Painted` høres ut som noe som allerede er tegnet
+- Use the terms in `GLOSSARY.md` in new names, comments and UI text. Words under _Avoid_ don't go into new code
+- No abbreviations. Use descriptive names: `viewport`, not `vp`, and `anchor_left`, not `al`. This also applies to closure parameters: `|commits|`, not `|c|`. The exceptions are `e` for errors and `i` as a loop counter, which are common in Rust
+- The name says what something is or does. `Painter` draws, while `Painted` sounds like something that has already been drawn
 
-## Ingen magiske tall
+## No magic numbers
 
-Et tall som betyr noe, får en konstant med navn. Si hvorfor i en kommentar når navnet ikke gjør det:
+A number that means something gets a named constant. Say why in a comment when the name doesn't:
 
 ```rust
-/// Den automatiske bredden tar aldri mer enn dette av vinduet, som i GPUI.
+/// The automatic width never takes more than this of the window, as in GPUI.
 const MAX_AUTO_FRACTION: f32 = 0.4;
 
 let max = (window_width as f32 * MAX_AUTO_FRACTION) as u16;
 ```
 
-Konstanten står øverst i fila som bruker den. Brukes den av flere filer, står den i modulen over, som `WHEEL_ROWS` i `jetdiff-tui/src/lib.rs`. Unntaket er tall som forklarer seg selv der de står, som `0`, `+ 1` eller å dele på `2` for midten.
+The constant sits at the top of the file that uses it. If several files use it, it sits in the module above, like `WHEEL_ROWS` in `jetdiff-tui/src/lib.rs`. The exception is numbers that explain themselves where they are, like `0`, `+ 1` or dividing by `2` for the middle.
 
-## Kommentarer
+## Comments
 
-Skriv kode som forklarer seg selv. En kommentar forklarer hvorfor, ikke hva, og er kort. Ingen seksjons-skiller og ingen utkommentert kode.
+Write code that explains itself. A comment explains why, not what, and is short. No section dividers and no commented-out code.
 
-Doc-kommentarer øverst i en fil sier hva fila har ansvar for.
+Doc comments at the top of a file say what the file is responsible for.
+
+## Language
+
+Everything in the repo is in English, with US spelling: code, comments, UI text, docs and test names. Commit messages too, in the imperative, e.g. "Add b to hide the side panel".

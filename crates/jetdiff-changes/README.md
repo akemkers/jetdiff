@@ -1,25 +1,25 @@
 # jetdiff-changes
 
-Endrede filer og treet de vises i.
+Changed files and the tree they are shown in.
 
-## Hvorfor
+## Why
 
-Treet skal oppføre seg som i commit-dialogen i IntelliJ: mapper først, mapper med bare én undermappe slått sammen, og mapper som kan klappes sammen. Den logikken er skilt ut hit så den kan testes uten git og uten GUI.
+The tree should behave as in IntelliJ's commit dialog: folders first, folders with only one subfolder merged, and folders that can be collapsed. That logic is split out here so it can be tested without git and without a GUI.
 
-## Bruk
+## Usage
 
 ```rust
 use jetdiff_changes::{ChangeTree, FileChange, Status};
 
 let changes = vec![FileChange { path: "src/main.rs".into(), old_path: None, status: Status::Modified }];
 let mut tree = ChangeTree::new(&changes);
-let rows = tree.rows();                 // det som skal tegnes, i rekkefølge
-let first = tree.first();               // første fil
+let rows = tree.rows();                 // what to draw, in order
+let first = tree.first();               // the first file
 let next = tree.step(first.unwrap(), true);
-tree.toggle("src");                     // klapp mappa sammen eller opp
+tree.toggle("src");                     // collapse or expand the folder
 ```
 
-Filer refereres med indeks i `changes`. `touched` teller hvor mange filer som er endret mellom to lister, og brukes til beskjeden etter en reload.
+Files are referred to by index in `changes`. `touched` counts how many files changed between two lists, and is used for the message after a reload.
 
 ```mermaid
 graph LR

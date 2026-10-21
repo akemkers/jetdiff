@@ -1,40 +1,40 @@
 # jetdiff-app
 
-Tilstanden rundt diffen: endringene i repoet, fila som vises, filtreet, commit-lista og watcheren. Uten GUI, så GPUI-visningen og en terminalvisning kan dele den.
+The state around the diff: the changes in the repo, the file being shown, the file tree, the commit list and the watcher. No GUI, so the GPUI view and a terminal view can share it.
 
-## Hvorfor
+## Why
 
-`jetdiff-viewmodel` vet alt om diffen av én fil, men ingenting om hvor fila kommer fra. Det som skjer rundt, som at valgt fil beholdes etter en reload eller at en commit som ikke finnes gir advarsel og working tree igjen, lå før i `jetdiff-ui` sammen med GPUI. Et nytt UI måtte da skrevet det på nytt og holdt det likt for hånd. Her ligger det én gang, med tester.
+`jetdiff-viewmodel` knows everything about the diff of one file, but nothing about where the file comes from. What happens around it, like the selected file being kept after a reload, or a commit that doesn't exist giving a warning and Local changes again, used to live in `jetdiff-ui` together with GPUI. A new UI would then have had to write it again and keep it the same by hand. Here it lives once, with tests.
 
-## Hva craten eier
+## What the crate owns
 
-| Eier                                                                                                | Modul     |
-| --------------------------------------------------------------------------------------------------- | --------- |
-| Repoet, commiten som vises, endringene og fila som vises. Reload, og hvilken fil som velges etterpå | `changes` |
-| Fra innholdet git gir til `FileDiff`: binærfil, for stor, likt innhold og syntaks                   | `content` |
-| Filtreets rader og markør, og mapper som klappes sammen                                             | `files`   |
-| Commit-listas rader, markør og valg, og alderen som «3 timer siden»                                 | `commits` |
-| Rollback og `fil:linje` for markert linje: hva som rulles tilbake, eller hvorfor det ikke går        | `actions` |
-| Tastene i tastelinja og i hjelpen på `?`                                                            | `help`    |
-| Tastene utenfor diffen: filbytte, paneler, hjelp, zoom og avslutt                                   | `keys`    |
-| Stier som er endret i working tree, samlet til det er stille                                        | `watcher` |
-| Beskjedene og nivået deres (`Notice`, `Level`)                                                      | `content` |
+| Owns                                                                                                    | Module    |
+| ------------------------------------------------------------------------------------------------------- | --------- |
+| The repo, the commit being shown, the changes and the file being shown. Reload, and which file is selected afterwards | `changes` |
+| From the content git gives to `FileDiff`: binary file, too big, identical content and syntax          | `content` |
+| The file tree's rows and cursor, and folders being collapsed                                          | `files`   |
+| The commit list's rows, cursor and selection, and the age like "3 hours ago"                          | `commits` |
+| Rollback and `file:line` for the cursor's line: what is rolled back, or why it can't be               | `actions` |
+| The keys in the keymap bar and in the help on `?`                                                     | `help`    |
+| The keys outside the diff: switching files, panels, help, zoom and quit                               | `keys`    |
+| Paths changed in Local changes, collected until it is quiet                                            | `watcher` |
+| The messages and their level (`Notice`, `Level`)                                                       | `content` |
 
-## Hva craten ikke eier
+## What the crate doesn't own
 
-| Ligger i             | Hva                                                                             |
-| -------------------- | ------------------------------------------------------------------------------- |
-| `jetdiff-viewmodel`       | Diffen av én fil: markert linje, scroll, folding, split og unified, vim-tastene |
-| `jetdiff-git`        | Å snakke med `git`                                                              |
-| `jetdiff-changes`    | `FileChange` og tremodellen                                                     |
-| UI-et (`jetdiff-ui`, `jetdiff-tui`) | Tegning, fokus, mus, animasjon, zoom, utklippstavla, timere og tråder |
-| Binæren (`jetdiff`)  | Argumenter og config-fila                                                       |
+| Lives in                            | What                                                                       |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| `jetdiff-viewmodel`                 | The diff of one file: cursor, scroll, folding, Split and Unified, vim keys |
+| `jetdiff-git`                       | Talking to `git`                                                           |
+| `jetdiff-changes`                   | `FileChange` and the tree model                                            |
+| The UI (`jetdiff-ui`, `jetdiff-tui`) | Drawing, focus, mouse, animation, zoom, clipboard, timers and threads      |
+| The binary (`jetdiff`)              | Arguments and the config file                                              |
 
-Grensen er at denne craten bestemmer **hva** som vises, og UI-et bestemmer **hvordan**. En `if` som endrer hva som vises hører hjemme her.
+The boundary is that this crate decides **what** is shown, and the UI decides **how**. An `if` that changes what is shown belongs here.
 
-Craten starter ingen tråder og har ingen timere. Arbeid som tar tid kommer som en jobb UI-et kjører der det passer, og svaret gis tilbake. Valgt fil eies av UI-et, siden både treet og diffen må se den. Her regnes bare ut hva den blir.
+The crate starts no threads and has no timers. Work that takes time comes as a job the UI runs where it suits, and the answer is handed back. The selected file is owned by the UI, since both the tree and the diff must see it. Here we only compute what it becomes.
 
-## Bruk
+## Usage
 
 ```rust
 use jetdiff_app::{Changes, Reloaded, Show, Watcher};
@@ -42,28 +42,28 @@ use jetdiff_app::{Changes, Reloaded, Show, Watcher};
 let mut changes = Changes::new(repo, repo_changes);
 let mut selected = changes.first();
 
-// Fila som er valgt
+// The selected file
 match changes.load(selected) {
-    Show::Diff(shown) => { /* vis shown.diff, fest shown.notice */ }
-    Show::Empty(notice) => { /* tom diff og beskjeden */ }
+    Show::Diff(shown) => { /* show shown.diff, pin shown.notice */ }
+    Show::Empty(notice) => { /* empty diff and the message */ }
     Show::Unchanged => {}
 }
 
-// Watcheren spørres hver `watcher::POLL`
+// The watcher is asked every `watcher::POLL`
 let watcher = Watcher::new(changes.repo().root())?;
 if let Some(paths) = watcher.take() {
-    let job = changes.reload();          // Send, kan kjøres på en annen tråd
+    let job = changes.reload();          // Send, can run on another thread
     let loaded = job.run();
     match changes.reloaded(loaded, &paths) {
         Reloaded::Done { commits, changes, file, notice } => selected = file,
-        Reloaded::Failed { shown, error } => { /* commit-lista viser `shown` */ }
+        Reloaded::Failed { shown, error } => { /* the commit list shows `shown` */ }
     }
 }
 ```
 
 ```mermaid
 graph TD
-    ui[UI-et] -- load / reload / rollback --> changes[changes: Changes]
+    ui[The UI] -- load / reload / rollback --> changes[changes: Changes]
     changes -- ReloadJob --> ui
     changes -- Show --> ui
     changes --> content[content: build_diff]
@@ -72,15 +72,15 @@ graph TD
     ui --> files[files: FileTree]
     ui --> commits[commits: Commits]
     ui --> watcher[watcher: Watcher]
-    ui --> actions[actions: rollback og fil:linje]
+    ui --> actions[actions: rollback and file:line]
     actions --> mode[jetdiff-viewmodel: DiffMode]
     files --> tree[jetdiff-changes: ChangeTree]
 ```
 
-## Tester
+## Tests
 
 ```
 cargo test -p jetdiff-app
 ```
 
-Testene for `changes` lager et midlertidig git-repo og krever `git` på PATH.
+The tests for `changes` create a temporary git repo and require `git` on the PATH.

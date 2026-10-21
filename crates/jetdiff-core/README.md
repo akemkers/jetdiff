@@ -1,52 +1,52 @@
 # jetdiff-core
 
-Diff-algoritmen fra IntelliJ, portert til Rust.
+The diff algorithm from IntelliJ, ported to Rust.
 
-## Hvorfor
+## Why
 
-Målet er at diffen blir lik den i JetBrains-IDE-ene. Da holder det ikke med en vanlig Myers-diff. IntelliJ har heuristikker oppå, som å matche linjer uten whitespace først, flytte endringer til naturlige grenser og finne ord-endringer inni linjene. Porten gir samme resultat, og golden-testene sjekker det mot IntelliJ sin egen kode.
+The goal is a diff identical to the one in the JetBrains IDEs. A plain Myers diff isn't enough for that. IntelliJ has heuristics on top, like matching lines without whitespace first, moving changes to natural boundaries and finding word changes inside lines. The port gives the same result, and the golden tests check it against IntelliJ's own code.
 
-Craten har ingen avhengigheter og vet ingenting om filer, git eller GUI.
+The crate has no dependencies and knows nothing about files, git or a GUI.
 
-## Bruk
+## Usage
 
 ```rust
 use jetdiff_core::{ComparisonPolicy, compare_for_viewer};
 
 let fragments = compare_for_viewer(left, right, ComparisonPolicy::Default)?;
 for f in &fragments {
-    // f.lines1 og f.lines2: endrede linjer på hver side
-    // f.inner: ord-endringer inni blokken, None er hele linjer
+    // f.lines1 and f.lines2: changed lines on each side
+    // f.inner: word changes inside the hunk, None is whole lines
 }
 ```
 
-- `compare_lines`: bare linjer
-- `compare_lines_inner`: linjer med ord-endringer
-- `compare_for_viewer`: som over, pluss etterbehandlingen viewen i IntelliJ gjør
+- `compare_lines`: lines only
+- `compare_lines_inner`: lines with word changes
+- `compare_for_viewer`: as above, plus the post-processing the viewer in IntelliJ does
 
-Offsets er UTF-8 bytes. `DiffTooBig` betyr at filene er for store til å diffes innen terskelen IntelliJ bruker.
+Offsets are UTF-8 bytes. `DiffTooBig` means the files are too big to diff within the threshold IntelliJ uses.
 
 ```mermaid
 graph LR
-    input[to tekster] --> lcs[lcs: Myers, patience-fallback]
-    lcs --> by_line[by_line: smart linjediff, ChunkOptimizer]
-    by_line --> by_word[by_word: ord-endringer per blokk]
+    input[two texts] --> lcs[lcs: Myers, patience fallback]
+    lcs --> by_line[by_line: smart line diff, ChunkOptimizer]
+    by_line --> by_word[by_word: word changes per hunk]
     by_word --> viewer[compare_for_viewer]
     viewer --> out[Vec LineFragment]
 ```
 
-## Tester
+## Tests
 
 ```
 cargo test -p jetdiff-core
 ```
 
-`tests/golden.rs` kjører alle casene i `fixtures/` og sammenligner med `expected.json`, som er laget av IntelliJ. Mot et annet sett med fixturer:
+`tests/golden.rs` runs all the cases in `fixtures/` and compares with `expected.json`, which is produced by IntelliJ. Against another set of fixtures:
 
 ```
-JETDIFF_FIXTURES=/sti/til/fixturer cargo test --test golden
+JETDIFF_FIXTURES=/path/to/fixtures cargo test --test golden
 ```
 
-Ny case: lag `fixtures/<navn>/a.txt` og `b.txt`, kjør `tools/golden/gen.sh` og så `cargo test`. Se [`fixtures/README.md`](../../fixtures/README.md) og [`tools/golden/README.md`](../../tools/golden/README.md).
+New case: create `fixtures/<name>/a.txt` and `b.txt`, run `tools/golden/gen.sh` and then `cargo test`. See [`fixtures/README.md`](../../fixtures/README.md) and [`tools/golden/README.md`](../../tools/golden/README.md).
 
-Research om algoritmen ligger i [`docs/research/01-diff-algoritme.md`](../../docs/research/01-diff-algoritme.md).
+Research on the algorithm is in [`docs/research/01-diff-algoritme.md`](../../docs/research/01-diff-algoritme.md).

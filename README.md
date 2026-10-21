@@ -1,121 +1,121 @@
 # jetdiff
 
-En rask diff-viewer for macOS, med diffen fra JetBrains-IDE-ene. Rendres på GPU-en med [GPUI](https://www.gpui.rs), eller i terminalen over SSH.
+A fast diff viewer for macOS, with the diff from the JetBrains IDEs. Rendered on the GPU with [GPUI](https://www.gpui.rs), or in the terminal over SSH.
 
-Den viser lokale endringer, en commit eller to filer side om side, med trakt mellom sidene, ord-markering, folding av uendrede linjer og syntaksfarger. `v` bytter til unified, der slettede linjer står over de nye i én kodevisning. Diff-algoritmen er portert fra IntelliJ og gir samme resultat. Alt er for lesing, ingenting kan redigeres.
+It shows Local changes, a commit or a file pair side by side, with the diff divider between the sides, inline highlights, folding of unchanged lines and syntax colors. `v` switches to Unified, where deleted lines sit above the added ones in a single code view. The diff algorithm is ported from IntelliJ and gives the same result. Everything is read-only; nothing can be edited.
 
-![Lokale endringer med filtre og commits](docs/screenshots/endringer.png)
+![Local changes with the file tree and commits](docs/screenshots/local-changes.png)
 
-![To filer side om side](docs/screenshots/filer.png)
+![A file pair side by side](docs/screenshots/file-pair.png)
 
-## Installere
+## Installing
 
 ```
 cargo install --path crates/jetdiff
 ```
 
-Det legger `jetdiff` på PATH. Krever Rust stable.
+This puts `jetdiff` on your PATH. rustup installs the Rust version pinned in `rust-toolchain.toml` by itself.
 
-Featurene `gui` og `tui` er begge på som standard. På en server uten skjerm holder terminalvisningen, og GPUI trengs ikke:
+The `gui` and `tui` features are both on by default. On a server without a screen, the terminal view is enough and GPUI isn't needed:
 
 ```
 cargo install --path crates/jetdiff --no-default-features --features tui
 ```
 
-## Oppsett
+## Setup
 
-Terminalvisningen viser filikoner med tegn fra [Nerd Fonts](https://www.nerdfonts.com), så terminalen må bruke en Nerd Font med filikoner, for eksempel Hack Nerd Font Mono. Velg Mono-varianten, ellers blir ikonene for brede. Over SSH er det fonten i terminalen på din egen maskin som gjelder.
+The terminal view shows file icons using characters from [Nerd Fonts](https://www.nerdfonts.com), so the terminal must use a Nerd Font with file icons, for example Hack Nerd Font Mono. Pick the Mono variant, otherwise the icons are too wide. Over SSH, it's the font in the terminal on your own machine that counts.
 
-Uten en slik font blir ikonene tomme firkanter. Skru dem av med `icons = false` under `[terminal]` i [innstillingene](#innstillinger).
+Without such a font, the icons show as empty squares. Turn them off with `icons = false` under `[terminal]` in the [settings](#settings).
 
-## Bruk
+## Usage
 
 ```
-jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
+jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]
 ```
 
-- Uten argumenter: det som ikke er committet, også nye filer git ikke kjenner. Alltid mot HEAD
-- `<mappe>`: som uten argumenter, men for repoet eller worktreet mappa ligger i
-- `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
-- `<pr-lenke>`: en PR på GitHub, f.eks. `https://github.com/eier/repo/pull/12`, som den vises der. Må kjøres i repoet PR-en hører til, og henter den fra `origin`. Krever `gh`
-- `<venstre> <høyre>`: to filer
-- `--tui`: viser diffen i terminalen i stedet for i et vindu. Bygd uten `gui` er terminalen standard
+- No arguments: everything not yet committed, including new files git doesn't know about. Always against HEAD
+- `<folder>`: as without arguments, but for the repo or worktree the folder is in
+- `<commit>`: the commit against its parent, e.g. `HEAD~2`
+- `<pr-link>`: a pull request on GitHub, e.g. `https://github.com/owner/repo/pull/12`, as it is shown there. Must be run in the repo the PR belongs to, and fetches it from `origin`. Requires `gh`
+- `<left> <right>`: a file pair
+- `--tui`: shows the diff in the terminal instead of in a window. Built without `gui`, the terminal is the default
 
-Tittelen på vinduet, eller terminalen, starter med mappenavnet til repoet, så flere vinduer kan skilles.
+The title of the window, or the terminal, starts with the repo's folder name, so several windows can be told apart.
 
-Til venstre er et tre over endrede filer. Nye og slettede filer vises alltid unified, binærfiler vises ikke. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
+On the left is a file tree of changed files. Added and deleted files are always shown Unified; binary files are not shown. Drag the edge to change the width, and double-click to go back.
 
-For lokale endringer ligger commitene under treet: branchens commits mot `origin/main`, eller de siste når branchen ikke har egne. Maks 50. Klikk på en commit for å se den, og på raden øverst for å gå tilbake. Klikk på «Filer» eller «Commits» for å klappe seksjonen sammen.
+For Local changes, the commit list sits under the tree: the branch's commits against `origin/main`, or the latest ones when the branch has none of its own. At most 50. Click a commit to see it, and the top row to go back. Click «Files» or «Commits» to collapse the section.
 
-Lokale endringer lastes inn på nytt når filer endres. Valgt fil beholdes, og diffen starter på toppen hvis innholdet er endret.
+Local changes are reloaded when files change on disk. The selected file is kept, and the diff starts at the top if the content has changed.
 
-Uendrede linjer er foldet, med 4 linjer kontekst. Klikk på en fold for å vise mer. Unified har ikke folding.
+Unchanged lines are folded, with 4 lines of context. Click a fold to show more. Unified has no folding.
 
-Syntaksfarger for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML og Markdown. Språket velges fra filendelsen.
+Syntax colors for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML and Markdown. The language is picked from the file extension.
 
-### Innstillinger
+### Settings
 
-Leses fra `$XDG_CONFIG_HOME/jetdiff/config.toml`, eller `~/.config/jetdiff/config.toml`. Fila lages første gang jetdiff starter, med standardverdiene:
+Read from `$XDG_CONFIG_HOME/jetdiff/config.toml`, or `~/.config/jetdiff/config.toml`. The file is created the first time jetdiff starts, with the defaults:
 
 ```toml
 theme = "catppuccin-mocha"
-font_size = 14             # mellom 8 og 40, Cmd-0 går tilbake hit
-collapse_unchanged = true  # false viser hele fila
-view = "split"             # eller "unified", v bytter mens appen kjører
+font_size = 14             # between 8 and 40, Cmd-0 goes back to this
+collapse_unchanged = true  # false shows the whole file
+view = "split"             # or "unified", v switches while the app is running
 
 [side_panel]
-open = false               # true viser filtreet og commitene ved oppstart
+open = false               # true shows the file tree and the commit list at startup
 
 [terminal]
-icons = true               # filikoner i terminalvisningen, krever en Nerd Font
+icons = true               # file icons in the terminal view, requires a Nerd Font
 ```
 
-`theme` er `catppuccin-mocha`, `jetbrains-dark` eller `jetbrains-light`. De to siste er IntelliJ sine Islands-temaer.
+`theme` is `catppuccin-mocha`, `jetbrains-dark` or `jetbrains-light`. The last two are IntelliJ's Islands themes.
 
-### Taster
+### Keys
 
-Et lite, vim-inspirert keymap for lesing. Det er ingen cursor, bare en markert linje. Tastelinja nederst viser de viktigste, og `?` viser alle.
+A small, vim-inspired keymap for reading. The cursor is a whole line, with no column. The keymap bar at the bottom shows the most important keys, and `?` shows all of them.
 
-| Tast                                | Gjør                                                                                            |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `J` `K`, Tab Shift+Tab              | Neste og forrige fil i treet                                                                    |
-| Ctrl+h Ctrl+j Ctrl+k Ctrl+l         | Bytt mellom diffen, treet og commitene. Der flytter `j` `k` og pilene, og Enter eller `l` åpner |
-| `b`                                 | Skjul eller vis venstre panel                                                                   |
-| `j` `k`, pil opp og ned             | Flytt markert linje. Hopper over lukkede folds                                                  |
-| `h` `l`, pil venstre og høyre       | Scroll sideveis 4 tegn                                                                          |
-| `0` `$`                             | Scroll til linjestart og til slutten av markert linje                                           |
-| `gg` `G`                            | Første og siste linje                                                                           |
-| `d` `u`, Ctrl+d Ctrl+u              | Halv side ned og opp                                                                            |
-| `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Neste og forrige endring                                                                        |
-| `H` `L`                             | Til venstre og høyre side. Bare split                                                           |
-| `o`                                 | Åpne fold ved markert linje ett nivå. Bare split                                                |
-| `f`                                 | Åpne alle folds, eller lukk alle hvis ingen er lukket. Bare split                               |
-| `v`                                 | Bytt mellom split og unified for alle filer. Markert linje blir stående der den er              |
-| `y`                                 | Kopier `fil:linje` for markert linje. Linja er i nyeste versjon, også fra venstre side          |
-| `r`                                 | Rull tilbake endringen på markert linje til venstre side, etter Enter. Bare lokale endringer    |
-| Cmd/Ctrl+Pluss, Minus, 0            | Zoom inn, ut og tilbake til 14pt. Treet følger med                                              |
-| `?`                                 | Vis eller skjul alle tastene. Esc lukker også                                                   |
-| `q`, Cmd/Ctrl+Q, Cmd/Ctrl+W         | Avslutt                                                                                         |
+| Key                                 | Does                                                                                                 |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `J` `K`, Tab Shift+Tab              | Next and previous file in the tree                                                                   |
+| Ctrl+h Ctrl+j Ctrl+k Ctrl+l         | Switch between the diff, the tree and the commit list. There `j` `k` and the arrows move, and Enter or `l` opens |
+| `b`                                 | Hide or show the side panel                                                                          |
+| `j` `k`, arrow up and down          | Move the cursor. Skips closed folds                                                                  |
+| `h` `l`, arrow left and right       | Scroll sideways 4 characters                                                                         |
+| `0` `$`                             | Scroll to the start of the line and to the end of the cursor's line                                  |
+| `gg` `G`                            | First and last line                                                                                  |
+| `d` `u`, Ctrl+d Ctrl+u              | Half a page down and up                                                                              |
+| `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Next and previous hunk                                                                               |
+| `H` `L`                             | To Left and Right. Split only                                                                        |
+| `o`                                 | Open the fold at the cursor one level. Split only                                                    |
+| `f`                                 | Open all folds, or close all if none are closed. Split only                                          |
+| `v`                                 | Switch between Split and Unified for all files. The cursor stays where it is                         |
+| `y`                                 | Copy the cursor location (`file:line`). The line is in the newest version, also from Left            |
+| `r`                                 | Roll back the hunk at the cursor to Left, after Enter. Local changes only                            |
+| Cmd/Ctrl+Plus, Minus, 0             | Zoom in, out and back to 14pt. The tree follows                                                      |
+| `?`                                 | Show or hide all the keys. Esc also closes                                                           |
+| `q`, Cmd/Ctrl+Q, Cmd/Ctrl+W         | Quit                                                                                                 |
 
-## Utvikling
+## Development
 
-Krav:
+Requirements:
 
-- Rust (edition 2024, stable)
-- For golden-generatoren: JDK 25 og Gradle 9.x
+- Rust: the version in `rust-toolchain.toml`, which rustup installs by itself (edition 2024)
+- For the golden generator: JDK 25 and Gradle 9.x
 
 ```
 cargo run --release -p jetdiff -- examples/kotlin/a.kt examples/kotlin/b.kt
 cargo test
 ```
 
-`examples/` har et filpar per språk å prøve viewen på.
+`examples/` has a file pair per language to try the viewer on.
 
-GPUI bygges med `runtime_shaders`, så Metal-shaderne kompileres ved oppstart og Xcode sin Metal Toolchain trengs ikke.
+GPUI is built with `runtime_shaders`, so the Metal shaders are compiled at startup and Xcode's Metal Toolchain isn't needed.
 
-Hvordan koden organiseres står i [CODING_STANDARDS.md](CODING_STANDARDS.md).
+How the code is organized is in [CODING_STANDARDS.md](CODING_STANDARDS.md). The domain language is in [GLOSSARY.md](GLOSSARY.md).
 
-Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI, og bare `jetdiff-tui` kjenner terminalen. All logikk for scroll, folding og geometri ligger i `jetdiff-viewmodel`, og tilstanden rundt diffen (endringer, reload, tre og commits) i `jetdiff-app`. Begge testes uten vindu.
+The code is split into crates with one responsibility each. Only `jetdiff-ui` and the binary know GPUI, and only `jetdiff-tui` knows the terminal. All the logic for scroll, folding and geometry is in `jetdiff-viewmodel`, and the state around the diff (changes, reload, tree and commits) is in `jetdiff-app`. Both are tested without a window.
 
 ```mermaid
 graph TD
@@ -139,24 +139,24 @@ graph TD
     git --> changes
 ```
 
-| Crate                                           | Ansvar                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------- |
-| [`jetdiff`](crates/jetdiff)                     | Binæren: argumenter, config og vindu                          |
-| [`jetdiff-ui`](crates/jetdiff-ui)               | GPUI-visningen                                                |
-| [`jetdiff-tui`](crates/jetdiff-tui)             | Terminalvisningen                                             |
-| [`jetdiff-app`](crates/jetdiff-app)             | Tilstanden rundt diffen uten GUI: endringer, reload, tre, commits |
-| [`jetdiff-viewmodel`](crates/jetdiff-viewmodel) | Visningsmodell uten GUI: scroll, folding, markert linje, taster |
-| [`jetdiff-core`](crates/jetdiff-core)           | Diff-algoritmen, portert fra IntelliJ                         |
-| [`jetdiff-syntax`](crates/jetdiff-syntax)       | Syntaksfarger med tree-sitter                                 |
-| [`jetdiff-git`](crates/jetdiff-git)             | Endringer og filinnhold fra `git`                             |
-| [`jetdiff-changes`](crates/jetdiff-changes)     | Endrede filer og treet de vises i                             |
+| Crate                                           | Responsibility                                                    |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| [`jetdiff`](crates/jetdiff)                     | The binary: arguments, config and window                          |
+| [`jetdiff-ui`](crates/jetdiff-ui)               | The GPUI view                                                     |
+| [`jetdiff-tui`](crates/jetdiff-tui)             | The terminal view                                                 |
+| [`jetdiff-app`](crates/jetdiff-app)             | The state around the diff, without a GUI: changes, reload, tree, commits |
+| [`jetdiff-viewmodel`](crates/jetdiff-viewmodel) | View model without a GUI: scroll, folding, cursor, keys           |
+| [`jetdiff-core`](crates/jetdiff-core)           | The diff algorithm, ported from IntelliJ                          |
+| [`jetdiff-syntax`](crates/jetdiff-syntax)       | Syntax colors with tree-sitter                                    |
+| [`jetdiff-git`](crates/jetdiff-git)             | Changes and file content from `git`                               |
+| [`jetdiff-changes`](crates/jetdiff-changes)     | Changed files and the tree they are shown in                      |
 
-Øvrige mapper:
+Other folders:
 
-- `fixtures/`: testcaser for diff-algoritmen, med fasit fra IntelliJ. Se [`fixtures/README.md`](fixtures/README.md)
-- `tools/golden/`: Kotlin-generatoren som lager fasiten. Se [`tools/golden/README.md`](tools/golden/README.md)
-- `docs/`: overordnet løsning og research fra IntelliJ-koden
+- `fixtures/`: test cases for the diff algorithm, with expected results from IntelliJ. See [`fixtures/README.md`](fixtures/README.md)
+- `tools/golden/`: the Kotlin generator that produces the expected results. See [`tools/golden/README.md`](tools/golden/README.md)
+- `docs/`: the solution overview and research on the IntelliJ code
 
-Commit-meldinger er på norsk i imperativ, f.eks. «Legg til b for å skjule venstre panel».
+Commit messages are in English, in the imperative, e.g. "Add b to hide the side panel".
 
-Fonten er JetBrains Mono (SIL Open Font License). Ikonene er fra intellij-community (Apache 2.0), intellij-rust (MIT) og Seti UI (MIT).
+The font is JetBrains Mono (SIL Open Font License). The icons are from intellij-community (Apache 2.0), intellij-rust (MIT) and Seti UI (MIT).
