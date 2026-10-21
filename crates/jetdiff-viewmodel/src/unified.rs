@@ -1,7 +1,7 @@
 //! Unified diff: én editor der slettede linjer står over de nye i hver endring. Port av
 //! `UnifiedFragmentBuilder`, men radene peker inn i `FileDiff` i stedet for å bygge ny
-//! tekst, så syntaks og ord-markering gjenbrukes. Ingen folding. `aligned` gir samme rader med
-//! slettet og ny linje side om side, for split i terminalen.
+//! tekst, så syntaks og ord-markering gjenbrukes. Ingen folding. `RowLayout::Split` gir samme
+//! rader med slettet og ny linje side om side, for split i terminalen.
 
 use std::ops::Range;
 use std::rc::Rc;
@@ -55,6 +55,16 @@ impl Row {
     }
 }
 
+/// Hvordan linjene i en endring står i radene.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowLayout {
+    /// Slettede linjer over de nye.
+    Unified,
+    /// Slettet og ny linje side om side, for split i terminalen. Den korteste siden får rader
+    /// uten linje. Split med trakt i GPUI er `DiffState`, ikke dette.
+    Split,
+}
+
 #[derive(Debug, Clone)]
 pub struct UnifiedDiff {
     pub diff: Rc<FileDiff>,
@@ -64,24 +74,19 @@ pub struct UnifiedDiff {
     row_of: [Vec<usize>; 2],
     /// Radene til hver blokk.
     block_rows: Vec<Range<usize>>,
-    aligned: bool,
+    row_layout: RowLayout,
 }
 
 impl UnifiedDiff {
     pub fn new(diff: Rc<FileDiff>) -> Self {
-        Self::build(diff, false)
+        Self::with_layout(diff, RowLayout::Unified)
     }
 
-    /// Linjene i en endring står parvis, og den korteste siden får rader uten linje.
-    pub fn aligned(diff: Rc<FileDiff>) -> Self {
-        Self::build(diff, true)
+    pub fn row_layout(&self) -> RowLayout {
+        self.row_layout
     }
 
-    pub fn is_aligned(&self) -> bool {
-        self.aligned
-    }
-
-    fn build(diff: Rc<FileDiff>, aligned: bool) -> Self {
+    pub fn with_layout(diff: Rc<FileDiff>, row_layout: RowLayout) -> Self {
         let line_counts = [diff.line_count(Side::Left), diff.line_count(Side::Right)];
         let mut rows = Vec::with_capacity(line_counts[0] + line_counts[1]);
         let mut row_of = line_counts.map(|count| vec![0; count]);
@@ -104,16 +109,19 @@ impl UnifiedDiff {
                 len = push([Some(left), Some(right)], None);
             }
             let start = len;
-            if aligned {
-                for lines in pair_lines(&diff, block) {
-                    len = push(lines, Some(index));
+            match row_layout {
+                RowLayout::Unified => {
+                    for line in left.clone() {
+                        len = push([Some(line), None], Some(index));
+                    }
+                    for line in right.clone() {
+                        len = push([None, Some(line)], Some(index));
+                    }
                 }
-            } else {
-                for line in left.clone() {
-                    len = push([Some(line), None], Some(index));
-                }
-                for line in right.clone() {
-                    len = push([None, Some(line)], Some(index));
+                RowLayout::Split => {
+                    for lines in pair_lines(&diff, block) {
+                        len = push(lines, Some(index));
+                    }
                 }
             }
             block_rows.push(start..len);
@@ -134,7 +142,7 @@ impl UnifiedDiff {
             rows,
             row_of,
             block_rows,
-            aligned,
+            row_layout,
         }
     }
 
@@ -168,13 +176,13 @@ impl UnifiedDiff {
         LineLayout::new(self.row_count(), line_height)
     }
 
-    /// To markører for en endret blokk: én for slettet del og én for ny del. `aligned` har én
-    /// per blokk.
+    /// To markører for en endret blokk: én for slettet del og én for ny del. Split har én per
+    /// blokk.
     pub fn stripe_markers(&self, line_height: f32) -> Vec<StripeMarker> {
         let layout = self.layout(line_height);
         let mut markers = Vec::new();
         for (rows, block) in self.block_rows.iter().zip(self.diff.blocks()) {
-            if self.aligned {
+            if self.row_layout == RowLayout::Split {
                 let (start_y, end_y) = marker_y(&layout, rows.clone());
                 markers.push(StripeMarker {
                     diff_type: block.diff_type,
@@ -287,12 +295,12 @@ impl UnifiedState {
         Self::place(diff, cursor, offset, split.scroll.x, viewport)
     }
 
-    /// Bytter mellom unified og `aligned` på samme måte som mot split.
-    pub fn realign(&self, aligned: bool, viewport: Viewport) -> Self {
+    /// Bytter radoppsett på samme måte som mot split.
+    pub fn realign(&self, row_layout: RowLayout, viewport: Viewport) -> Self {
         let row = self.diff.row(self.row);
         let cursor = Cursor::new(row.side(), row.line());
         let offset = self.row as f32 * viewport.line_height - self.scroll_y();
-        let diff = Rc::new(UnifiedDiff::build(self.diff.diff.clone(), aligned));
+        let diff = Rc::new(UnifiedDiff::with_layout(self.diff.diff.clone(), row_layout));
         Self::place(diff, cursor, offset, self.scroll.x, viewport)
     }
 
@@ -502,7 +510,7 @@ impl UnifiedState {
     /// langt det går.
     pub fn replace_diff(&mut self, diff: Rc<FileDiff>, viewport: Viewport) {
         let row = *self.diff.row(self.row);
-        self.diff = Rc::new(UnifiedDiff::build(diff, self.diff.aligned));
+        self.diff = Rc::new(UnifiedDiff::with_layout(diff, self.diff.row_layout));
         self.row = self.diff.row_of(row.side(), row.line());
         self.set_scroll_y(self.scroll_y(), viewport);
         self.follow(viewport, false);

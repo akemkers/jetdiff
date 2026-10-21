@@ -8,7 +8,7 @@ Samme diff som GPUI-visningen, der GPU-en ikke finnes. Logikken ligger i `jetdif
 
 I GPUI har sidene hver sin scroll, og trakten mellom dem viser hvilke linjer som hører sammen. Trakten tegnes med kurver, og det går ikke i en terminal. Her står venstre og høyre linje på samme rad i stedet. Er en endring kortere på den ene siden, fylles den ut med skraverte rader, så resten av fila står likt. Linjer med tekst felles settes på samme rad.
 
-Radene lages av `UnifiedDiff::aligned`, så split og unified bruker samme `UnifiedState` for cursor og scroll.
+Radene lages av `UnifiedDiff::with_layout` med `RowLayout::Split`, så split og unified bruker samme `UnifiedState` for cursor og scroll.
 
 ## Bruk
 

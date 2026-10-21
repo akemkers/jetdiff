@@ -1,7 +1,9 @@
 //! Split og unified. Begge er rader fra `UnifiedDiff`, og scroll rundes til hele rader.
 
 use jetdiff_viewmodel::stripe::thumb_range;
-use jetdiff_viewmodel::{DiffType, FileDiff, LineLayout, Side, StripeMarker, Theme, UnifiedState};
+use jetdiff_viewmodel::{
+    DiffType, FileDiff, LineLayout, RowLayout, Side, StripeMarker, Theme, UnifiedState,
+};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -23,7 +25,7 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
     let scroll_y = state.scroll_y();
     let scroll_x = state.scroll.x.round() as usize;
     fill(area, color(theme.editor_bg), buf);
-    let scrollbar = if unified.is_aligned() {
+    let scrollbar = if unified.row_layout() == RowLayout::Split {
         let cells = geometry::aligned(diff, area);
         let guide = Style::default().fg(color(theme.indent_guide));
         for screen in 0..area.height {

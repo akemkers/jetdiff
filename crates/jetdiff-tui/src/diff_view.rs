@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use jetdiff_app::{RollbackRequest, location, rollback_request};
 use jetdiff_viewmodel::{
-    Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, Theme, UnifiedDiff,
+    Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, RowLayout, Theme, UnifiedDiff,
     UnifiedState, Viewport,
 };
 use ratatui::buffer::Buffer;
@@ -75,9 +75,9 @@ impl DiffView {
         };
         self.paths = paths;
         self.max_cols = diff.max_display_width();
-        let aligned = aligned(&diff, self.unified);
-        if aligned != self.state.diff.is_aligned() {
-            self.state = self.state.realign(aligned, viewport);
+        let row_layout = row_layout(&diff, self.unified);
+        if row_layout != self.state.diff.row_layout() {
+            self.state = self.state.realign(row_layout, viewport);
         }
         self.state.replace_diff(Rc::new(diff), viewport);
         self.clamp_scroll_x();
@@ -92,10 +92,9 @@ impl DiffView {
 
     fn text_width(&self) -> u16 {
         let diff = &self.state.diff.diff;
-        if self.state.diff.is_aligned() {
-            geometry::aligned(diff, self.area).sides[0].text_width()
-        } else {
-            geometry::unified(diff, self.area).columns.text_width()
+        match self.state.diff.row_layout() {
+            RowLayout::Split => geometry::aligned(diff, self.area).sides[0].text_width(),
+            RowLayout::Unified => geometry::unified(diff, self.area).columns.text_width(),
         }
     }
 
@@ -138,7 +137,10 @@ impl DiffView {
         }
         self.unified = !self.unified;
         match self.viewport().filter(|_| self.initialized) {
-            Some(viewport) => self.state = self.state.realign(!self.unified, viewport),
+            Some(viewport) => {
+                let row_layout = row_layout(&self.state.diff.diff, self.unified);
+                self.state = self.state.realign(row_layout, viewport);
+            }
             None => self.state = state(self.state.diff.diff.clone(), self.unified),
         }
         self.clamp_scroll_x();
@@ -220,15 +222,16 @@ impl DiffView {
     }
 }
 
-fn aligned(diff: &FileDiff, unified: bool) -> bool {
-    !unified && diff.can_split()
+/// Split er justerte rader.
+fn row_layout(diff: &FileDiff, unified: bool) -> RowLayout {
+    if !unified && diff.can_split() {
+        RowLayout::Split
+    } else {
+        RowLayout::Unified
+    }
 }
 
 fn state(diff: Rc<FileDiff>, unified: bool) -> UnifiedState {
-    let rows = if aligned(&diff, unified) {
-        UnifiedDiff::aligned(diff)
-    } else {
-        UnifiedDiff::new(diff)
-    };
-    UnifiedState::new(Rc::new(rows))
+    let row_layout = row_layout(&diff, unified);
+    UnifiedState::new(Rc::new(UnifiedDiff::with_layout(diff, row_layout)))
 }
