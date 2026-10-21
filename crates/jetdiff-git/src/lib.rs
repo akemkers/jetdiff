@@ -744,10 +744,15 @@ mod tests {
         let pr = PullRequest::parse("https://github.com/eier/repo/pull/1").unwrap();
         let err = |r: &TempRepo| Repo::pull_request(&r.0, &pr).err().unwrap();
         assert_eq!(err(&r), "repoet har ingen origin");
-        r.git(&["remote", "add", "origin", "git@github.com:eier/annet.git"]);
+        r.git(&[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/eier/annet.git",
+        ]);
         assert_eq!(
             err(&r),
-            "PR-en hører til eier/repo, ikke git@github.com:eier/annet.git"
+            "PR-en hører til eier/repo, ikke https://github.com/eier/annet.git"
         );
     }
 
