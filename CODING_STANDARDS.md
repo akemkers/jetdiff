@@ -67,6 +67,19 @@ Da kan tilstanden endres ett sted. Prisen er noen metoder som stort sett sender 
 - Ingen forkortelser. Bruk beskrivende navn: `viewport`, ikke `vp`, og `anchor_left`, ikke `al`. Det gjelder også parametre i closures: `|commits|`, ikke `|c|`. Unntakene er `e` for feil og `i` som løkketeller, som er vanlige i Rust
 - Navnet sier hva noe er eller gjør. `Painter` tegner, mens `Painted` høres ut som noe som allerede er tegnet
 
+## Ingen magiske tall
+
+Et tall som betyr noe, får en konstant med navn. Si hvorfor i en kommentar når navnet ikke gjør det:
+
+```rust
+/// Den automatiske bredden tar aldri mer enn dette av vinduet, som i GPUI.
+const MAX_AUTO_FRACTION: f32 = 0.4;
+
+let max = (window_width as f32 * MAX_AUTO_FRACTION) as u16;
+```
+
+Konstanten står øverst i fila som bruker den. Brukes den av flere filer, står den i modulen over, som `WHEEL_ROWS` i `jetdiff-tui/src/lib.rs`. Unntaket er tall som forklarer seg selv der de står, som `0`, `+ 1` eller å dele på `2` for midten.
+
 ## Kommentarer
 
 Skriv kode som forklarer seg selv. En kommentar forklarer hvorfor, ikke hva, og er kort. Ingen seksjons-skiller og ingen utkommentert kode.
