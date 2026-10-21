@@ -2,9 +2,9 @@
 
 A GPU-accelerated diff viewer in Rust + GPUI, modeled on JetBrains. The details are in `research/`:
 
-- `01-diff-algoritme.md` - pipeline, heuristics, word diff
+- `01-diff-algorithm.md` - pipeline, heuristics, word diff
 - `02-rendering.md` - diff divider, colors, gutter, folding waves
-- `03-scroll-folding-struktur.md` - sync scroll, folding, commit view, tree
+- `03-scroll-folding-structure.md` - sync scroll, folding, commit view, tree
 - `04-unified-diff.md` - the Unified viewer: rows, line numbers, colors and switching from Split
 
 ## Constraints
