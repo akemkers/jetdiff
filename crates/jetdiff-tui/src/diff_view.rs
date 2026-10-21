@@ -133,7 +133,7 @@ impl DiffView {
     }
 
     pub fn toggle_view(&mut self) -> Option<Effect> {
-        if self.state.diff.diff.single_side().is_some() {
+        if !self.state.diff.diff.can_split() {
             return None;
         }
         self.unified = !self.unified;
@@ -220,9 +220,8 @@ impl DiffView {
     }
 }
 
-/// Nye og slettede filer vises alltid unified.
 fn aligned(diff: &FileDiff, unified: bool) -> bool {
-    !unified && diff.single_side().is_none()
+    !unified && diff.can_split()
 }
 
 fn state(diff: Rc<FileDiff>, unified: bool) -> UnifiedState {

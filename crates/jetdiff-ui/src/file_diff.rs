@@ -146,7 +146,7 @@ impl FileDiffView {
     /// høyde.
     pub(crate) fn toggle_view(&mut self, _: &ToggleView, _: &mut Window, cx: &mut Context<Self>) {
         // Nye og slettede filer vises alltid unified, så `v` gjør ingenting der
-        if self.mode.diff().single_side().is_some() {
+        if !self.mode.diff().can_split() {
             return;
         }
         self.unified = !self.unified;

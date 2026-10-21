@@ -160,6 +160,11 @@ impl FileDiff {
         }
     }
 
+    /// Nye og slettede filer vises alltid unified, så split slipper å vise én side alene.
+    pub fn can_split(&self) -> bool {
+        self.single_side().is_none()
+    }
+
     /// Minst én linje. Tekst som slutter på `'\n'` har en tom siste linje, som i IntelliJ.
     pub fn line_count(&self, side: Side) -> usize {
         self.side(side).line_count()
