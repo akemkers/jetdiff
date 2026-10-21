@@ -1,4 +1,4 @@
-//! Beskjed over tastelinja. En kort beskjed legger seg over den faste en stund.
+//! Message above the keymap bar. A brief message lies over the pinned one for a while.
 
 use std::time::{Duration, Instant};
 

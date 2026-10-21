@@ -1,27 +1,27 @@
-//! Vim sin `scrolloff` for én kodevisning: hvor cursoren kan stå uten at det scrolles, og minste
-//! scroll som holder den der. Cursoren er en visuell linje i `layout`.
+//! Vim's `scrolloff` for one code view: where the cursor can be without scrolling, and the smallest
+//! scroll that keeps it there. The cursor is a visual line in `layout`.
 
 use crate::layout::{LineLayout, Viewport};
 
-/// Antall linjer til topp/bunn før cursor begynner å scrolle.
+/// Number of lines to the top/bottom before the cursor starts to scroll.
 const SCROLLOFF: usize = 8;
 
-/// Liten margin mot flyttallsfeil når scroll står på grensen mellom to linjer.
+/// A small margin against floating point errors when scroll is on the boundary between two lines.
 const TOLERANCE: f32 = 1e-3;
 
-/// Hvor mange hele linjer det er plass til i viewporten.
+/// How many whole lines fit in the viewport.
 pub(crate) fn screen_lines(viewport: Viewport) -> usize {
     (viewport.height / viewport.line_height + TOLERANCE)
         .floor()
         .max(0.) as usize
 }
 
-/// `SCROLLOFF`, men aldri mer enn det er plass til over og under cursoren i et lite vindu.
+/// `SCROLLOFF`, but never more than there is room for above and below the cursor in a small window.
 fn scrolloff(viewport: Viewport) -> usize {
     SCROLLOFF.min(screen_lines(viewport).saturating_sub(1) / 2)
 }
 
-/// Første og siste hele visuelle linje med tekst i viewporten.
+/// First and last whole visual line with text in the viewport.
 fn full_lines(layout: &LineLayout, scroll_y: f32, viewport: Viewport) -> (usize, usize) {
     let line_height = viewport.line_height;
     let last_line = layout.visual_line_count() - 1;
@@ -30,8 +30,8 @@ fn full_lines(layout: &LineLayout, scroll_y: f32, viewport: Viewport) -> (usize,
     (first, last.saturating_sub(1).clamp(first, last_line))
 }
 
-/// Visuelle linjer cursoren kan stå på uten at det scrolles. Øverst og nederst i
-/// fila slippes scrolloff, ellers kunne cursoren aldri nå første og siste linje.
+/// Visual lines the cursor can be on without scrolling. At the top and bottom of
+/// the file scrolloff is relaxed, otherwise the cursor could never reach the first and last line.
 pub(crate) fn cursor_range(
     layout: &LineLayout,
     scroll_y: f32,
@@ -51,8 +51,8 @@ pub(crate) fn cursor_range(
     (min, max)
 }
 
-/// Minste scroll som gir cursoren scrolloff. Er hoppet langt, sentreres linja som
-/// vim sin `scroll_cursor_halfway`.
+/// The smallest scroll that gives the cursor scrolloff. If the jump is long, the line is centered like
+/// vim's `scroll_cursor_halfway`.
 pub(crate) fn follow_y(
     layout: &LineLayout,
     cursor: usize,
@@ -72,7 +72,7 @@ pub(crate) fn follow_y(
     if y > max_y + TOLERANCE {
         y = max_y;
     }
-    // Vim sentrerer når det må scrolles en hel skjerm ned eller en halv opp
+    // Vim centers when it has to scroll a whole screen down or half a screen up
     let far = (y > scroll_y && y - scroll_y >= viewport.height)
         || (y < scroll_y && scroll_y - y >= viewport.height / 2.);
     if allow_center && far {
@@ -100,14 +100,14 @@ mod tests {
     }
 
     #[test]
-    fn scrolloff_klemmes_i_lite_vindu() {
+    fn scrolloff_is_clamped_in_small_window() {
         assert_eq!(scrolloff(viewport(50.)), 2);
         assert_eq!(scrolloff(viewport(200.)), 8);
         assert_eq!(scrolloff(viewport(5.)), 0);
     }
 
     #[test]
-    fn scrolloff_slippes_i_toppen_og_bunnen() {
+    fn scrolloff_is_relaxed_at_top_and_bottom() {
         let layout = LineLayout::new(100, LINE_HEIGHT);
         let max = layout.max_scroll(200.);
         assert_eq!(cursor_range(&layout, 0., viewport(200.)), (0, 11));
@@ -116,13 +116,13 @@ mod tests {
     }
 
     #[test]
-    fn langt_hopp_sentreres() {
+    fn long_jump_is_centered() {
         let layout = LineLayout::new(100, LINE_HEIGHT);
-        // Linje 50 med scrolloff 8 nederst i 20 linjer
+        // Line 50 with scrolloff 8 at the bottom of 20 lines
         assert_eq!(follow_y(&layout, 50, 0., viewport(200.), false), 390.);
-        // 9 linjer over cursoren
+        // 9 lines above the cursor
         assert_eq!(follow_y(&layout, 50, 0., viewport(200.), true), 410.);
-        // Kort hopp sentreres ikke
+        // A short jump is not centered
         assert_eq!(follow_y(&layout, 25, 0., viewport(200.), true), 140.);
     }
 }

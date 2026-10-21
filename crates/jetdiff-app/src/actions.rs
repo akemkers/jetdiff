@@ -1,4 +1,4 @@
-//! Rollback og `fil:linje` for markert linje.
+//! Rollback and `file:line` for the cursor's line.
 
 use std::ops::Range;
 
@@ -6,31 +6,31 @@ use jetdiff_viewmodel::{Cursor, FileDiff, Side};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollbackRequest {
-    /// Høyre side slik den vises, for å oppdage om fila er endret siden.
+    /// Right as it is shown, to detect whether the file has changed since.
     pub before: String,
     pub lines: [Range<usize>; 2],
 }
 
-/// `block` er blokken cursoren står i.
+/// `block` is the hunk the cursor is in.
 pub fn rollback_request(
     diff: &FileDiff,
     block: Option<usize>,
     can_rollback: bool,
 ) -> Result<RollbackRequest, &'static str> {
     if !can_rollback {
-        return Err("Bare lokale endringer kan rulles tilbake");
+        return Err("Only Local changes can be rolled back");
     }
     if diff.single_side().is_some() {
-        return Err("Hele fila er ny eller slettet");
+        return Err("The whole file is added or deleted");
     }
-    let block = block.ok_or("Ingen endring på linja")?;
+    let block = block.ok_or("No hunk on this line")?;
     Ok(RollbackRequest {
         before: diff.text(Side::Right).to_owned(),
         lines: diff.blocks()[block].lines.clone(),
     })
 }
 
-/// `cursor` er markert linje i nyeste versjon.
+/// `cursor` is the cursor's line in the newest version.
 pub fn location(cursor: Cursor, paths: &[String; 2]) -> Option<String> {
     let path = &paths[cursor.side.select(0, 1)];
     (!path.is_empty()).then(|| format!("{path}:{}", cursor.line + 1))

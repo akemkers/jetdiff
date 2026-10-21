@@ -1,5 +1,5 @@
-//! Treet fra IntelliJ sin `TreeModelBuilder`: mapper før filer, sortert på navn, og mapper
-//! med bare én undermappe slått sammen til `a/b/c` (`collapseDirectories`).
+//! The tree from IntelliJ's `TreeModelBuilder`: folders before files, sorted by name, and folders
+//! with only one subfolder merged into `a/b/c` (`collapseDirectories`).
 
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -9,13 +9,13 @@ use crate::FileChange;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RowKind {
     Dir {
-        /// Hele stien, brukt som id for sammenklapping.
+        /// The whole path, used as the id for collapsing.
         path: String,
         name: String,
         count: usize,
         expanded: bool,
     },
-    /// Indeks i `changes`.
+    /// Index in `changes`.
     File(usize),
 }
 
@@ -38,7 +38,7 @@ struct Dir {
 pub struct ChangeTree {
     root: Dir,
     collapsed: HashSet<String>,
-    /// Filene i den rekkefølgen treet viser dem, for neste og forrige fil.
+    /// The files in the order the tree shows them, for next and previous file.
     order: Vec<usize>,
 }
 
@@ -79,7 +79,7 @@ impl ChangeTree {
         }
     }
 
-    /// Nye endringer. Sammenklappede mapper forblir sammenklappet.
+    /// New changes. Collapsed folders stay collapsed.
     pub fn rebuild(&mut self, changes: &[FileChange]) {
         let collapsed = std::mem::take(&mut self.collapsed);
         *self = Self {
@@ -126,7 +126,7 @@ impl ChangeTree {
         self.order.first().copied()
     }
 
-    /// Neste eller forrige fil i trerekkefølge. Står stille ved endene.
+    /// Next or previous file in tree order. Stands still at the ends.
     pub fn step(&self, file: usize, forward: bool) -> usize {
         let Some(i) = self.order.iter().position(|&f| f == file) else {
             return file;
@@ -139,7 +139,7 @@ impl ChangeTree {
         self.order[j]
     }
 
-    /// Åpner mappene over en fil, så den synes når den velges med tastaturet.
+    /// Opens the folders above a file, so it shows when it is selected with the keyboard.
     pub fn reveal(&mut self, file: usize, changes: &[FileChange]) {
         let path = &changes[file].path;
         let mut end = 0;
@@ -159,7 +159,7 @@ fn join(parent: &str, name: &str) -> String {
     }
 }
 
-/// Sorterer og teller filer. Navn sammenlignes uten store og små bokstaver først.
+/// Sorts and counts files. Names are compared case-insensitively first.
 fn finish(dir: &mut Dir, changes: &[FileChange]) -> usize {
     let name = |i: &usize| changes[*i].path.rsplit('/').next().unwrap_or_default();
     dir.files.sort_by(|a, b| by_name(name(a), name(b)));
@@ -215,7 +215,7 @@ mod tests {
             .collect()
     }
 
-    /// Rader som `"  navn (antall)"` for mapper og `"  fil"` for filer.
+    /// Rows like `"  name (count)"` for folders and `"  file"` for files.
     fn show(tree: &ChangeTree, changes: &[FileChange]) -> Vec<String> {
         tree.rows()
             .iter()
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn mapper_for_filer_og_sortert() {
+    fn folders_before_files_and_sorted() {
         let c = changes(&["b.rs", "src/z.rs", "A.md", "src/a.rs", "docs/x.md"]);
         let t = ChangeTree::new(&c);
         assert_eq!(
@@ -248,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn enkeltbarn_mapper_slas_sammen() {
+    fn single_child_folders_are_merged() {
         let c = changes(&[
             "crates/ui/src/a.rs",
             "crates/ui/src/b.rs",
@@ -269,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    fn sammenklapping_og_reveal() {
+    fn collapsing_and_reveal() {
         let c = changes(&["a/b/x.rs", "a/c/y.rs"]);
         let mut t = ChangeTree::new(&c);
         t.toggle("a");
@@ -279,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn rebuild_beholder_sammenklapping() {
+    fn rebuild_keeps_collapsing() {
         let c = changes(&["a/x.rs", "b/y.rs"]);
         let mut t = ChangeTree::new(&c);
         t.toggle("a");
@@ -289,14 +289,14 @@ mod tests {
     }
 
     #[test]
-    fn tomt_tre() {
+    fn empty_tree() {
         let t = ChangeTree::new(&[]);
         assert_eq!(t.first(), None);
         assert!(t.rows().is_empty());
     }
 
     #[test]
-    fn neste_fil_folger_treet() {
+    fn next_file_follows_the_tree() {
         let c = changes(&["z.rs", "src/a.rs"]);
         let t = ChangeTree::new(&c);
         assert_eq!(t.first(), Some(1));

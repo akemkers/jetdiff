@@ -1,5 +1,5 @@
-//! Diffen av én fil, split eller unified. `DiffMode` eier cursor, folding og scroll-målet.
-//! Her ligger det som trenger GPUI: taster, mus, animasjon mot målet og zoom.
+//! The diff of one file, Split or Unified. `DiffMode` owns the cursor, folding and the scroll target.
+//! This is where the parts that need GPUI live: keys, mouse, animation toward the target and zoom.
 
 use std::rc::Rc;
 
@@ -29,17 +29,17 @@ actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom, ToggleView]);
 
 const SIDES: [Side; 2] = [Side::Left, Side::Right];
 
-/// Brukeren vil rulle tilbake en endring. Sendes til den som kan skrive fila.
+/// The user wants to roll back a hunk. Sent to whoever can write the file.
 pub struct Rollback(pub RollbackRequest);
 
-/// Ligger over diffen. Bare én om gangen.
+/// Lies over the diff. Only one at a time.
 enum Overlay {
-    /// Venter på bekreftelse av rollback. Enter bekrefter, alt annet avbryter.
+    /// Waiting for confirmation of the rollback. Enter confirms, anything else cancels.
     Confirm(Rollback),
     Help,
 }
 
-/// Ny fontstørrelse etter zoom, så resten av vinduet kan følge med.
+/// New font size after zoom, so the rest of the window can follow.
 pub struct Zoomed {
     pub font_size: f32,
 }
@@ -48,29 +48,29 @@ pub struct FileDiffView {
     mode: DiffMode,
     font_size: f32,
     style: Option<TextStyle>,
-    /// Det som vises nå. Målet er `mode.scroll()`.
+    /// What is shown now. The target is `mode.scroll()`.
     scroll: ScrollAnimator,
     keys: KeyParser,
     initialized: bool,
     viewport_height: f32,
     markers: Rc<[Vec<StripeMarker>; 2]>,
-    /// Lengste linje i tegn, regnet én gang. Gir maks horisontal scroll uten å shape alt.
+    /// The longest line in characters, computed once. Gives max horizontal scroll without shaping everything.
     max_cols: usize,
-    /// Split og unified for alle filer, til `v` bytter.
+    /// Split or Unified for all files, until `v` switches.
     unified: bool,
-    /// Høyre side er en fil i working tree, så endringer kan rulles tilbake.
+    /// Right is a file in Local changes, so hunks can be rolled back.
     can_rollback: bool,
     overlay: Option<Overlay>,
-    /// Venstre og høyre sti for `y`. Tom når det ikke finnes noen fil.
+    /// Left and Right path for `y`. Empty when there is no file.
     paths: [String; 2],
-    /// Eies av den som lager diffen, men tegnes over tastelinja her.
+    /// Owned by whoever makes the diff, but drawn above the keymap bar here.
     message: Entity<Message>,
     shared: Rc<Shared>,
     focus: FocusHandle,
 }
 
 impl FileDiffView {
-    /// Én fil, med egne beskjeder.
+    /// One file, with its own messages.
     pub fn standalone(diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) -> Self {
         let message = cx.new(|_| Message::default());
         Self::new(diff, paths, message, cx)
@@ -107,7 +107,7 @@ impl FileDiffView {
         self.can_rollback = can_rollback;
     }
 
-    /// Ny fil i samme visning. Zoom beholdes, cursor og scroll starter på nytt.
+    /// A new file in the same view. Zoom is kept; cursor and scroll start over.
     pub fn set_diff(&mut self, diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) {
         if matches!(self.overlay, Some(Overlay::Confirm(_))) {
             self.overlay = None;
@@ -123,7 +123,7 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// Samme fil med nytt innhold, etter rollback eller lagring. Cursor og scroll beholdes.
+    /// The same file with new content, after a rollback or a save. Cursor and scroll are kept.
     pub fn update_diff(&mut self, diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) {
         let Some(vp) = self.viewport().filter(|_| self.initialized) else {
             self.set_diff(diff, paths, cx);
@@ -142,10 +142,10 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// `v`: bytter mellom split og unified for alle filer. Cursoren blir på samme linje og
-    /// høyde.
+    /// `v`: switches between Split and Unified for all files. The cursor stays on the same line and
+    /// height.
     pub(crate) fn toggle_view(&mut self, _: &ToggleView, _: &mut Window, cx: &mut Context<Self>) {
-        // Nye og slettede filer vises alltid unified, så `v` gjør ingenting der
+        // Added and deleted files are always shown Unified, so `v` does nothing there
         if !self.mode.diff().can_split() {
             return;
         }
@@ -155,7 +155,7 @@ impl FileDiffView {
         let folding = Rc::new(folding(&diff, cx));
         match self.viewport().filter(|_| self.initialized) {
             Some(vp) => self.mode.toggle(folding, vp),
-            // Ingenting er vist ennå, så `step` lander på første endring
+            // Nothing is shown yet, so `step` lands on the first hunk
             None => self.mode = DiffMode::new(diff, folding, self.unified),
         }
         self.update_markers();
@@ -165,7 +165,7 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// Tekstbredden er ulik i split og unified, og innholdet kan ha blitt kortere.
+    /// The text width differs between Split and Unified, and the content may have become shorter.
     fn clamp_scroll_x(&mut self) {
         let max_x = self.max_scroll_x();
         let scroll = self.mode.scroll_mut();
@@ -194,8 +194,8 @@ impl FileDiffView {
         self.update_markers();
     }
 
-    /// Stripen følger visuelle linjer, så den må regnes på nytt når foldene endres. Unified
-    /// regner sine markører når stripen tegnes.
+    /// The hunk minimap follows visual lines, so it must be recomputed when the folds change. Unified
+    /// computes its marks when the hunk minimap is drawn.
     fn update_markers(&mut self) {
         self.shared.clear_stripes();
         let (Some(style), DiffMode::Split(state)) = (&self.style, &self.mode) else {
@@ -217,7 +217,7 @@ impl FileDiffView {
         }
     }
 
-    /// Fullfører en animasjon der den står, før noe annet endrer scroll.
+    /// Finishes an animation where it is, before anything else changes the scroll.
     fn stop_animation(&mut self) {
         if let Some(shown) = self.scroll.stop() {
             *self.mode.scroll_mut() = shown;
@@ -236,7 +236,7 @@ impl FileDiffView {
             Command::CopyLocation => {
                 if let Some(location) = location(self.mode.location(), &self.paths) {
                     cx.write_to_clipboard(ClipboardItem::new_string(location.clone()));
-                    self.show_message(format!("Kopierte {location}"), cx);
+                    self.show_message(format!("Copied {location}"), cx);
                 }
                 return;
             }
@@ -259,9 +259,9 @@ impl FileDiffView {
             let closed = state.folding.visible(Side::Left).next().is_some();
             self.show_message(
                 if closed {
-                    "Folds lukket"
+                    "Folds closed"
                 } else {
-                    "Folds åpnet"
+                    "Folds opened"
                 },
                 cx,
             );
@@ -280,8 +280,8 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// Sjekker at endringen kan rulles tilbake og åpner dialogen. `on_key_down` sender
-    /// `Rollback` på Enter.
+    /// Checks that the hunk can be rolled back and opens the dialog. `on_key_down` sends
+    /// `Rollback` on Enter.
     fn rollback(&mut self, cx: &mut Context<Self>) {
         match rollback_request(
             self.mode.diff(),
@@ -296,8 +296,8 @@ impl FileDiffView {
         }
     }
 
-    /// Kommer som action, så `?` virker også når treet har fokus. Avbryter rollback, som
-    /// ellers ikke ser tasten.
+    /// Comes as an action, so `?` also works when the tree has focus. Cancels the rollback, which
+    /// otherwise doesn't see the key.
     pub(crate) fn toggle_help(&mut self, _: &ToggleHelp, _: &mut Window, cx: &mut Context<Self>) {
         self.overlay = match self.overlay {
             Some(Overlay::Help) => None,
@@ -306,7 +306,7 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// Esc går videre når hjelpen ikke vises, så rollback-dialogen får den.
+    /// Esc passes through when help is not shown, so the rollback dialog gets it.
     pub(crate) fn hide_help(&mut self, _: &HideHelp, _: &mut Window, cx: &mut Context<Self>) {
         if !matches!(self.overlay, Some(Overlay::Help)) {
             cx.propagate();
@@ -322,7 +322,7 @@ impl FileDiffView {
             .update(cx, |m, cx| m.show(text, Level::Info, cx));
     }
 
-    /// `EditorFontSizeAction`: ny fontstørrelse, og cursorlinja holdes på samme sted.
+    /// `EditorFontSizeAction`: new font size, and the cursor line is kept at the same place.
     fn zoom(&mut self, size: f32, window: &mut Window) {
         if size == self.font_size {
             return;
@@ -343,7 +343,7 @@ impl FileDiffView {
     }
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        // Mens rollback venter på svar, går ingen taster til diffen
+        // While the rollback waits for an answer, no keys go to the diff
         match self.overlay.take() {
             Some(Overlay::Confirm(rollback)) => {
                 let k = &ev.keystroke;
@@ -361,7 +361,7 @@ impl FileDiffView {
                 self.execute(cmd, window, cx);
                 cx.stop_propagation();
             }
-            // macOS spiser ctrl-taster som ikke stopper propagering (`handle_key_equivalent`)
+            // macOS swallows ctrl keys that don't stop propagation (`handle_key_equivalent`)
             Parsed::Pending => cx.stop_propagation(),
             Parsed::Ignored => {}
         }
@@ -372,7 +372,7 @@ impl FileDiffView {
         code_viewer::hit(&self.mode, style, bounds, self.scroll.shown().y, position)
     }
 
-    /// Bare split har folds.
+    /// Only Split has folds.
     fn fold_at(&self, position: Point<Pixels>) -> Option<FoldId> {
         let (Some(Hit::Split(side, line)), DiffMode::Split(state)) =
             (self.hit(position), &self.mode)
@@ -382,7 +382,7 @@ impl FileDiffView {
         state.folding.fold_at_line(side, line)
     }
 
-    /// `FoldingModelSupport.MyMouseListener`: hover gjelder blokken på begge sider.
+    /// `FoldingModelSupport.MyMouseListener`: hover applies to the fold block on both sides.
     fn on_mouse_move(&mut self, ev: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
         let id = self.fold_at(ev.position);
         if let DiffMode::Split(state) = &mut self.mode
@@ -421,8 +421,8 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// Klikk gir fokus og markerer linja. Klikk på en fold åpner neste nivå på
-    /// begge sider (`DiffLineSeparatorRenderer.doAction`).
+    /// A click gives focus and moves the cursor to the line. A click on a fold opens the next level on
+    /// both sides (`DiffLineSeparatorRenderer.doAction`).
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
         self.keys.reset();
@@ -436,7 +436,7 @@ impl FileDiffView {
                 state.click(side, line);
                 if state.folding.fold_at_line(side, line).is_some() {
                     self.execute(Command::FoldOpen, window, cx);
-                    // Musa står fortsatt på linja, som nå kan være neste nivå
+                    // The mouse is still on the line, which may now be the next level
                     let id = self.fold_at(ev.position);
                     if let DiffMode::Split(state) = &mut self.mode {
                         Rc::make_mut(&mut state.folding).set_hovered(id);
@@ -468,7 +468,7 @@ impl FileDiffView {
         };
         if !self.initialized {
             self.initialized = true;
-            // `InitialScrollPositionSupport` faller tilbake til første endring
+            // `InitialScrollPositionSupport` falls back to the first hunk
             self.mode.init(vp);
             self.scroll.jump(self.mode.scroll());
         }
@@ -477,7 +477,7 @@ impl FileDiffView {
         }
     }
 
-    /// Ny viewport-høyde: målet regnes for den nye høyden, og animasjonen hopper dit.
+    /// New viewport height: the target is computed for the new height, and the animation jumps there.
     fn resize(&mut self, height: f32) {
         if height == self.viewport_height {
             return;
@@ -514,7 +514,7 @@ impl Focusable for FileDiffView {
 impl Render for FileDiffView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_style(window);
-        // Tastelinja kan bryte over flere linjer, så høyden kommer fra forrige layout
+        // The keymap bar can wrap over several lines, so the height comes from the previous layout
         let height = self
             .shared
             .bounds

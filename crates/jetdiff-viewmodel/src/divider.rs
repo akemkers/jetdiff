@@ -1,13 +1,13 @@
-//! Trakten mellom sidene. Port av `DiffDividerDrawUtil` (`DividerPaintableHandlerImpl`,
-//! `DividerPolygon.paint`) og `DiffDrawUtil.drawCurveTrapezium`. Koordinater er lokale for
-//! divideren: x fra 0 til bredden, y fra toppen av sidene.
+//! The diff divider between the sides. Port of `DiffDividerDrawUtil` (`DividerPaintableHandlerImpl`,
+//! `DividerPolygon.paint`) and `DiffDrawUtil.drawCurveTrapezium`. Coordinates are local to
+//! the divider: x from 0 to the width, y from the top of the sides.
 
 use crate::folding::{FoldId, Folding};
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{DiffType, FileDiff};
 use crate::separator::{PathSeg, connector};
 
-/// `diff.divider.width` i registry.
+/// `diff.divider.width` in the registry.
 pub const DIVIDER_WIDTH: f32 = 24.;
 
 /// `DiffDrawUtil.CTRL_PROXIMITY_X`.
@@ -28,7 +28,7 @@ pub struct Cubic {
 }
 
 impl Cubic {
-    /// `DiffDrawUtil.makeCurve(forward = true)`: fra venstre y1 til høyre y2.
+    /// `DiffDrawUtil.makeCurve(forward = true)`: from left y1 to right y2.
     pub fn new(width: f32, y1: f32, y2: f32) -> Self {
         let p = |x, y| Point { x, y };
         Self {
@@ -49,19 +49,19 @@ impl Cubic {
     }
 }
 
-/// Én blokk i divideren. Fyll: `top`, linje til `bottom.p3`, `bottom.reversed()`, lukk.
-/// Tegn også `mid` med 1px strek i samme farge, så bratte bånd aldri blir tynnere enn 1px.
+/// One hunk in the divider. Fill: `top`, line to `bottom.p3`, `bottom.reversed()`, close.
+/// Also draw `mid` with a 1px stroke in the same color, so steep bands are never thinner than 1px.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DividerBand {
     pub block: usize,
-    /// Full farge, også for ignored-blokker.
+    /// Full color, also for ignored hunks.
     pub diff_type: DiffType,
     pub top: Cubic,
     pub bottom: Cubic,
     pub mid: Cubic,
 }
 
-/// Blokker som er synlige på minst én side. `scroll_y` er per side, `[venstre, høyre]`.
+/// Hunks that are visible on at least one side. `scroll_y` is per side, `[left, right]`.
 pub fn divider_bands(
     diff: &FileDiff,
     folding: &Folding,
@@ -77,8 +77,8 @@ pub fn divider_bands(
 
     let above =
         |b: &crate::model::Block| painted[0].0 > b.lines[0].end && painted[1].0 > b.lines[1].end;
-    // `DividerPaintableHandlerImpl.process` hopper over blokker over viewporten. Endene
-    // stiger på begge sider, så de kan hoppes over med binærsøk.
+    // `DividerPaintableHandlerImpl.process` skips hunks above the viewport. The ends
+    // rise on both sides, so they can be skipped with a binary search.
     let first = diff.blocks().partition_point(above);
     let mut bands = Vec::new();
     for (i, block) in diff.blocks().iter().enumerate().skip(first) {
@@ -94,14 +94,14 @@ pub fn divider_bands(
             diff_type: block.diff_type,
             top: Cubic::new(width, s1, s2),
             bottom: Cubic::new(width, e1 + 1., e2 + 1.),
-            // Java: `(start + end) / 2` i int, og strek på heltalls-y dekker neste halve piksel
+            // Java: `(start + end) / 2` in int, and a stroke on integer y covers the next half pixel
             mid: Cubic::new(width, mid_y(s1, e1), mid_y(s2, e2)),
         });
     }
     bands
 }
 
-/// Kobling mellom to kollapsede folds, strekes med `separator::stroke_width(hovered)`.
+/// Fold link between two collapsed folds, stroked with `separator::stroke_width(hovered)`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DividerSeparator {
     pub id: FoldId,
@@ -109,8 +109,8 @@ pub struct DividerSeparator {
     pub path: Vec<PathSeg>,
 }
 
-/// `FoldingModelSupport.createVisibleSeparators`: koblinger for folds som er malt på minst
-/// én side.
+/// `FoldingModelSupport.createVisibleSeparators`: fold links for folds that are painted on at least
+/// one side.
 pub fn divider_separators(
     folding: &Folding,
     scroll_y: [f32; 2],
@@ -139,8 +139,8 @@ pub fn divider_separators(
     result
 }
 
-/// `DividerPolygon.paint`: under 2px høyde blir `[start-1, start]`, ellers `[start, end-1]`.
-/// Fyllet går til `end + 1`, så båndet dekker `[start, end)` eller 2px rundt grensen.
+/// `DividerPolygon.paint`: under 2px height becomes `[start-1, start]`, otherwise `[start, end-1]`.
+/// The fill goes to `end + 1`, so the band covers `[start, end)` or 2px around the boundary.
 fn trapezium_side(layout: &LineLayout, lines: std::ops::Range<usize>, scroll_y: f32) -> (f32, f32) {
     let (y1, y2) = layout.marker_range(lines);
     let (y1, y2) = (y1 - scroll_y, y2 - scroll_y);
@@ -174,7 +174,7 @@ mod tests {
     };
 
     #[test]
-    fn kurve_har_kontrollpunkter_pa_30_og_70_prosent() {
+    fn curve_has_control_points_at_30_and_70_percent() {
         let c = Cubic::new(24., 10., 50.);
         assert_eq!(c.p0, Point { x: 0., y: 10. });
         assert_eq!(
@@ -196,8 +196,8 @@ mod tests {
     }
 
     #[test]
-    fn modified_blokk_med_kjente_tall() {
-        // Venstre linje 2..4, høyre linje 2..5
+    fn modified_hunk_with_known_numbers() {
+        // Left lines 2..4, Right lines 2..5
         let d = diff("a\nb\nc\nd\ne\n", "a\nb\nx\ny\nz\ne\n");
         assert_eq!(d.blocks()[0].lines, [2..4, 2..5]);
         let bands = divider_bands(&d, &Folding::none(&d), [0., 10.], VP, 24.);
@@ -211,28 +211,28 @@ mod tests {
     }
 
     #[test]
-    fn tom_side_blir_2px() {
+    fn empty_side_becomes_2px() {
         let d = diff("a\nb\n", "a\nx\ny\nb\n");
         assert_eq!(d.blocks()[0].lines, [1..1, 1..3]);
         let b = divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.)[0];
         assert_eq!(b.diff_type, DiffType::Inserted);
-        // Grense på y=20: [19, 21)
+        // Boundary at y=20: [19, 21)
         assert_eq!((b.top.p0.y, b.bottom.p0.y), (19., 21.));
         assert_eq!((b.top.p3.y, b.bottom.p3.y), (20., 60.));
         assert_eq!(b.mid.p0.y, 19.5);
     }
 
     #[test]
-    fn tom_side_pa_forste_linje_flyttes_ned() {
+    fn empty_side_on_first_line_is_moved_down() {
         let d = diff("b\n", "x\nb\n");
         let b = divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.)[0];
-        // `getGutterMarkerPaintRange` gir y=1 for linje 0, så båndet blir [0, 2)
+        // `getGutterMarkerPaintRange` gives y=1 for line 0, so the band becomes [0, 2)
         assert_eq!((b.top.p0.y, b.bottom.p0.y), (0., 2.));
     }
 
     #[test]
-    fn blokker_utenfor_viewport_kuttes() {
-        // Endringer på linje 5, 30 og 60
+    fn hunks_outside_viewport_are_cut() {
+        // Hunks on lines 5, 30 and 60
         let a = lines("a", 80);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [5, 30, 60] {
@@ -241,10 +241,10 @@ mod tests {
         let b = b.join("\n") + "\n";
         let d = diff(&a, &b);
         assert_eq!(d.blocks().len(), 3);
-        // Viewport dekker linje 25..35
+        // Viewport covers lines 25..35
         let bands = divider_bands(&d, &Folding::none(&d), [500., 500.], VP, 24.);
         assert_eq!(bands.iter().map(|b| b.block).collect::<Vec<_>>(), vec![1]);
-        // Synlig på bare én side holder
+        // Visible on only one side is enough
         let bands = divider_bands(&d, &Folding::none(&d), [0., 500.], VP, 24.);
         assert_eq!(
             bands.iter().map(|b| b.block).collect::<Vec<_>>(),
@@ -253,8 +253,8 @@ mod tests {
     }
 
     #[test]
-    fn blokk_rett_under_kanten_tas_med() {
-        // Lukket intervall: linja som starter på bunnkanten regnes som malt
+    fn hunk_right_below_the_edge_is_included() {
+        // Closed interval: the line that starts on the bottom edge counts as painted
         let d = diff(
             &lines("a", 20),
             &(lines("a", 10) + "x\n" + &lines("a", 20)[lines("a", 11).len()..]),
@@ -271,8 +271,8 @@ mod tests {
     }
 
     #[test]
-    fn koblinger_for_synlige_folds() {
-        // Endringer på linje 10, 40 og 90 av 100: folds 0..6, 15..36, 45..86 og 95..101
+    fn fold_links_for_visible_folds() {
+        // Hunks on lines 10, 40 and 90 of 100: folds 0..6, 15..36, 45..86 and 95..101
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [10, 40, 90] {
@@ -281,11 +281,11 @@ mod tests {
         let d = diff(&a, &(b.join("\n") + "\n"));
         let f = Folding::new(&d);
         let seps = divider_separators(&f, [0., 0.], VP, 24.);
-        // Viewport på 10 visuelle linjer: fold 0 og 1 (visuell linje 0 og 10)
+        // Viewport of 10 visual lines: fold 0 and 1 (visual line 0 and 10)
         assert_eq!(seps.len(), 2);
         assert_eq!(seps[0].path[0], PathSeg::Move(Point { x: -0.5, y: 10. }));
         assert_eq!(seps[1].path[0], PathSeg::Move(Point { x: -0.5, y: 210. }));
-        // Delvis synlig fold er med, helt skjult er ikke
+        // A partly visible fold is included, a fully hidden one is not
         let groups = |y: f32| -> Vec<usize> {
             let seps = divider_separators(&f, [y, y], VP, 24.);
             seps.iter().map(|s| s.id.group).collect()
@@ -298,8 +298,8 @@ mod tests {
     }
 
     #[test]
-    fn stor_diff_gir_bare_synlige_band() {
-        // 20k linjer med en endring hver 50. linje
+    fn large_diff_gives_only_visible_bands() {
+        // 20k lines with a hunk every 50th line
         let a = lines("a", 20_000);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in (0..20_000).step_by(50) {

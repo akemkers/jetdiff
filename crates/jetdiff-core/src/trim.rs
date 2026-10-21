@@ -1,8 +1,8 @@
-//! Port av delene av `TrimUtil.kt` som trengs. Argumentrekkefølgen `(start1, start2, end1, end2)`
-//! er beholdt fra originalen. Tekst-varianter tar byte-offsets, whitespace er alltid ASCII.
+//! Port of the parts of `TrimUtil.kt` that are needed. The argument order `(start1, start2, end1, end2)`
+//! is kept from the original. Text variants take byte offsets; whitespace is always ASCII.
 //!
-//! Tegnklassene bruker kodepunkter som Java. Tegnsetting og whitespace er ASCII, så
-//! byte-for-byte på UTF-8 gir samme svar som Java på UTF-16-enheter.
+//! The character classes use code points like Java. Punctuation and whitespace are ASCII, so
+//! byte-for-byte on UTF-8 gives the same answer as Java on UTF-16 units.
 
 use crate::character_utils::{
     is_bmp_code_point, is_decimal_digit, is_hiragana_script, is_ideographic, is_javanese_script,
@@ -13,7 +13,7 @@ use crate::policy::{equals_ignore_whitespaces, is_space_enter_or_tab, is_ws_byte
 
 pub fn is_punctuation(b: u32) -> bool {
     if b == 95 {
-        // '_' er en del av ord
+        // '_' is part of a word
         return false;
     }
     (33..=47).contains(&b) // !"#$%&'()*+,-./
@@ -29,7 +29,7 @@ pub fn is_alpha(c: char) -> bool {
     !is_punctuation(c as u32)
 }
 
-/// Skrift uten mellomrom mellom ord (CJK, thai osv.). Hvert tegn blir et eget ord.
+/// Script without spaces between words (CJK, Thai, etc.). Each character becomes its own word.
 pub fn is_continuous_script(c: char) -> bool {
     let code = c as u32;
     if code < 128 {
@@ -117,7 +117,7 @@ pub fn expand_backward<T: Eq>(
     expand_backward_by(start1, start2, end1, end2, |i1, i2| data1[i1] == data2[i2])
 }
 
-/// Skreller like whitespace i kantene av en range. Andre like tegn stopper.
+/// Peels equal whitespace off the edges of a range. Other equal characters stop it.
 pub fn expand_whitespaces(text1: &str, text2: &str, range: Range) -> Range {
     let (a, b) = (text1.as_bytes(), text2.as_bytes());
     expand_ignored_by(
@@ -307,12 +307,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn expand_skreller_like_kanter() {
+    fn expand_peels_equal_edges() {
         let a = [1, 2, 3, 4, 5];
         let b = [1, 2, 9, 4, 5];
         assert_eq!(expand(&a, &b, 0, 0, 5, 5), Range::new(2, 3, 2, 3));
         assert_eq!(expand(&a, &a, 0, 0, 5, 5), Range::new(5, 5, 5, 5));
-        // Forover først, bakover får bare det som er igjen
+        // Forward first; backward only gets what is left
         let a = [1, 1];
         let b = [1];
         assert_eq!(expand(&a, &b, 0, 0, 2, 1), Range::new(1, 2, 1, 1));
@@ -326,8 +326,8 @@ mod tests {
     }
 
     #[test]
-    fn expand_whitespaces_stopper_paa_andre_tegn() {
-        // Like mellomrom skrelles, like bokstaver ikke
+    fn expand_whitespaces_stops_at_other_characters() {
+        // Equal spaces are peeled, equal letters are not
         let r = expand_whitespaces("  a  ", "  b  ", Range::new(0, 5, 0, 5));
         assert_eq!(r, Range::new(2, 3, 2, 3));
         let r = expand_whitespaces("xa", "xb", Range::new(0, 2, 0, 2));
@@ -335,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn tegnklasser() {
+    fn character_classes() {
         assert!(is_punctuation('.' as u32));
         assert!(!is_punctuation('_' as u32));
         assert!(!is_alpha(' '));

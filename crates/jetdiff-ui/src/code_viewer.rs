@@ -1,5 +1,5 @@
-//! Koden i diffen, i split eller unified: tegning, hva musa treffer og tekstbredden.
-//! `FileDiffView` lager en `Painter` i `render` og tegner den i canvas-en.
+//! The code in the diff, in Split or Unified: drawing, what the mouse hits and the text width.
+//! `FileDiffView` makes a `Painter` in `render` and draws it in the canvas.
 
 mod code_paint;
 mod divider;
@@ -21,15 +21,15 @@ use self::unified::{RowCache, UnifiedPainter};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
-/// Linjer utenfor viewporten som beholdes shapet per side.
+/// Lines outside the viewport that are kept shaped, per side.
 const CACHE_CAPACITY: usize = 2000;
 
 const SIDES: [Side; 2] = [Side::Left, Side::Right];
 
-/// Det paint deler med hendelsene: siste bounds, shapede linjer og error stripe.
+/// What paint shares with the events: last bounds, shaped lines and the hunk minimap.
 pub struct Shared {
     pub bounds: Cell<Option<Bounds<Pixels>>>,
-    /// Bredeste linje som er tegnet, for maks horisontal scroll.
+    /// The widest line that has been drawn, for max horizontal scroll.
     pub widest: Cell<f32>,
     split_lines: RefCell<[SideCache; 2]>,
     split_stripes: RefCell<[StripeRects; 2]>,
@@ -49,14 +49,14 @@ impl Shared {
         }
     }
 
-    /// Ny fil eller nytt innhold.
+    /// A new file or new content.
     pub fn clear(&self) {
         *self.split_lines.borrow_mut() = new_side_caches();
         *self.unified_rows.borrow_mut() = RowCache::new(CACHE_CAPACITY);
         self.widest.set(0.);
     }
 
-    /// Nøkkelen har fontstørrelsen, så zoom tømmer cachen.
+    /// The key has the font size, so zoom clears the cache.
     pub fn set_style(&self, style: &TextStyle) {
         for cache in self.split_lines.borrow_mut().iter_mut() {
             cache.set_key(style.cache_key());
@@ -65,7 +65,7 @@ impl Shared {
         self.widest.set(0.);
     }
 
-    /// Stripen regnes ut på nytt neste gang den tegnes.
+    /// The hunk minimap is recomputed the next time it is drawn.
     pub fn clear_stripes(&self) {
         *self.split_stripes.borrow_mut() = Default::default();
         *self.unified_stripe.borrow_mut() = Default::default();
@@ -79,7 +79,7 @@ fn new_side_caches() -> [SideCache; 2] {
     ]
 }
 
-/// Det som er under musa.
+/// What is under the mouse.
 pub enum Hit {
     Split(Side, usize),
     Unified(usize),
@@ -108,7 +108,7 @@ pub fn hit(
     }
 }
 
-/// Split scroller siden musa står over, og divideren regnes til nærmeste side.
+/// Split scrolls the side the mouse is over, and the divider counts as the nearest side.
 pub fn wheel(
     mode: &mut DiffMode,
     bounds: Option<Bounds<Pixels>>,
@@ -134,14 +134,14 @@ pub fn text_width(mode: &DiffMode, style: &TextStyle, bounds: Bounds<Pixels>) ->
     }
 }
 
-/// Det som skal tegnes i én frame.
+/// What to draw in one frame.
 pub enum Painter {
     Split(SplitPainter),
     Unified(UnifiedPainter),
 }
 
 impl Painter {
-    /// `shown` er scroll slik den vises nå, midt i en eventuell animasjon.
+    /// `shown` is the scroll as it is shown now, in the middle of any animation.
     pub fn new(
         mode: &DiffMode,
         markers: &Rc<[Vec<StripeMarker>; 2]>,
@@ -154,8 +154,8 @@ impl Painter {
         let scroll_x = snap(shown.x, scale);
         match mode {
             DiffMode::Split(state) => {
-                // Den andre siden viser overført linje svakere, så man ser hvor H og L lander.
-                // IntelliJ har caret row bare på aktiv side.
+                // The other side shows the transferred line more faintly, so you see where H and L land.
+                // IntelliJ has a caret row only on the active side.
                 let cursor = state.cursor;
                 let other = state.transferred_cursor();
                 let carets = SIDES.map(|side| {
@@ -221,7 +221,7 @@ impl Painter {
     }
 }
 
-/// Snapper til hele device-piksler så kanter og tekst ikke blir uskarpe midt i en scroll.
+/// Snaps to whole device pixels so edges and text don't get blurry in the middle of a scroll.
 fn snap(y: f32, scale: f32) -> f32 {
     (y * scale).round() / scale
 }

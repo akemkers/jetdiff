@@ -2,17 +2,17 @@ const API = "https://example.com/api/v2";
 const TIMEOUT_MS = 5000;
 
 /**
- * Henter kurser for en liste tickere.
+ * Fetches quotes for a list of tickers.
  */
-async function hentKurser(tickere, { signal } = {}) {
-  const url = `${API}/kurser?t=${encodeURIComponent(tickere.join(","))}`;
-  const svar = await fetch(url, { signal: signal ?? AbortSignal.timeout(TIMEOUT_MS) });
-  if (!svar.ok) throw new Error(`HTTP ${svar.status}`);
-  return svar.json();
+async function fetchQuotes(tickers, { signal } = {}) {
+  const url = `${API}/quotes?t=${encodeURIComponent(tickers.join(","))}`;
+  const response = await fetch(url, { signal: signal ?? AbortSignal.timeout(TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
 }
 
-function formater(kurs, valuta = "kr") {
-  return `${kurs.toFixed(2)} ${valuta}`;
+function format(price, currency = "USD") {
+  return `${price.toFixed(2)} ${currency}`;
 }
 
-module.exports = { hentKurser, formater };
+module.exports = { fetchQuotes, format };

@@ -1,17 +1,17 @@
-//! Hvor diffen er scrollet på skjermen akkurat nå. `DiffState` regner ut hvor scroll skal
-//! ende, for eksempel etter `n`. Her flyttes det som vises dit over 170 ms, eller med en
-//! gang når det ikke skal animeres.
+//! Where the diff is scrolled on screen right now. `DiffState` computes where the scroll should
+//! end, for example after `n`. Here what is shown is moved there over 170 ms, or at
+//! once when it shouldn't be animated.
 
 use std::time::Instant;
 
 use jetdiff_viewmodel::{ScrollAnimation, ScrollState};
 
-/// Varighet på animert hopp til endring.
+/// Duration of an animated jump to a hunk.
 const NAV_ANIMATION_MS: f32 = 170.;
 
 #[derive(Default)]
 pub struct ScrollAnimator {
-    /// Under en animasjon ligger den etter målet.
+    /// During an animation it lags behind the target.
     shown: ScrollState,
     animation: Option<(ScrollAnimation, Instant)>,
 }
@@ -21,13 +21,13 @@ impl ScrollAnimator {
         self.shown
     }
 
-    /// Rett til målet, uten animasjon.
+    /// Straight to the target, without animation.
     pub fn jump(&mut self, target: ScrollState) {
         self.animation = None;
         self.shown = target;
     }
 
-    /// Fra det som vises til målet. Midt i en animasjon starter den nye der den gamle står.
+    /// From what is shown to the target. In the middle of an animation the new one starts where the old one is.
     pub fn animate(&mut self, target: ScrollState) {
         if self.shown == target {
             self.animation = None;
@@ -37,12 +37,12 @@ impl ScrollAnimator {
         self.animation = Some((animation, Instant::now()));
     }
 
-    /// Stopper en animasjon der den står. Gir posisjonen, som da må bli det nye målet.
+    /// Stops an animation where it is. Gives the position, which must then become the new target.
     pub fn stop(&mut self) -> Option<ScrollState> {
         self.animation.take().map(|_| self.shown)
     }
 
-    /// Flytter det som vises til der animasjonen er nå. `true` mens den ikke er ferdig.
+    /// Moves what is shown to where the animation is now. `true` while it isn't done.
     pub fn step(&mut self) -> bool {
         let Some((animation, start)) = &self.animation else {
             return false;
@@ -66,7 +66,7 @@ mod tests {
     }
 
     #[test]
-    fn stopp_gir_posisjonen_bare_under_animasjon() {
+    fn stop_gives_position_only_during_animation() {
         let mut scroll = ScrollAnimator::default();
         scroll.jump(at(100.));
         assert_eq!(scroll.stop(), None);
@@ -76,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    fn uendret_scroll_animeres_ikke() {
+    fn unchanged_scroll_is_not_animated() {
         let mut scroll = ScrollAnimator::default();
         scroll.jump(at(100.));
         scroll.animate(at(100.));

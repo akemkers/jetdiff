@@ -1,4 +1,4 @@
-//! Samler endrede stier til det har vært stille. UI-et spør med `take`.
+//! Collects changed paths until it has been quiet. The UI asks with `take`.
 
 use std::mem;
 use std::path::{Path, PathBuf};
@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher as _};
 
-/// Et lagringssteg gir mange hendelser tett etter hverandre.
+/// A save step gives many events close together.
 const QUIET: Duration = Duration::from_millis(300);
-/// Melder fra selv om noe skriver hele tiden, som en build.
+/// Reports even if something writes all the time, like a build.
 const MAX_WAIT: Duration = Duration::from_secs(2);
 pub const POLL: Duration = Duration::from_millis(100);
 
@@ -36,14 +36,14 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    /// `.git` ignoreres, siden git selv skriver der når vi leser.
+    /// `.git` is ignored, since git itself writes there when we read.
     pub fn new(root: &Path) -> Result<Self, String> {
         let pending = Arc::new(Mutex::new(Pending::default()));
         let sink = pending.clone();
         let git_dir = root.join(".git");
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let Ok(event) = res else { return };
-            // inotify melder lesing, og vår egen lesing ville gitt en ny reload
+            // inotify reports reads, and our own reading would cause a new reload
             if event.kind.is_access() {
                 return;
             }
@@ -84,7 +84,7 @@ impl Watcher {
     }
 }
 
-/// Med `/` som skille, som git skriver dem.
+/// With `/` as separator, as git writes them.
 fn relative(root: &Path, paths: Vec<PathBuf>) -> Vec<String> {
     let mut rel: Vec<String> = paths
         .iter()
@@ -102,7 +102,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn venter_til_det_er_stille() {
+    fn waits_until_quiet() {
         let t0 = Instant::now();
         let mut p = Pending::default();
         assert!(!p.ready(t0));
@@ -116,11 +116,11 @@ mod tests {
     }
 
     #[test]
-    fn stier_relative_til_roten() {
+    fn paths_relative_to_root() {
         let root = Path::new("/r");
         let paths = vec![
             "/r/b/x.rs".into(),
-            "/annet/y".into(),
+            "/other/y".into(),
             "/r/a.rs".into(),
             "/r/a.rs".into(),
         ];

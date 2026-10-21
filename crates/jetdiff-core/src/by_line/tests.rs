@@ -12,7 +12,7 @@ fn lines<'t>(xs: &[&'t str], policy: ComparisonPolicy) -> Vec<Line<'t>> {
     get_lines(xs, policy)
 }
 
-/// Kjører IW-steget som `do_compare`, så steg 2 på resultatet. Returnerer IW- og endelige endringer.
+/// Runs the IW step like `do_compare`, then step 2 on the result. Returns the IW and final changes.
 #[allow(clippy::type_complexity)]
 fn second_step(
     a: &[&str],
@@ -33,8 +33,8 @@ fn second_step(
 }
 
 #[test]
-fn second_step_velger_beste_alignment() {
-    // Eksempelet fra IntelliJ med mellomrom for prikker
+fn second_step_picks_best_alignment() {
+    // The example from IntelliJ, with spaces for dots
     let a = [" {", "  {", "   {"];
     let b = ["  {", "   {"];
     let (iw, result) = second_step(&a, &b);
@@ -43,8 +43,8 @@ fn second_step_velger_beste_alignment() {
 }
 
 #[test]
-fn second_step_mister_ikke_iw_matchede_linjer() {
-    // Like store blokker: ingen søk, par i rekkefølge og behold de som er eksakt like
+fn second_step_keeps_iw_matched_lines() {
+    // Blocks of equal size: no search, pair in order and keep the ones that are exactly equal
     let a = [" {", "  {", "   {"];
     let b = ["   {", "  {", " {"];
     let (iw, result) = second_step(&a, &b);
@@ -53,7 +53,7 @@ fn second_step_mister_ikke_iw_matchede_linjer() {
 }
 
 #[test]
-fn second_step_like_linjer_beholdes() {
+fn second_step_keeps_equal_lines() {
     let a = ["a", " b", "c"];
     let b = ["a", "b", "c"];
     assert_eq!(second_step(&a, &b).1, vec![(1, 2, 1, 2)]);
@@ -68,40 +68,40 @@ fn alignment_brute_force() {
         vec![1, 3]
     );
 
-    // Ingen like par: første kombinasjon
+    // No equal pairs: first combination
     let l2 = lines(&["q", "q", "q"], ComparisonPolicy::Default);
     assert_eq!(
         best_matching_alignment(&[0, 1], &[0, 1, 2], &l1, &l2),
         vec![0, 1]
     );
 
-    // Første vinner ved likhet
+    // The first one wins on a tie
     let l1 = lines(&["x"], ComparisonPolicy::Default);
     let l2 = lines(&["x", "x"], ComparisonPolicy::Default);
     assert_eq!(best_matching_alignment(&[0], &[0, 1], &l1, &l2), vec![0]);
 }
 
 #[test]
-fn alignment_hoppes_over_for_store_blokker() {
-    // 11 IW-like linjer mot 1: over grensen, så første pares med første og ingenting blir likt
+fn alignment_is_skipped_for_large_blocks() {
+    // 11 IW-equal lines against 1: over the limit, so first pairs with first and nothing becomes equal
     let mut a = vec![" x"; 11];
     a[5] = "x";
     let b = ["x"];
     assert_eq!(second_step(&a, &b).1, vec![(0, 11, 0, 1)]);
 
-    // Under grensen finnes den eksakte matchen
+    // Under the limit the exact match is found
     let a = [" x", "x", " x"];
     assert_eq!(second_step(&a, &b).1, vec![(0, 1, 0, 0), (2, 3, 1, 1)]);
 }
 
 #[test]
-fn non_space_chars_teller_utf16() {
+fn non_space_chars_counts_utf16() {
     let line = Line::new(" 😀 é\t", ComparisonPolicy::Default);
     assert_eq!(line.non_space_chars, 3);
 }
 
 #[test]
-fn line_likhet_etter_policy() {
+fn line_equality_by_policy() {
     let eq = |a: &str, b: &str, p| Line::new(a, p) == Line::new(b, p);
     assert!(!eq("a b", "a  b", ComparisonPolicy::Default));
     assert!(eq(" a b ", "a b", ComparisonPolicy::TrimWhitespaces));
@@ -110,7 +110,7 @@ fn line_likhet_etter_policy() {
 }
 
 #[test]
-fn compare_policyer() {
+fn compare_policies() {
     let a = ["fun main() {", "    println()", "}"];
     let b = ["fun main() {", "  println() ", "}"];
     assert_eq!(

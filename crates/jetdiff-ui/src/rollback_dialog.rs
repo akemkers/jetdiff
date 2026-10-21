@@ -1,4 +1,4 @@
-//! Spør om endringen skal rulles tilbake. `FileDiffView` tar imot Enter og Esc.
+//! Asks whether the hunk should be rolled back. `FileDiffView` handles Enter and Esc.
 
 use gpui::{Div, div, prelude::*, px, relative};
 
@@ -28,7 +28,7 @@ pub fn rollback_dialog(theme: &UiTheme) -> Div {
                 .font_family(FAMILY)
                 .text_size(px(13.))
                 .text_color(theme.editor_fg)
-                .child("Rull tilbake endringen?")
+                .child("Roll back this hunk?")
                 .child(
                     div()
                         .text_color(theme.line_number)

@@ -1,4 +1,4 @@
-//! Innebygd JetBrains Mono og tekstmål. Manglende glyfer (CJK, emoji) håndteres av CoreText sin font-kaskade ved shaping.
+//! Built-in JetBrains Mono and text metrics. Missing glyphs (CJK, emoji) are handled by CoreText's font cascade during shaping.
 
 use std::borrow::Cow;
 
@@ -8,7 +8,7 @@ use jetdiff_viewmodel::metrics::{LINE_NUMBER_FONT_DELTA, LineMetrics, line_metri
 
 pub(crate) const FAMILY: &str = "JetBrains Mono";
 
-/// Samme versjon som i JBR-en til IntelliJ, så tekstmålene blir de samme som i IDE-en.
+/// The same version as in IntelliJ's JBR, so the text metrics are the same as in the IDE.
 const FONTS: [&[u8]; 4] = [
     include_bytes!("../fonts/JetBrainsMono-Regular.ttf"),
     include_bytes!("../fonts/JetBrainsMono-Italic.ttf"),
@@ -19,7 +19,7 @@ const FONTS: [&[u8]; 4] = [
 pub fn load_font(cx: &App) {
     cx.text_system()
         .add_fonts(FONTS.map(Cow::Borrowed).to_vec())
-        .expect("innebygd font skal kunne lastes");
+        .expect("the built-in font should load");
 }
 
 #[derive(Debug, Clone)]
@@ -27,12 +27,12 @@ pub struct TextStyle {
     pub font: Font,
     pub font_size: Pixels,
     pub metrics: LineMetrics,
-    /// GPUI sentrerer glyfene i linjehøyden. Forskyvningen legges til linjetoppen så
-    /// baseline havner der IntelliJ har den.
+    /// GPUI centers the glyphs in the line height. The offset is added to the line top so
+    /// the baseline ends up where IntelliJ has it.
     pub text_dy: f32,
     pub char_width: f32,
     pub number_font_size: Pixels,
-    /// Linjenumrene har samme baseline som teksten (`getLineNumberAscent` = editorens ascent).
+    /// The line numbers have the same baseline as the text (`getLineNumberAscent` = the editor's ascent).
     pub number_dy: f32,
     pub number_char_width: f32,
 }
@@ -40,7 +40,7 @@ pub struct TextStyle {
 impl TextStyle {
     pub fn new(size: f32, window: &Window) -> Self {
         let font = Font {
-            // Ingen ligaturer i diff, som IntelliJ sin default
+            // No ligatures in the diff, like IntelliJ's default
             features: FontFeatures::disable_ligatures(),
             ..font(FAMILY)
         };
@@ -53,7 +53,7 @@ impl TextStyle {
                 .map(|s| f32::from(s.width))
                 .unwrap_or(f32::from(size) * 0.6)
         };
-        // Der GPUI legger baseline når en linje males med en gitt linjehøyde
+        // Where GPUI puts the baseline when a line is painted with a given line height
         let gpui_baseline = |size, lh: f32| (lh - ascent(size) - descent(size)) / 2. + ascent(size);
 
         let font_size = px(size);
@@ -76,7 +76,7 @@ impl TextStyle {
         self.metrics.line_height
     }
 
-    /// Nøkkel for cachen: alt en shapet linje avhenger av utenom teksten.
+    /// Key for the cache: everything a shaped line depends on besides the text.
     pub fn cache_key(&self) -> (SharedString, u32) {
         (
             self.font.family.clone(),

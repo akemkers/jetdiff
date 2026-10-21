@@ -1,5 +1,5 @@
-//! Byggeklossene split, unified og scrollbaren tegner med. Bare denne fila kjenner
-//! tilstanden, temaet og bufferen.
+//! The building blocks Split, Unified and the scrollbar draw with. Only this file knows
+//! the state, the theme and the buffer.
 
 use jetdiff_viewmodel::{DiffType, FileDiff, Row, Side, StripeMarker, Theme, UnifiedState};
 use ratatui::buffer::Buffer;
@@ -12,7 +12,7 @@ use crate::color::{color, faded, over};
 use crate::geometry::{self, Columns};
 use crate::text::{LineText, fill, paint_line, tint};
 
-/// Markert rad når diffen ikke har fokus, som i GPUI.
+/// The cursor's row when the diff doesn't have focus, as in GPUI.
 const UNFOCUSED_CARET: f32 = 0.4;
 
 pub(super) struct Painter<'a> {
@@ -22,7 +22,7 @@ pub(super) struct Painter<'a> {
     buf: &'a mut Buffer,
 }
 
-/// En rad som synes, og skjermraden den står på.
+/// A visible row, and the screen row it is on.
 pub(super) struct VisibleRow<'a> {
     pub(super) y: u16,
     pub(super) row: &'a Row,
@@ -81,8 +81,8 @@ impl<'a> Painter<'a> {
         fill(area, color(self.theme.editor_bg), self.buf);
     }
 
-    /// Bakgrunnen til endringen og teksten med syntaks og ord-markering. `word_type` gir alle
-    /// ordene samme farge, ellers får hvert ord sin egen.
+    /// The background of the hunk and the text with syntax and inline highlights. `word_type` gives all
+    /// the words the same color; otherwise each word gets its own.
     pub(super) fn line(
         &mut self,
         columns: &Columns,
@@ -113,8 +113,8 @@ impl<'a> Painter<'a> {
         paint_line(&content, scroll_x, columns.text(y), self.theme, self.buf);
     }
 
-    /// Høyrejustert mot `end`. Standardfargen forsvinner mot diff-bakgrunnen, så endrede og
-    /// markerte rader får en sterkere.
+    /// Right-aligned to `end`. The default color disappears against the diff background, so changed and
+    /// cursor rows get a stronger one.
     pub(super) fn line_number(
         &mut self,
         end: u16,
@@ -133,7 +133,7 @@ impl<'a> Painter<'a> {
             .set_string(x, y, number, Style::default().fg(color(number_color)));
     }
 
-    /// Siden har ingen linje på raden.
+    /// The side has no line on the row.
     pub(super) fn filler(&mut self, columns: &Columns, y: u16) {
         let area = columns.row(y);
         let style = Style::default()
@@ -144,7 +144,7 @@ impl<'a> Painter<'a> {
             .set_stringn(area.x, area.y, hatch, usize::MAX, style);
     }
 
-    /// Markert rad. Svakere når diffen ikke har fokus.
+    /// The cursor's row. Fainter when the diff doesn't have focus.
     pub(super) fn caret(&mut self, columns: &Columns, y: u16) {
         let highlight = if self.focused {
             self.theme.row_highlight
@@ -165,7 +165,7 @@ impl<'a> Painter<'a> {
         }
     }
 
-    /// Én celle i scrollbaren, med tommel og markør for en endring.
+    /// One cell in the scrollbar, with the thumb and the hunk minimap mark for a hunk.
     pub(super) fn scrollbar_cell(
         &mut self,
         x: u16,
@@ -192,7 +192,7 @@ impl<'a> Painter<'a> {
     }
 }
 
-/// Diff-bakgrunnen er for svak som markør.
+/// The diff background is too faint as a hunk minimap mark.
 fn brighter(base: Color) -> Color {
     over([255, 255, 255, 60], base)
 }

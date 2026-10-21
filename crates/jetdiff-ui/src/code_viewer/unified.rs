@@ -1,5 +1,5 @@
-//! Unified-visningen: én kodevisning der slettede rader står over de nye, med gammelt og nytt
-//! linjenummer i gutteren. Tegning, og hvilken rad musa treffer.
+//! The Unified view: one code view where deleted rows sit above the added ones, with old and new
+//! line numbers in the gutter. Drawing, and which row the mouse hits.
 
 use std::ops::{Range, RangeInclusive};
 use std::rc::Rc;
@@ -19,24 +19,24 @@ use crate::theme::UiTheme;
 
 pub struct CachedRow {
     pub text: ShapedText,
-    /// Gammelt og nytt nummer. Slettede rader har bare gammelt, nye bare nytt.
+    /// Old and new number. Deleted rows have only old, added rows only new.
     pub numbers: [Option<ShapedLine>; 2],
 }
 
 pub type RowCache = LineCache<(SharedString, u32), CachedRow>;
 
-/// Det som skal tegnes i én frame. Lages i `render` og tegnes i canvas-en.
+/// What to draw in one frame. Made in `render` and drawn in the canvas.
 pub struct UnifiedPainter {
     pub diff: Rc<UnifiedDiff>,
     pub theme: UiTheme,
     pub style: TextStyle,
     pub scroll_y: f32,
     pub scroll_x: f32,
-    /// `line` er raden.
+    /// `line` is the row.
     pub caret: CaretRow,
 }
 
-/// Geometrien og radene som er synlige i denne framen.
+/// The geometry and the rows that are visible in this frame.
 struct Frame<'a> {
     painter: &'a UnifiedPainter,
     geom: UnifiedGeometry,
@@ -46,8 +46,8 @@ struct Frame<'a> {
 }
 
 impl UnifiedPainter {
-    /// Maler lagene nedenfra og opp. Returnerer bredden av den bredeste synlige raden, for
-    /// maks horisontal scroll.
+    /// Paints the layers from the bottom up. Returns the width of the widest visible row, for
+    /// max horizontal scroll.
     pub fn paint(
         &self,
         bounds: Bounds<Pixels>,
@@ -103,7 +103,7 @@ impl UnifiedPainter {
             &self.theme,
             window,
         );
-        // Standardfargen forsvinner mot diff-bakgrunnen
+        // The default color disappears against the diff background
         let color = if row.block.is_some() {
             self.theme.line_number_caret_row
         } else {
@@ -129,12 +129,12 @@ impl UnifiedPainter {
 }
 
 impl Frame<'_> {
-    /// Hele høyden til kodevisningen, fra `x.start` til `x.end`.
+    /// The whole height of the code view, from `x.start` to `x.end`.
     fn area(&self, x: Range<f32>) -> Bounds<Pixels> {
         rect(x, self.top, self.bottom)
     }
 
-    /// Y på skjermen for en y i dokumentet.
+    /// Y on screen for a y in the document.
     fn screen_y(&self, y: f32) -> f32 {
         self.top + y - self.painter.scroll_y
     }
@@ -143,7 +143,7 @@ impl Frame<'_> {
         self.screen_y(row as f32 * self.painter.style.line_height())
     }
 
-    /// Slettet og ny del av hver blokk får hver sin farge, uten blått.
+    /// The deleted and added part of each hunk get a color each, without blue.
     fn paint_changes(&self, window: &mut Window) {
         let diff = &self.painter.diff;
         let layout = diff.layout(self.painter.style.line_height());
@@ -184,8 +184,8 @@ impl Frame<'_> {
         paint_caret_row(&self.geom.code, top, bottom, caret.active, theme, window);
     }
 
-    /// Ord-markering og tekst, klippet så teksten ikke flyter inn i gutteren ved sidescroll.
-    /// Returnerer bredden av den bredeste raden.
+    /// Inline highlights and text, clipped so the text doesn't flow into the gutter on sideways scroll.
+    /// Returns the width of the widest row.
     fn paint_text(&self, cache: &mut RowCache, window: &mut Window, cx: &mut App) -> f32 {
         let painter = self.painter;
         let code = &self.geom.code;
@@ -199,7 +199,7 @@ impl Frame<'_> {
                 let entry =
                     cache.get_or_insert_with(row_index, || painter.shape(row_index, window));
                 widest = widest.max(entry.text.width());
-                // Fargen følger raden, ikke ordet, så unified ikke får blått
+                // The color follows the row, not the word, so Unified doesn't get blue
                 let highlights: Vec<InlineHighlight> = painter
                     .diff
                     .diff
@@ -265,7 +265,7 @@ fn geometry(diff: &UnifiedDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> Un
     UnifiedGeometry::new(&diff.diff, style.number_char_width, x, width)
 }
 
-/// Raden under musa, `None` utenfor kodevisningen.
+/// The row under the mouse, `None` outside the code view.
 pub fn hit(
     diff: &UnifiedDiff,
     style: &TextStyle,
@@ -282,7 +282,7 @@ pub fn hit(
     Some(layout.y_to_logical_line(y).min(layout.line_count() - 1))
 }
 
-/// Bredden teksten har, for horisontal scroll.
+/// The width the text has, for horizontal scroll.
 pub fn text_width(diff: &UnifiedDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
     let code = geometry(diff, style, bounds).code;
     code.text.end - code.text_x

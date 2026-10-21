@@ -1,36 +1,36 @@
 import { formatNumber } from "./format";
 
-/** Posisjon i en portefølje. */
-export interface Posisjon {
+/** A position in a portfolio. */
+export interface Position {
   ticker: string;
-  antall: number;
-  snittkurs: number;
-  valuta?: "NOK" | "USD";
+  quantity: number;
+  averagePrice: number;
+  currency?: "NOK" | "USD";
 }
 
-export const MAKS_POSISJONER = 250;
+export const MAX_POSITIONS = 250;
 
-export function verdi(p: Posisjon, kurs: number): number {
-  return p.antall * kurs;
+export function value(p: Position, price: number): number {
+  return p.quantity * price;
 }
 
-export class Portefolje {
-  private readonly posisjoner = new Map<string, Posisjon>();
+export class Portfolio {
+  private readonly positions = new Map<string, Position>();
 
-  leggTil(p: Posisjon): void {
-    if (this.posisjoner.size >= MAKS_POSISJONER) {
-      throw new Error("For mange posisjoner");
+  add(p: Position): void {
+    if (this.positions.size >= MAX_POSITIONS) {
+      throw new Error("Too many positions");
     }
-    this.posisjoner.set(p.ticker, p);
+    this.positions.set(p.ticker, p);
   }
 
-  beskriv(): string {
-    return `Portefølje med ${this.posisjoner.size} posisjoner\n`;
+  describe(): string {
+    return `Portfolio with ${this.positions.size} positions\n`;
   }
 
-  sum(kurser: Record<string, number>): number {
-    return [...this.posisjoner.values()].reduce(
-      (total, p) => total + verdi(p, kurser[p.ticker] ?? p.snittkurs),
+  sum(prices: Record<string, number>): number {
+    return [...this.positions.values()].reduce(
+      (total, p) => total + value(p, prices[p.ticker] ?? p.averagePrice),
       0,
     );
   }

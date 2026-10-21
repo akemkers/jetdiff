@@ -1,6 +1,6 @@
-//! Animert scroll mot et mål. `SyncScrollSupport.doMakeVisible` animerer master og lar
-//! slave følge masterens progresjon via ankeret, så begge sider lander samtidig selv om
-//! avstandene er ulike. Tid er millisekunder, så modellen kan testes uten klokke.
+//! Animated scroll toward a target. `SyncScrollSupport.doMakeVisible` animates the master and lets
+//! the slave follow the master's progress through the anchor, so both sides land at the same time even if
+//! the distances differ. Time is milliseconds, so the model can be tested without a clock.
 
 use crate::scroll::ScrollState;
 
@@ -20,9 +20,9 @@ impl ScrollAnimation {
         }
     }
 
-    /// Posisjon etter `elapsed_ms`, og om animasjonen er ferdig. Slave lerpes med samme
-    /// progresjon som master, som ankeret i `syncVerticalScroll` gjør. Står master stille
-    /// flytter IntelliJ slave etterpå, her skjer det i samme bevegelse.
+    /// Position after `elapsed_ms`, and whether the animation is done. The slave is lerped with the same
+    /// progress as the master, as the anchor in `syncVerticalScroll` does. If the master stands still,
+    /// IntelliJ moves the slave afterwards; here it happens in the same motion.
     pub fn sample(&self, elapsed_ms: f32) -> (ScrollState, bool) {
         if elapsed_ms >= self.duration_ms || self.duration_ms <= 0. {
             return (self.to, true);
@@ -40,7 +40,7 @@ impl ScrollAnimation {
     }
 }
 
-/// Kubisk ease-out: rask start, myk landing.
+/// Cubic ease-out: fast start, soft landing.
 fn ease_out(t: f32) -> f32 {
     let t = t.clamp(0., 1.);
     1. - (1. - t).powi(3)
@@ -55,7 +55,7 @@ mod tests {
     }
 
     #[test]
-    fn starter_og_lander_eksakt() {
+    fn starts_and_lands_exactly() {
         let from = ScrollState {
             y: [100., 300.],
             x: 40.,
@@ -70,7 +70,7 @@ mod tests {
     }
 
     #[test]
-    fn slave_folger_masterens_progresjon() {
+    fn slave_follows_master_progress() {
         let from = ScrollState {
             y: [0., 100.],
             x: 0.,
@@ -89,7 +89,7 @@ mod tests {
     }
 
     #[test]
-    fn ease_out_er_raskest_i_starten() {
+    fn ease_out_is_fastest_at_the_start() {
         assert_eq!(ease_out(0.), 0.);
         assert_eq!(ease_out(1.), 1.);
         assert!(ease_out(0.5) > 0.8);
@@ -97,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn null_varighet_er_ferdig_med_en_gang() {
+    fn zero_duration_is_done_at_once() {
         let a = ScrollAnimation::new(ScrollState::default(), target([5., 6.]), 0.);
         assert_eq!(a.sample(0.).0.y, [5., 6.]);
     }

@@ -1,4 +1,4 @@
-//! Scrollbaren: tommelen viser hva som synes, og markørene hvor endringene er.
+//! The scrollbar: the thumb shows what is visible, and the hunk minimap shows where the hunks are.
 
 use jetdiff_viewmodel::StripeMarker;
 use jetdiff_viewmodel::stripe::thumb_range;
@@ -25,7 +25,7 @@ pub(super) fn paint(painter: &mut Painter, x: u16, area: Rect) {
     }
 }
 
-/// Scrollbaren som rader. Innholdet skaleres ned når det er høyere enn sporet.
+/// The scrollbar as rows. The content is scaled down when it is taller than the track.
 struct Track {
     height: f32,
     content: f32,
@@ -44,12 +44,12 @@ impl Track {
         }
     }
 
-    /// Rad `row` overlapper `start..end` i sporet.
+    /// Row `row` overlaps `start..end` in the track.
     fn covers(&self, row: u16, start: f32, end: f32) -> bool {
         start < row as f32 + 1. && end > row as f32
     }
 
-    /// Markøren synes i rad `row`, minst én rad høy.
+    /// The mark shows in row `row`, at least one row high.
     fn shows(&self, row: u16, marker: &StripeMarker) -> bool {
         let start = self.to_track(marker.start_y);
         self.covers(row, start, self.to_track(marker.end_y).max(start + 1.))

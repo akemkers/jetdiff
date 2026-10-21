@@ -1,5 +1,5 @@
-//! Port av `LineFragmentSplitter.kt`. Deler en ord-diff i blokker av linjer, splittet på
-//! matchede newlines og matchede første ord i linja.
+//! Port of `LineFragmentSplitter.kt`. Splits a word diff into blocks of lines, split on
+//! matched newlines and matched first words in the line.
 
 use crate::by_word::InlineChunk;
 use crate::lcs::{Changes, Range};
@@ -25,7 +25,7 @@ pub(crate) struct LineFragmentSplitter<'a, 't> {
     words2: &'a [InlineChunk<'t>],
     iterable: &'a Changes,
     result: Vec<WordBlock>,
-    // -1 er starten av teksten, words.len() slutten, alt mellom er indekser i words
+    // -1 is the start of the text, words.len() the end, everything between is indices in words
     last1: isize,
     last2: isize,
     pending_chunk: Option<PendingChunk>,
@@ -163,15 +163,15 @@ impl<'a, 't> LineFragmentSplitter<'a, 't> {
 }
 
 fn should_merge_chunks(chunk1: &PendingChunk, chunk2: &PendingChunk) -> bool {
-    // Linjer som bare matchet på '\n'
+    // Lines that only matched on '\n'
     if !chunk1.has_equal_words && !chunk2.has_equal_words {
         return true;
     }
-    // Linjer med bare whitespace-endringer
+    // Lines with whitespace-only changes
     if chunk1.is_equal_ignore_whitespaces && chunk2.is_equal_ignore_whitespaces {
         return true;
     }
-    // Blokk uten ord i seg
+    // A block with no words in it
     !chunk1.has_words_inside || !chunk2.has_words_inside
 }
 

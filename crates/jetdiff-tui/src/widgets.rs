@@ -1,4 +1,4 @@
-//! Stien, tastelinja, beskjeden, hjelpen og rollback-dialogen.
+//! The path, the keymap bar, the message, the help and the rollback dialog.
 
 use jetdiff_app::help::{ALL, BAR};
 use jetdiff_app::{Level, Notice};
@@ -13,7 +13,7 @@ use crate::color::color;
 
 const HELP_WIDTH: u16 = 42;
 const CONFIRM_WIDTH: u16 = 28;
-/// Tastene i hjelpen står i en kolonne, med beskrivelsen til høyre.
+/// The keys in the help are in a column, with the description on the right.
 const KEY_COLUMN: usize = 15;
 
 fn text_row(text: &str, style: Style, area: Rect, buf: &mut Buffer) {
@@ -57,7 +57,7 @@ pub fn message(notice: &Notice, area: Rect, theme: &Theme, buf: &mut Buffer) {
     text_row(&notice.text, style, area, buf);
 }
 
-/// Linjene i en ramme midt i `area`, med én kolonne luft til venstre.
+/// The lines in a frame in the middle of `area`, with one column of space on the left.
 fn popup(width: u16, lines: Vec<Line>, area: Rect, theme: &Theme, buf: &mut Buffer) {
     let width = width.min(area.width);
     let height = (lines.len() as u16 + 2).min(area.height);
@@ -97,14 +97,14 @@ pub fn help(area: Rect, theme: &Theme, buf: &mut Buffer) {
         }
         lines.push(Line::raw(""));
     }
-    lines.push(Line::styled("? eller Esc lukker", what));
+    lines.push(Line::styled("? or Esc closes", what));
     popup(HELP_WIDTH, lines, area, theme, buf);
 }
 
 pub fn confirm_rollback(area: Rect, theme: &Theme, buf: &mut Buffer) {
     let lines = vec![
         Line::styled(
-            "Rull tilbake endringen?",
+            "Roll back this hunk?",
             Style::default().fg(color(theme.editor_fg)),
         ),
         Line::styled(

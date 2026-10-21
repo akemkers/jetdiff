@@ -1,32 +1,32 @@
-package no.jetdiff.eksempel;
+package dev.jetdiff.example;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Holder styr på ordre i minnet.
+ * Keeps track of orders in memory.
  */
-public class OrdreBok {
-    private static final int MAKS_ORDRE = 500;
+public class OrderBook {
+    private static final int MAX_ORDERS = 500;
 
-    private final List<Ordre> ordre = new ArrayList<>();
+    private final List<Order> orders = new ArrayList<>();
 
-    public record Ordre(String ticker, int antall, double kurs) {}
+    public record Order(String ticker, int quantity, double price) {}
 
-    public void leggTil(Ordre o) {
-        ordre.add(o);
+    public void add(Order o) {
+        orders.add(o);
     }
 
     public double sum() {
         double total = 0;
-        for (Ordre o : ordre) {
-            total += o.antall() * o.kurs();
+        for (Order o : orders) {
+            total += o.quantity() * o.price();
         }
         return total;
     }
 
     @Override
     public String toString() {
-        return "OrdreBok med " + ordre.size() + " ordre";
+        return "OrderBook with " + orders.size() + " orders";
     }
 }

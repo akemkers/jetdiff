@@ -1,4 +1,4 @@
-//! GPUI-vinduet.
+//! The GPUI window.
 
 use gpui::{
     App, AppContext, Application, Bounds, Context, Focusable, KeyBinding, Render, WindowBounds,
@@ -43,7 +43,7 @@ pub fn run(content: Content, title: String, config: Config) {
 }
 
 fn bind_keys(cx: &mut App) {
-    // Resten av tastene går gjennom vim-parseren i `FileDiffView`
+    // The rest of the keys go through the vim parser in `FileDiffView`
     cx.bind_keys(BINDINGS.iter().map(|&(keys, cmd)| key_binding(keys, cmd)));
     cx.on_action(|_: &Quit, cx| cx.quit());
 }
@@ -72,7 +72,7 @@ fn open<V: Render + Focusable>(
     title: String,
     build: impl FnOnce(&mut Context<V>) -> V + 'static,
 ) {
-    // Nær skjermstørrelsen, så zoom-animasjonen på macOS blir kort
+    // Close to the screen size, so the zoom animation on macOS is short
     let screen = cx.primary_display().map(|d| d.bounds().size);
     let start = screen.map_or(size(px(1400.), px(900.)), |s| {
         size(s.width * 0.95, s.height * 0.95)
@@ -94,5 +94,5 @@ fn open<V: Render + Focusable>(
             view
         },
     )
-    .expect("kunne ikke åpne vindu");
+    .expect("could not open window");
 }

@@ -1,5 +1,5 @@
-//! Tastetrykk til `Command`. Et lite, vim-inspirert keymap for lesing. Ikke vim-kompatibelt:
-//! vi velger taster som er lette å nå, også på norsk tastatur. Kun `g` venter på neste tast.
+//! Keystrokes to `Command`. A small, vim-inspired keymap for reading. Not vim-compatible:
+//! we pick keys that are easy to reach, also on a Norwegian keyboard. Only `g` waits for the next key.
 
 use jetdiff_core::side::Side;
 
@@ -7,7 +7,7 @@ use crate::command::Command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCode {
-    /// Tegnet tasten gir med shift og alt. Med ctrl er det grunntasten.
+    /// The character the key gives with shift and alt. With ctrl it is the base key.
     Char(char),
     Up,
     Down,
@@ -59,15 +59,15 @@ impl Key {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Parsed {
     Command(Command),
-    /// Tasten er brukt uten kommando: første `g` i `gg`, eller `g` fulgt av noe annet.
+    /// The key is used without a command: the first `g` in `gg`, or `g` followed by something else.
     Pending,
-    /// Ikke vår tast, f.eks. Cmd-snarveier. La GPUI-actions ta den.
+    /// Not our key, e.g. Cmd shortcuts. Let GPUI actions take it.
     Ignored,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct KeyParser {
-    /// `g` er trykket, venter på `g` nummer to.
+    /// `g` is pressed, waiting for the second `g`.
     g: bool,
 }
 
@@ -97,7 +97,7 @@ impl KeyParser {
 fn command(key: Key) -> Option<Command> {
     use Command::*;
     let cmd = match key.code {
-        // Ctrl-variantene er for muskelminnet fra vim. De står ikke i tastelinja.
+        // The Ctrl variants are for muscle memory from vim. They are not in the keymap bar.
         KeyCode::Char(c) if key.ctrl => match c {
             'd' => HalfPageDown,
             'u' => HalfPageUp,
@@ -129,7 +129,7 @@ fn command(key: Key) -> Option<Command> {
         KeyCode::Up => MoveUp,
         KeyCode::Left => ScrollLeft,
         KeyCode::Right => ScrollRight,
-        // F7 og Shift+F7 er IntelliJ sine `NextDiff` og `PreviousDiff`
+        // F7 and Shift+F7 are IntelliJ's `NextDiff` and `PreviousDiff`
         KeyCode::F(7) if key.shift => PrevChange,
         KeyCode::F(7) => NextChange,
         _ => return None,
@@ -151,7 +151,7 @@ mod tests {
         s.chars().map(Key::char).collect()
     }
 
-    /// Siste resultat for en sekvens, og at alt før ventet.
+    /// The last result for a sequence, and that everything before it waited.
     fn last(keys: &[Key]) -> Parsed {
         let out = run(keys);
         for p in &out[..out.len() - 1] {
@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn enkle_taster() {
+    fn simple_keys() {
         assert_eq!(last(&chars("j")), c(MoveDown));
         assert_eq!(last(&chars("k")), c(MoveUp));
         assert_eq!(last(&chars("h")), c(ScrollLeft));
@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn g_venter_paa_neste_tast() {
+    fn g_waits_for_next_key() {
         assert_eq!(
             run(&[Key::char('g'), Key::new(KeyCode::Other), Key::char('g')]),
             [Parsed::Pending, Parsed::Pending, Parsed::Pending]
@@ -202,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_og_cmd() {
+    fn ctrl_and_cmd() {
         assert_eq!(last(&[Key::ctrl('d')]), c(HalfPageDown));
         assert_eq!(last(&[Key::ctrl('u')]), c(HalfPageUp));
         assert_eq!(last(&[Key::ctrl('n')]), c(NextChange));
@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn f7_og_piltaster() {
+    fn f7_and_arrow_keys() {
         let k = Key::new;
         assert_eq!(last(&[k(KeyCode::F(7))]), c(NextChange));
         assert_eq!(last(&[k(KeyCode::F(7)).shift()]), c(PrevChange));

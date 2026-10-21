@@ -1,5 +1,5 @@
 [package]
-name = "kurs"
+name = "quote"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,6 @@ edition = "2021"
 serde = { version = "1", features = ["derive"] }
 tokio = "1.38"
 
-# Bare for tester
+# Only for tests
 [dev-dependencies]
 insta = "1"

@@ -1,6 +1,6 @@
-//! Sync scroll. Port av `BaseSyncScrollable`, `SimpleDiffViewer.MySyncScrollable` og
-//! `SyncScrollSupport.ScrollHelper.syncVerticalScroll`. Scroll-y er piksler fra toppen av
-//! dokumentet, per side.
+//! Sync scroll. Port of `BaseSyncScrollable`, `SimpleDiffViewer.MySyncScrollable` and
+//! `SyncScrollSupport.ScrollHelper.syncVerticalScroll`. Scroll y is pixels from the top of
+//! the document, per side.
 
 use jetdiff_core::side::Side;
 
@@ -8,7 +8,7 @@ use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{Block, FileDiff, idx};
 
-/// `Range` fra IntelliJ sett fra master: 1 er master, 2 er slave.
+/// `Range` from IntelliJ seen from the master: 1 is the master, 2 is the slave.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct SyncRange {
     start1: usize,
@@ -17,7 +17,7 @@ struct SyncRange {
     end2: usize,
 }
 
-/// Grensepunktene `(0,0)`, start og slutt for hver blokk, og `(lineCount1, lineCount2)`.
+/// The boundary points `(0,0)`, start and end of each hunk, and `(lineCount1, lineCount2)`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineMapping {
     bounds: Vec<[usize; 2]>,
@@ -38,14 +38,14 @@ impl LineMapping {
         }
     }
 
-    /// `BaseSyncScrollable.getRange` med `ScrollHelper.process`: nabogrensene som omslutter linja.
+    /// `BaseSyncScrollable.getRange` with `ScrollHelper.process`: the neighboring boundaries that enclose the line.
     fn range(&self, master: Side, line: usize) -> SyncRange {
         if !self.has_changes {
             return id_range(line);
         }
         let (m, s) = (idx(master), idx(master.other()));
-        // Første grense med `line <= b[m]`, ellers den siste. Binærsøk så scroll ikke blir
-        // O(blokker) per frame.
+        // The first boundary with `line <= b[m]`, otherwise the last one. Binary search so scroll doesn't become
+        // O(hunks) per frame.
         let i = self
             .bounds
             .partition_point(|b| b[m] < line)
@@ -65,8 +65,8 @@ impl LineMapping {
     }
 }
 
-/// `BaseSyncScrollable.transferLine`. Inne i en blokk går slave linje for linje fra toppen
-/// og står stille når den korte siden er brukt opp.
+/// `BaseSyncScrollable.transferLine`. Inside a hunk the slave goes line by line from the top
+/// and stands still when the short side is used up.
 fn transfer_line(line: usize, r: SyncRange) -> usize {
     if r.start1 == line {
         return r.start2;
@@ -89,8 +89,8 @@ fn id_range(line: usize) -> SyncRange {
     }
 }
 
-/// `ScrollHelper.transferVisualLine`: grensene konverteres til visuelle linjer på hver
-/// side, så foldede områder blir riktige uten spesialkode.
+/// `ScrollHelper.transferVisualLine`: the boundaries are converted to visual lines on each
+/// side, so folded areas come out right without special code.
 fn transfer_visual_line(
     mapping: &LineMapping,
     master: Side,
@@ -122,9 +122,9 @@ fn transfer_visual_line(
     )
 }
 
-/// `ScrollHelper.syncVerticalScroll` og `doScrollVertically` uten anker og animasjon.
-/// Ankeret ligger 1/3 ned i viewporten. Når slave står i en tom blokk flyttes den bare
-/// ved hele linjer, så den ikke vibrerer mens master scroller gjennom en ren insert.
+/// `ScrollHelper.syncVerticalScroll` and `doScrollVertically` without anchor and animation.
+/// The anchor is 1/3 down the viewport. When the slave is in an empty hunk side it only moves
+/// by whole lines, so it doesn't vibrate while the master scrolls through a pure insert.
 fn sync_vertical_scroll(
     mapping: &LineMapping,
     master: Side,
@@ -138,7 +138,7 @@ fn sync_vertical_scroll(
     let transfer =
         |visual| transfer_visual_line(mapping, master, master_layout, slave_layout, visual);
 
-    // Heltallsdivisjon i Java
+    // Integer division in Java
     let middle_y = (viewport_height / 3.).floor();
     let master_offset = master_y + middle_y;
     let master_visual = master_layout.y_to_visual_line(master_offset);
@@ -146,7 +146,7 @@ fn sync_vertical_scroll(
 
     let slave_offset = slave_layout.visual_line_to_y(slave_visual);
     let master_offset_raw = master_layout.visual_line_to_y(master_visual);
-    // Holder ankerlinjene i samme fase
+    // Keeps the anchor lines in the same phase
     let correction = (master_offset - master_offset_raw) % lh;
     let offset = slave_offset - middle_y + correction;
 
@@ -166,8 +166,8 @@ fn sync_vertical_scroll(
     slave_layout.clamp_scroll(target, viewport_height)
 }
 
-/// Scroll for begge sider. Horisontal scroll deles, som i spiken og JetBrains
-/// (`syncHorizontalScroll` setter samme x).
+/// Scroll for both sides. Horizontal scroll is shared, as in the spike and JetBrains
+/// (`syncHorizontalScroll` sets the same x).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ScrollState {
     pub y: [f32; 2],
@@ -179,7 +179,7 @@ impl ScrollState {
         self.y[idx(side)]
     }
 
-    /// Siden brukeren scroller er master. Slave regnes ut i samme frame.
+    /// The side the user scrolls is the master. The slave is computed in the same frame.
     pub fn scroll_to(
         &mut self,
         diff: &FileDiff,
@@ -190,7 +190,7 @@ impl ScrollState {
     ) {
         let layout = folding.layout(master, viewport.line_height);
         let y = layout.clamp_scroll(y, viewport.height);
-        // `visibleAreaChanged` synker bare når y faktisk endret seg
+        // `visibleAreaChanged` only syncs when y actually changed
         if y == self.y(master) {
             return;
         }
@@ -209,7 +209,7 @@ impl ScrollState {
         self.scroll_to(diff, folding, master, self.y(master) + dy, viewport);
     }
 
-    /// Regner slave på nytt, f.eks. etter endret viewport-høyde.
+    /// Recomputes the slave, e.g. after a changed viewport height.
     pub fn sync_from(
         &mut self,
         diff: &FileDiff,
@@ -231,17 +231,17 @@ impl ScrollState {
         );
     }
 
-    /// `max_x` kommer fra UI-et, som kjenner tekstbredden.
+    /// `max_x` comes from the UI, which knows the text width.
     pub fn scroll_x_to(&mut self, x: f32, max_x: f32) {
         self.x = x.clamp(0., max_x.max(0.));
     }
 }
 
-/// `EditorScrollingPositionKeeper` per side: holder caret, eller øverste linje hvis caret er
-/// utenfor, på samme sted på skjermen gjennom en fold-endring.
+/// `EditorScrollingPositionKeeper` per side: keeps the caret, or the top line if the caret is
+/// outside, at the same place on screen through a fold change.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PositionKeeper {
-    /// Logisk linje og avstand fra toppen av viewporten.
+    /// Logical line and distance from the top of the viewport.
     anchors: [(usize, f32); 2],
     caret: [bool; 2],
 }
@@ -262,7 +262,7 @@ impl PositionKeeper {
             let off_screen =
                 caret_y + layout.line_height() <= top || caret_y >= top + viewport.height;
             anchors[i] = if off_screen {
-                // `xyToLogicalPosition`: første linje i folden hvis toppen står på en
+                // `xyToLogicalPosition`: the first line of the fold if the top is on one
                 let line = layout.y_to_logical_line(top).min(layout.line_count() - 1);
                 (line, layout.line_top(line) - top)
             } else {
@@ -273,9 +273,9 @@ impl PositionKeeper {
         Self { anchors, caret }
     }
 
-    /// `carets` er etter endringen, flyttet ut av kollapsede folds. Venstre gjenopprettes
-    /// først uten sync, siden høyre fortsatt er i batch. Flytter høyre seg, synker den
-    /// venstre som i `runBatchOperation`.
+    /// `carets` are after the change, moved out of collapsed folds. Left is restored
+    /// first without sync, since Right is still in the batch. If Right moves, it syncs
+    /// Left as in `runBatchOperation`.
     pub fn restore(
         &self,
         state: &mut ScrollState,
@@ -323,24 +323,24 @@ mod tests {
     }
 
     #[test]
-    fn transfer_line_kanter() {
+    fn transfer_line_edges() {
         let range = r(10, 20, 30, 33);
         assert_eq!(transfer_line(10, range), 30);
         assert_eq!(transfer_line(20, range), 33);
         assert_eq!(transfer_line(11, range), 31);
         assert_eq!(transfer_line(12, range), 32);
-        // Klemt når den korte siden er brukt opp
+        // Clamped when the short side is used up
         assert_eq!(transfer_line(13, range), 33);
         assert_eq!(transfer_line(19, range), 33);
-        // Etter siste grense
+        // After the last boundary
         assert_eq!(transfer_line(25, range), 38);
     }
 
     #[test]
-    fn transfer_line_tom_blokk() {
-        // Ren insert på slave-siden: master står stille på grensen
+    fn transfer_line_empty_hunk() {
+        // Pure insert on the slave side: the master stands still on the boundary
         assert_eq!(transfer_line(5, r(5, 5, 5, 9)), 5);
-        // Ren insert på master: hele blokken mappes til grensen
+        // Pure insert on the master: the whole hunk maps to the boundary
         let range = r(5, 9, 5, 5);
         for line in 5..=9 {
             assert_eq!(transfer_line(line, range), 5);
@@ -354,8 +354,8 @@ mod tests {
     }
 
     #[test]
-    fn transfer_for_og_etter_og_inni_blokk() {
-        // venstre 0..10, høyre har 3 ekstra linjer etter linje 4
+    fn transfer_before_after_and_inside_hunk() {
+        // Left 0..10, Right has 3 extra lines after line 4
         let a = lines("a", 10);
         let b = format!(
             "{}{}{}",
@@ -370,9 +370,9 @@ mod tests {
         assert_eq!(m.transfer(L, 3), 3);
         assert_eq!(m.transfer(L, 4), 4);
         assert_eq!(m.transfer(L, 5), 8);
-        // Venstre har 11 linjer inkludert den tomme etter siste '\n'
+        // Left has 11 lines including the empty one after the last '\n'
         assert_eq!(m.transfer(L, 10), 13);
-        // Forbi slutten, lineært
+        // Past the end, linearly
         assert_eq!(m.transfer(L, 14), 17);
 
         assert_eq!(m.transfer(R, 4), 4);
@@ -383,8 +383,8 @@ mod tests {
     }
 
     #[test]
-    fn transfer_start_og_slutt_av_dokument() {
-        // Insert helt i starten og slutten
+    fn transfer_start_and_end_of_document() {
+        // Insert at the very start and end
         let a = "m\n";
         let b = "x\ny\nm\nz\n";
         let d = diff(a, b);
@@ -400,7 +400,7 @@ mod tests {
     }
 
     #[test]
-    fn binaersok_gir_samme_range_som_lineaert_sok() {
+    fn binary_search_gives_same_range_as_linear_search() {
         let a = lines("a", 60);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         b[3] = "x".into();
@@ -428,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn uten_endringer_er_mapping_identitet() {
+    fn without_hunks_mapping_is_identity() {
         let d = diff("a\nb\n", "a\nb\n");
         assert_eq!(d.mapping().transfer(L, 1), 1);
         assert_eq!(d.mapping().transfer(R, 40), 40);
@@ -448,8 +448,8 @@ mod tests {
         sync_vertical_scroll(d.mapping(), master, &ml, &sl, master_y, slave_y, VP.height)
     }
 
-    /// Endringer på linjene 10, 40 og 90 av 100. Kollapset: folds 0..6, 15..36, 45..86 og
-    /// 95..101 på begge sider.
+    /// Hunks on lines 10, 40 and 90 of 100. Collapsed: folds 0..6, 15..36, 45..86 and
+    /// 95..101 on both sides.
     fn three_changes() -> FileDiff {
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
@@ -464,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn expand_holder_caret_pa_plass() {
+    fn expand_keeps_caret_in_place() {
         let d = three_changes();
         let mut f = folded(&d);
         let mut s = ScrollState::default();
@@ -479,28 +479,28 @@ mod tests {
         let id = f.fold_at_line(L, 45).unwrap();
         f.set_expanded(id, true);
         keeper.restore(&mut s, &d, &f, carets, VP);
-        // 45..86 ble 4 + fold + 4 linjer, altså 8 visuelle linjer mer over caret
+        // 45..86 became 4 + fold + 4 lines, so 8 more visual lines above the caret
         assert_eq!(s.y, [560., 560.]);
         assert_eq!(screen(&f, &s), before);
     }
 
     #[test]
-    fn caret_utenfor_holder_overste_linje() {
+    fn caret_outside_keeps_top_line() {
         let d = three_changes();
         let mut f = folded(&d);
         let mut s = ScrollState::default();
-        // Visuell linje 11 er logisk 36
+        // Visual line 11 is logical 36
         s.scroll_to(&d, &f, L, 220., VP);
         let carets = [0, 0];
         let keeper = PositionKeeper::save(&s, &f, carets, VP);
-        // 0..6 blir fold 0..2 og fire linjer, altså fire visuelle linjer mer
+        // 0..6 becomes fold 0..2 and four lines, so four more visual lines
         let id = f.fold_at_line(R, 0).unwrap();
         f.set_expanded(id, true);
         keeper.restore(&mut s, &d, &f, carets, VP);
         assert_eq!(s.y, [300., 300.]);
         assert_eq!(f.layout(L, 20.).y_to_logical_line(s.y[0]), 36);
 
-        // Toppen står på en fold som åpnes: første linje blir liggende
+        // The top is on a fold that opens: the first line stays put
         let mut s = ScrollState::default();
         s.scroll_to(&d, &f, L, 480., VP);
         assert_eq!(f.layout(L, 20.).y_to_logical_line(480.), 45);
@@ -511,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn collapse_flytter_caret_til_folden() {
+    fn collapse_moves_caret_to_the_fold() {
         let d = three_changes();
         let mut f = folded(&d);
         f.expand_all(true);
@@ -523,13 +523,13 @@ mod tests {
         let carets = carets.map(|c| f.caret_after(L, c));
         assert_eq!(carets, [45, 45]);
         keeper.restore(&mut s, &d, &f, carets, VP);
-        // Folden havner der caret-linja sto
+        // The fold ends up where the caret line was
         assert_eq!(f.layout(L, 20.).line_top(45) - s.y[0], 1200. - 1000.);
     }
 
     #[test]
-    fn sync_med_ulike_folds() {
-        // Høyre har 30 ekstra linjer ved 40, så gapene og foldene er ulike
+    fn sync_with_different_folds() {
+        // Right has 30 extra lines at 40, so the gaps and folds differ
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         b[10] = "x".into();
@@ -564,7 +564,7 @@ mod tests {
     }
 
     #[test]
-    fn like_filer_scroller_likt() {
+    fn equal_files_scroll_the_same() {
         let a = lines("a", 100);
         let d = diff(&a, &a);
         for y in [0., 7., 20., 333.5, 1000.] {
@@ -573,8 +573,8 @@ mod tests {
     }
 
     #[test]
-    fn anker_en_tredjedel_ned() {
-        // 10 ekstra linjer på høyre side etter linje 50
+    fn anchor_a_third_down() {
+        // 10 extra lines on Right after line 50
         let a = lines("a", 100);
         let b = format!(
             "{}{}{}",
@@ -584,16 +584,16 @@ mod tests {
         );
         let d = diff(&a, &b);
         assert_eq!(d.blocks()[0].lines, [50..50, 50..60]);
-        // Anker (y+100) over blokken: likt
+        // Anchor (y+100) above the hunk: the same
         assert_eq!(sync(&d, L, 800., 800.), 800.);
-        // Anker under blokken: 10 linjer forskjøvet
+        // Anchor below the hunk: shifted 10 lines
         assert_eq!(sync(&d, L, 1100., 0.), 1300.);
-        // Fra høyre: ankeret inni den innsatte blokken treffer grensen på venstre side
+        // From Right: the anchor inside the inserted hunk hits the boundary on Left
         assert_eq!(sync(&d, R, 950., 0.), 50. * 20. - 100. + 50. % 20.);
     }
 
     #[test]
-    fn slave_flytter_bare_hele_linjer_i_tom_blokk() {
+    fn slave_moves_only_whole_lines_in_empty_hunk() {
         let a = lines("a", 100);
         let b = format!(
             "{}{}{}",
@@ -602,15 +602,15 @@ mod tests {
             &a[lines("a", 50).len()..]
         );
         let d = diff(&a, &b);
-        // Master = høyre, ankeret (y + 100) går gjennom de innsatte linjene 50..60.
-        // Slave (venstre) følger fasen til midten av første linje og står så stille
-        // til ankeret er halvveis i linja etter blokken.
+        // Master = Right, the anchor (y + 100) goes through the inserted lines 50..60.
+        // The slave (Left) follows the phase to the middle of the first line and then stands still
+        // until the anchor is halfway into the line after the hunk.
         let mut slave = 0.;
         for y in 880..1140 {
             let y = y as f32;
             let prev = slave;
             slave = sync(&d, R, y, slave);
-            assert!(slave >= prev, "slave gikk bakover ved master {y}");
+            assert!(slave >= prev, "slave went backward at master {y}");
             let expected = match y {
                 ..=910. => y,
                 ..1110. => 910.,
@@ -621,8 +621,8 @@ mod tests {
     }
 
     #[test]
-    fn slave_klemmes() {
-        // Venstre kort, høyre lang: slave kan ikke gå forbi sin maks
+    fn slave_is_clamped() {
+        // Left short, Right long: the slave cannot go past its max
         let a = lines("a", 5);
         let b = lines("a", 200);
         let d = diff(&a, &b);
@@ -635,7 +635,7 @@ mod tests {
     }
 
     #[test]
-    fn scroll_state_bytter_master() {
+    fn scroll_state_switches_master() {
         let a = lines("a", 100);
         let b = format!(
             "{}{}{}",

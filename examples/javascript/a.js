@@ -1,15 +1,15 @@
 const API = "https://example.com/api";
 
 /**
- * Henter kurser for en liste tickere.
+ * Fetches quotes for a list of tickers.
  */
-async function hentKurser(tickere) {
-  const svar = await fetch(API + "/kurser?t=" + tickere.join(","));
-  return svar.json();
+async function fetchQuotes(tickers) {
+  const response = await fetch(API + "/quotes?t=" + tickers.join(","));
+  return response.json();
 }
 
-function formater(kurs) {
-  return kurs.toFixed(2) + " kr";
+function format(price) {
+  return price.toFixed(2) + " USD";
 }
 
-module.exports = { hentKurser, formater };
+module.exports = { fetchQuotes, format };

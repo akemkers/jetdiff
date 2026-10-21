@@ -1,4 +1,4 @@
-//! Hendelsesløkka: taster og mus, watcheren og reload i bakgrunnen.
+//! The event loop: keys and mouse, the watcher and reload in the background.
 
 use std::io;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -33,11 +33,11 @@ enum Focus {
     Panel(Section),
 }
 
-/// Svaret fra en reload i bakgrunnen.
+/// The answer from a reload in the background.
 struct Reload {
     generation: u64,
     loaded: Result<Loaded, String>,
-    /// Filene watcheren så endret, tom når reloaden kom av noe annet.
+    /// The files the watcher saw change, empty when the reload came from something else.
     paths: Vec<String>,
 }
 
@@ -49,7 +49,7 @@ struct Repository {
     watcher: Option<Watcher>,
     reload_sender: Sender<Reload>,
     reload_receiver: Receiver<Reload>,
-    /// Bare svaret på siste reload brukes.
+    /// Only the answer to the last reload is used.
     generation: u64,
 }
 
@@ -69,7 +69,7 @@ impl Repository {
         });
     }
 
-    /// Svaret på siste reload, hvis det har kommet. Svar på eldre reloads kastes.
+    /// The answer to the last reload, if it has arrived. Answers to older reloads are dropped.
     fn latest_reload(&mut self) -> Option<Reload> {
         let mut latest = None;
         while let Ok(reload) = self.reload_receiver.try_recv() {
@@ -117,7 +117,7 @@ impl App {
             })));
             match Watcher::new(repo.root()) {
                 Ok(started) => watcher = Some(started),
-                Err(e) => message.show(format!("Følger ikke endringer: {e}"), Level::Warning),
+                Err(e) => message.show(format!("Can't watch for changes: {e}"), Level::Warning),
             }
         }
         let tree = FileTree::new(changes.changes().clone());
@@ -245,8 +245,7 @@ impl App {
             Some(Effect::Message(text)) => self.message.show(text, Level::Info),
             Some(Effect::Copy(location)) => {
                 clipboard::copy(&location, &mut io::stdout())?;
-                self.message
-                    .show(format!("Kopierte {location}"), Level::Info);
+                self.message.show(format!("Copied {location}"), Level::Info);
             }
             Some(Effect::Rollback(request)) => {
                 let Some(repo) = &mut self.repository else {
@@ -281,7 +280,7 @@ impl App {
         }
     }
 
-    /// Som i GPUI: tastene i `jetdiff_app::keys` først, så det som har fokus.
+    /// As in GPUI: the keys in `jetdiff_app::keys` first, then whatever has focus.
     fn key(&mut self, key: jetdiff_viewmodel::Key) -> io::Result<()> {
         if let Some(cmd) = app_command(key)
             && self.app_command(cmd)?
@@ -300,7 +299,7 @@ impl App {
         }
     }
 
-    /// `false` når tasten skal gå videre.
+    /// `false` when the key should pass through.
     fn app_command(&mut self, cmd: AppCommand) -> io::Result<bool> {
         match cmd {
             AppCommand::Quit => self.quit = true,

@@ -1,4 +1,4 @@
-//! Tilstanden rundt diffen som UI-ene deler. Se README.
+//! The state around the diff that the UIs share. See the README.
 
 pub mod actions;
 pub mod changes;
@@ -17,7 +17,7 @@ pub use files::{FileTree, count_label, file_name};
 pub use keys::{AppCommand, BINDINGS, app_command};
 pub use watcher::Watcher;
 
-/// Raden markøren flyttes til, innenfor `len` rader.
+/// The row the cursor moves to, within `len` rows.
 pub fn step(row: usize, down: bool, len: usize) -> usize {
     if down {
         (row + 1).min(len.saturating_sub(1))
@@ -31,7 +31,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn steg_innenfor_lista() {
+    fn step_within_the_list() {
         assert_eq!(step(0, true, 3), 1);
         assert_eq!(step(2, true, 3), 2);
         assert_eq!(step(0, false, 3), 0);

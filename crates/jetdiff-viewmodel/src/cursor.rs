@@ -1,12 +1,12 @@
-//! Markert linje for hele diffen, på den siden som har fokus. Siden er master for sync
-//! scroll, som `getCurrentSide` i `TwosideTextDiffViewer`.
+//! The cursor for the whole diff, on the side that has focus. That side is the master for sync
+//! scroll, like `getCurrentSide` in `TwosideTextDiffViewer`.
 
 use jetdiff_core::side::Side;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cursor {
     pub side: Side,
-    /// Logisk linje. På en kollapset fold er det første linje i folden.
+    /// Logical line. On a collapsed fold it is the first line of the fold.
     pub line: usize,
 }
 

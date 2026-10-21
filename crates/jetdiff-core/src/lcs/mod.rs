@@ -1,5 +1,5 @@
-//! LCS-motoren. Port av `com.intellij.util.diff.Diff` med Myers, Reindexer og patience-fallback.
-//! Holdes nær originalen så resultatene blir like IntelliJ sine.
+//! The LCS engine. Port of `com.intellij.util.diff.Diff` with Myers, Reindexer and the patience fallback.
+//! Kept close to the original so the results match IntelliJ's.
 
 mod bitset;
 mod myers;
@@ -15,11 +15,11 @@ use myers::MyersLcs;
 use patience::PatienceLcs;
 use reindexer::Reindexer;
 
-/// Myers ga opp og patience klarte ikke å redusere problemet nok.
+/// Myers gave up and patience could not reduce the problem enough.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DiffTooBig;
 
-/// Et endret område, halvåpne intervaller på hver side.
+/// A changed range, half-open intervals on each side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Range {
     pub start1: usize,
@@ -43,7 +43,7 @@ impl Range {
     }
 }
 
-/// Resultatet av en diff: endringene i stigende rekkefølge. Alt mellom dem er likt 1:1.
+/// The result of a diff: the changes in ascending order. Everything between them is equal 1:1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Changes {
     pub len1: usize,
@@ -52,7 +52,7 @@ pub struct Changes {
 }
 
 impl Changes {
-    /// Uendrede områder mellom endringene, inkludert før første og etter siste.
+    /// Unchanged ranges between the changes, including before the first and after the last.
     pub fn unchanged(&self) -> impl Iterator<Item = Range> + '_ {
         let mut last = (0, 0);
         self.ranges
@@ -69,7 +69,7 @@ impl Changes {
     }
 }
 
-/// Sammenligner to sekvenser basert på `Eq`/`Hash`. Tilsvarer `DiffIterableUtil.diff`.
+/// Compares two sequences based on `Eq`/`Hash`. Corresponds to `DiffIterableUtil.diff`.
 pub fn diff<'t, T: Hash + Eq>(a: &'t [T], b: &'t [T]) -> Result<Changes, DiffTooBig> {
     let start = common_prefix(a, b);
     let end = common_suffix(a, b, start);
@@ -94,7 +94,7 @@ pub fn diff<'t, T: Hash + Eq>(a: &'t [T], b: &'t [T]) -> Result<Changes, DiffToo
     build(&ints1, &ints2, builder)
 }
 
-/// Sammenligner to int-sekvenser direkte. Tilsvarer `Diff.buildChanges(IntArray, IntArray)`.
+/// Compares two int sequences directly. Corresponds to `Diff.buildChanges(IntArray, IntArray)`.
 pub fn diff_ints(a: &[u32], b: &[u32]) -> Result<Changes, DiffTooBig> {
     let start = common_prefix(a, b);
     let end = common_suffix(a, b, start);
@@ -160,7 +160,7 @@ fn common_suffix<T: Eq>(a: &[T], b: &[T], start: usize) -> usize {
         .count()
 }
 
-/// Bygger listen av endringer fra en strøm av `add_equal`/`add_change`. Tilsvarer `Diff.ChangeBuilder`.
+/// Builds the list of changes from a stream of `add_equal`/`add_change`. Corresponds to `Diff.ChangeBuilder`.
 pub(crate) struct ChangeBuilder {
     index1: usize,
     index2: usize,

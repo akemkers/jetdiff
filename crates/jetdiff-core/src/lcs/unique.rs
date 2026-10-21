@@ -1,8 +1,8 @@
-//! Port av `UniqueLCS.kt`: LCS over elementer som finnes nøyaktig én gang på hver side.
+//! Port of `UniqueLCS.kt`: LCS over elements that occur exactly once on each side.
 
 use std::collections::HashMap;
 
-/// Returnerer matchede posisjoner (relativt til start) på hver side, eller `None` uten unike par.
+/// Returns matched positions (relative to start) on each side, or `None` without unique pairs.
 pub(crate) fn unique_lcs(
     first: &[u32],
     second: &[u32],
@@ -11,7 +11,7 @@ pub(crate) fn unique_lcs(
     start2: usize,
     count2: usize,
 ) -> Option<(Vec<usize>, Vec<usize>)> {
-    // map: key -> (offset1 + 1), -1 hvis ikke unik
+    // map: key -> (offset1 + 1), -1 if not unique
     // matching: offset1 -> (offset2 + 1)
     let mut map: HashMap<u32, i64> = HashMap::with_capacity(count1 + count2);
     let mut matching = vec![0usize; count1];
@@ -51,7 +51,7 @@ pub(crate) fn unique_lcs(
         return None;
     }
 
-    // Lengste stigende delsekvens over de unike parene.
+    // Longest increasing subsequence over the unique pairs.
     let count = count as usize;
     let mut sequence = vec![0usize; count];
     let mut last_element = vec![0usize; count];

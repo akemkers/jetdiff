@@ -6,7 +6,7 @@ plugins {
 repositories {
     mavenCentral()
     maven("https://www.jetbrains.com/intellij-repository/releases")
-    // kotlinx-coroutines-intellij, transitivt fra util-base-multiplatform
+    // kotlinx-coroutines-intellij, transitively from util-base-multiplatform
     maven("https://cache-redirector.jetbrains.com/intellij-dependencies")
 }
 
@@ -28,15 +28,15 @@ sourceSets {
 kotlin {
     jvmToolchain(25)
     compilerOptions {
-        // Tilsvarer IntelliJ sin -Xjvm-default=all
+        // Corresponds to IntelliJ's -Xjvm-default=all
         jvmDefault.set(org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode.NO_COMPATIBILITY)
-        // Vendret kode gir mange deprecation-advarsler fra multiplatform-shims
+        // Vendored code gives many deprecation warnings from multiplatform shims
         suppressWarnings.set(true)
     }
 }
 
 application {
     mainClass.set("jetdiff.golden.MainKt")
-    // Slaa paa assert i IntelliJ-koden
+    // Turn on asserts in the IntelliJ code
     applicationDefaultJvmArgs = listOf("-ea")
 }

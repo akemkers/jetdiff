@@ -1,4 +1,4 @@
-//! Diffen av én fil, som `FileDiffView` i GPUI. Split er justerte rader og har ingen folding.
+//! The diff of one file, like `FileDiffView` in GPUI. Split is aligned rows and has no folding.
 
 use std::rc::Rc;
 
@@ -14,7 +14,7 @@ use crate::WHEEL_ROWS;
 use crate::{code_viewer, geometry};
 
 pub enum Overlay {
-    /// Enter bekrefter, alt annet avbryter.
+    /// Enter confirms, anything else cancels.
     Confirm(RollbackRequest),
     Help,
 }
@@ -67,7 +67,7 @@ impl DiffView {
         self.initialized = false;
     }
 
-    /// Cursor og scroll beholdes.
+    /// Cursor and scroll are kept.
     pub fn update_diff(&mut self, diff: FileDiff, paths: [String; 2]) {
         let Some(viewport) = self.viewport().filter(|_| self.initialized) else {
             return self.set_diff(diff, paths);
@@ -114,7 +114,7 @@ impl DiffView {
         self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
     }
 
-    /// Før tegning.
+    /// Before drawing.
     pub fn layout(&mut self, area: Rect) {
         let resized = area.height != self.area.height;
         self.area = area;
@@ -155,7 +155,7 @@ impl DiffView {
         };
     }
 
-    /// `false` når hjelpen ikke vises, så Esc går videre.
+    /// `false` when help is not shown, so Esc passes through.
     pub fn hide_help(&mut self) -> bool {
         if !matches!(self.overlay, Some(Overlay::Help)) {
             return false;
@@ -221,7 +221,7 @@ impl DiffView {
     }
 }
 
-/// Split er justerte rader.
+/// Split is aligned rows.
 fn row_layout(diff: &FileDiff, unified: bool) -> RowLayout {
     if !unified && diff.can_split() {
         RowLayout::Split

@@ -1,4 +1,4 @@
-//! Kjører `jetdiff_app::Watcher` på GPUI-executoren.
+//! Runs `jetdiff_app::Watcher` on the GPUI executor.
 
 use std::path::Path;
 

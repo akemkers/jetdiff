@@ -1,4 +1,4 @@
-//! Innstillinger for hele appen. Den som åpner vinduet setter dem med `cx.set_global`.
+//! Settings for the whole app. Whoever opens the window sets them with `cx.set_global`.
 
 use gpui::Global;
 
@@ -6,11 +6,11 @@ use crate::theme::UiTheme;
 
 pub struct Settings {
     pub theme: UiTheme,
-    /// Der zoom starter, og der `ResetZoom` går tilbake.
+    /// Where zoom starts, and where `ResetZoom` goes back to.
     pub font_size: f32,
-    /// Nye filer vises med uendrede deler klappet sammen.
+    /// New files are shown with unchanged parts folded.
     pub collapse_unchanged: bool,
-    /// Visningen ved oppstart. `v` bytter.
+    /// The diff mode at startup. `v` switches.
     pub unified: bool,
     pub side_panel_open: bool,
 }

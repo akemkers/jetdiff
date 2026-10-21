@@ -1,4 +1,4 @@
-//! Én linje som celler.
+//! One line as cells.
 
 use std::ops::Range;
 
@@ -16,11 +16,11 @@ pub struct LineText<'a> {
     pub text: &'a str,
     pub syntax: &'a [SyntaxSpan],
     pub inline: &'a [InlineHighlight],
-    /// Unified farger ordene etter raden, ikke ordet.
+    /// Unified colors the words by the row, not by the word.
     pub inline_type: Option<DiffType>,
 }
 
-/// `area` er én rad med bakgrunnen fra før.
+/// `area` is one row with the background from before.
 pub fn paint_line(line: &LineText, scroll_x: usize, area: Rect, theme: &Theme, buf: &mut Buffer) {
     let expanded = ExpandedLine::new(line.text);
     let display =
@@ -60,14 +60,14 @@ pub fn paint_line(line: &LineText, scroll_x: usize, area: Rect, theme: &Theme, b
         if col + cells > scroll_x && cells > 0 {
             let x = area.x + col.saturating_sub(scroll_x) as u16;
             let cell = &mut buf[(x, area.y)];
-            // Et bredt tegn som starter før scroll vises som mellomrom
+            // A wide character that starts before the scroll is shown as spaces
             let shown = if col < scroll_x || col + cells > scroll_x + width {
                 ' '
             } else {
                 ch
             };
             cell.set_char(shown);
-            // Et mellomrom beholder stilen foran, så terminalen slipper et fargebytte
+            // A space keeps the style in front of it, so the terminal is spared a color change
             if !shown.is_whitespace() {
                 text_style = Style::default().fg(color(theme.editor_fg));
                 if let Some(token) = covering(&syntax, &mut next_syntax, at) {
@@ -107,7 +107,7 @@ pub fn paint_line(line: &LineText, scroll_x: usize, area: Rect, theme: &Theme, b
     }
 }
 
-/// Spennet som dekker `at`. Spennene er sortert, og `at` øker, så `next` går bare framover.
+/// The span that covers `at`. The spans are sorted, and `at` increases, so `next` only goes forward.
 fn covering<T: Copy>(spans: &[(Range<usize>, T)], next: &mut usize, at: usize) -> Option<T> {
     while spans.get(*next).is_some_and(|(r, _)| r.end <= at) {
         *next += 1;
@@ -157,14 +157,14 @@ mod tests {
     }
 
     #[test]
-    fn tabs_og_scroll() {
+    fn tabs_and_scroll() {
         assert_eq!(paint("a\tb", 0, 6), "a   b ");
         assert_eq!(paint("abcdef", 2, 3), "cde");
         assert_eq!(paint("ab", 5, 3), "   ");
     }
 
     #[test]
-    fn mellomrom_beholder_fargen_foran() {
+    fn space_keeps_the_color_in_front() {
         let area = Rect::new(0, 0, 4, 1);
         let mut buf = Buffer::empty(area);
         let theme = Theme::mocha();
@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn brede_tegn_kuttes_til_mellomrom() {
+    fn wide_characters_are_cut_to_spaces() {
         assert_eq!(paint("日本", 1, 3), " 本 ");
     }
 }

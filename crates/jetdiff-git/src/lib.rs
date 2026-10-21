@@ -1,5 +1,5 @@
-//! Endringer og filinnhold fra git. Kaller `git` så resultatet blir det samme som i
-//! `git diff`, med brukerens config og rename-deteksjon.
+//! Changes and file content from git. Calls `git` so the result is the same as in
+//! `git diff`, with the user's config and rename detection.
 
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -9,29 +9,29 @@ use std::thread;
 
 use jetdiff_changes::{FileChange, Status};
 
-/// Commit-lista viser aldri flere, så en gammel default-branch ikke gir tusenvis.
+/// The commit list never shows more, so an old default branch doesn't give thousands.
 const MAX_COMMITS: usize = 50;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Commit {
     pub hash: String,
-    /// Første linje av meldingen.
+    /// The first line of the message.
     pub subject: String,
-    /// Sekunder siden 1970.
+    /// Seconds since 1970.
     pub time: i64,
 }
 
-/// En lenke som `https://github.com/eier/repo/pull/12`.
+/// A link like `https://github.com/owner/repo/pull/12`.
 #[derive(Debug, PartialEq, Eq)]
 pub struct PullRequest {
     pub url: String,
-    /// `eier/repo`.
+    /// `owner/repo`.
     pub slug: String,
     pub number: u32,
 }
 
 impl PullRequest {
-    /// Godtar også lenker til en fane eller kommentar i PR-en.
+    /// Also accepts links to a tab or comment in the PR.
     pub fn parse(url: &str) -> Option<Self> {
         let rest = url.strip_prefix("https://github.com/")?;
         let mut parts = rest.split(['/', '#', '?']);
@@ -49,19 +49,19 @@ impl PullRequest {
 
 pub struct Repo {
     root: PathBuf,
-    /// Venstre side. Det tomme treet hvis det ikke finnes noen forelder.
+    /// Left. The empty tree if there is no parent.
     left: String,
-    /// `None` er working tree.
+    /// `None` is Local changes.
     right: Option<String>,
-    /// Revisjonene commit-lista viser. `None` for en commit og for et repo uten commits.
+    /// The revisions the commit list shows. `None` for a commit and for a repo without commits.
     history: Option<String>,
 }
 
 impl Repo {
-    /// En commit mot forelderen.
+    /// A commit against its parent.
     pub fn commit(dir: &Path, rev: &str) -> Result<Self, String> {
         let root = toplevel(dir)?;
-        let right = verify(&root, rev).ok_or_else(|| format!("ukjent commit: {rev}"))?;
+        let right = verify(&root, rev).ok_or_else(|| format!("unknown commit: {rev}"))?;
         let left = match verify(&root, &format!("{right}^")) {
             Some(parent) => parent,
             None => empty_tree(&root)?,
@@ -74,15 +74,15 @@ impl Repo {
         })
     }
 
-    /// PR-en mot der den gikk ut fra base-branchen, som på GitHub. Hentes fra `origin`, så
-    /// repoet i `dir` må være det PR-en hører til.
+    /// The PR against where it branched off the base branch, as on GitHub. Fetched from `origin`, so
+    /// the repo in `dir` must be the one the PR belongs to.
     pub fn pull_request(dir: &Path, pr: &PullRequest) -> Result<Self, String> {
-        let root = toplevel(dir).map_err(|_| "står ikke i et git-repo".to_owned())?;
+        let root = toplevel(dir).map_err(|_| "not in a git repo".to_owned())?;
         let origin = git(&root, &["remote", "get-url", "origin"])
-            .map_err(|_| "repoet har ingen origin".to_owned())?;
+            .map_err(|_| "the repo has no origin".to_owned())?;
         let origin = origin.trim_end();
         if !github_slug(origin).is_some_and(|s| s.eq_ignore_ascii_case(&pr.slug)) {
-            return Err(format!("PR-en hører til {}, ikke {origin}", pr.slug));
+            return Err(format!("the PR belongs to {}, not {origin}", pr.slug));
         }
         let fields = ".baseRefName + \" \" + .headRefOid";
         let view = [
@@ -94,7 +94,7 @@ impl Repo {
             "--jq",
             fields,
         ];
-        // Alle branchene hentes, så fetch ikke trenger base-branchen fra gh og kan gå samtidig
+        // All the branches are fetched, so fetch doesn't need the base branch from gh and can run at the same time
         let head_ref = format!("pull/{}/head", pr.number);
         let branches = "+refs/heads/*:refs/remotes/origin/*";
         let fetch = [
@@ -115,8 +115,9 @@ impl Repo {
         let (base, head) = info
             .trim_end()
             .split_once(' ')
-            .ok_or_else(|| format!("uventet svar fra gh: {info}"))?;
-        let right = verify(&root, head).ok_or_else(|| format!("fant ikke {head} etter fetch"))?;
+            .ok_or_else(|| format!("unexpected answer from gh: {info}"))?;
+        let right =
+            verify(&root, head).ok_or_else(|| format!("did not find {head} after fetch"))?;
         let fork = git(&root, &["merge-base", &format!("origin/{base}"), &right])?;
         Ok(Self {
             root,
@@ -126,10 +127,10 @@ impl Repo {
         })
     }
 
-    /// Working tree med filer git ikke sporer ennå, mot HEAD. Commit-lista har commitene på
-    /// branchen, eller de siste når branchen ikke har egne.
+    /// Local changes, with files git doesn't track yet, against HEAD. The commit list has the commits on
+    /// the branch, or the latest ones when the branch has none of its own.
     pub fn work_tree(dir: &Path) -> Result<Self, String> {
-        // Hvert git-kall koster en prosess, så de uavhengige kjøres samtidig
+        // Each git call costs a process, so the independent ones run at the same time
         let (root, head, branch) = thread::scope(|s| {
             let head = s.spawn(|| verify(dir, "HEAD"));
             let branch = s.spawn(|| default_branch(dir));
@@ -165,12 +166,12 @@ impl Repo {
         &self.root
     }
 
-    /// Working tree kan endre seg mens den vises, en commit kan ikke.
+    /// Local changes can change while they are shown; a commit can't.
     pub fn is_work_tree(&self) -> bool {
         self.right.is_none()
     }
 
-    /// Commitene på branchen, eller de siste. Nyeste først. Tom for en commit.
+    /// The commits on the branch, or the latest ones. Newest first. Empty for a commit.
     pub fn commits(&self) -> Result<Vec<Commit>, String> {
         let Some(history) = &self.history else {
             return Ok(Vec::new());
@@ -180,7 +181,7 @@ impl Repo {
         Ok(parse_log(&git(&self.root, &args)?))
     }
 
-    /// Mappenavnet til repoet eller worktreet.
+    /// The folder name of the repo or worktree.
     pub fn name(&self) -> &str {
         self.root
             .file_name()
@@ -210,7 +211,7 @@ impl Repo {
         Ok(changes)
     }
 
-    /// Innholdet på hver side. En side som ikke finnes er tom.
+    /// The content on each side. A side that doesn't exist is empty.
     pub fn read(&self, change: &FileChange) -> Result<[String; 2], String> {
         let left = match change.status {
             Status::Added => String::new(),
@@ -228,9 +229,9 @@ impl Repo {
         Ok([left, right])
     }
 
-    /// Ruller tilbake én endring i working tree: linjene `lines[1]` erstattes med `lines[0]`
-    /// fra venstre side. Nekter hvis fila ikke lenger er `before`, det diffen viser.
-    /// Byttes som bytes, så encoding og linjeskift ikke endres.
+    /// Rolls back one hunk in Local changes: the lines `lines[1]` are replaced with `lines[0]`
+    /// from Left. Refuses if the file is no longer `before`, what the diff shows.
+    /// Replaced as bytes, so encoding and line breaks don't change.
     pub fn rollback(
         &self,
         change: &FileChange,
@@ -239,19 +240,19 @@ impl Repo {
     ) -> Result<String, String> {
         let path = &change.path;
         if !self.is_work_tree() {
-            return Err("en commit kan ikke endres".into());
+            return Err("a commit can't be changed".into());
         }
         let full = self.root.join(path);
         let disk = std::fs::read(&full).map_err(|e| format!("{path}: {e}"))?;
         if String::from_utf8_lossy(&disk) != before {
-            return Err(format!("{path} er endret på disk"));
+            return Err(format!("{path} has changed on disk"));
         }
         let left = match change.status {
             Status::Added => Vec::new(),
             _ => self.blob_bytes(&self.left, change.left_path())?,
         };
         let after = replace_with_left(&left, &disk, lines)
-            .ok_or_else(|| format!("{path}: linjene finnes ikke"))?;
+            .ok_or_else(|| format!("{path}: the lines don't exist"))?;
         std::fs::write(&full, &after).map_err(|e| format!("{path}: {e}"))?;
         Ok(String::from_utf8_lossy(&after).into_owned())
     }
@@ -261,8 +262,8 @@ impl Repo {
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
-    /// Fila slik den ligger på disk etter checkout, med linjeskift fra `autocrlf` og
-    /// `.gitattributes`. Ellers er hver linje endret i en fil med CRLF på disk.
+    /// The file as it is on disk after checkout, with line breaks from `autocrlf` and
+    /// `.gitattributes`. Otherwise every line is changed in a file with CRLF on disk.
     fn blob_bytes(&self, rev: &str, path: &str) -> Result<Vec<u8>, String> {
         git_bytes(
             &self.root,
@@ -282,7 +283,7 @@ fn verify(root: &Path, rev: &str) -> Option<String> {
     Some(out.trim_end().to_owned())
 }
 
-/// `origin` først, så commit-lista blir den samme som i PR-en. Lokal main ligger ofte bak.
+/// `origin` first, so the commit list is the same as in the PR. Local main is often behind.
 fn default_branch(root: &Path) -> Option<String> {
     let remote = git(
         root,
@@ -301,21 +302,21 @@ fn default_branch(root: &Path) -> Option<String> {
         .find(|b| verify(root, b).is_some())
 }
 
-/// `eier/repo` fra en SSH- eller HTTPS-remote på GitHub.
+/// `owner/repo` from an SSH or HTTPS remote on GitHub.
 fn github_slug(remote: &str) -> Option<&str> {
     let (_, rest) = remote.split_once("github.com")?;
     let rest = rest.strip_prefix([':', '/'])?;
     Some(rest.trim_end_matches('/').trim_end_matches(".git"))
 }
 
-/// Hashen avhenger av om repoet bruker SHA-1 eller SHA-256.
+/// The hash depends on whether the repo uses SHA-1 or SHA-256.
 fn empty_tree(root: &Path) -> Result<String, String> {
     let out = git(root, &["hash-object", "-t", "tree", "/dev/null"])?;
     Ok(out.trim_end().to_owned())
 }
 
-/// Bytter linjene `lines[1]` i `right` med linjene `lines[0]` fra `left`. `None` hvis
-/// linjene ikke finnes.
+/// Replaces the lines `lines[1]` in `right` with the lines `lines[0]` from `left`. `None` if
+/// the lines don't exist.
 fn replace_with_left(left: &[u8], right: &[u8], lines: [Range<usize>; 2]) -> Option<Vec<u8>> {
     let left: Vec<&[u8]> = left.split(|&b| b == b'\n').collect();
     let right: Vec<&[u8]> = right.split(|&b| b == b'\n').collect();
@@ -326,14 +327,14 @@ fn replace_with_left(left: &[u8], right: &[u8], lines: [Range<usize>; 2]) -> Opt
     Some([before, replacement, after].concat().join(&b'\n'))
 }
 
-/// Binærfiler og feil encoding vises med erstatningstegn i stedet for å feile.
+/// Binary files and wrong encoding are shown with replacement characters instead of failing.
 fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     let out = git_bytes(dir, args)?;
     Ok(String::from_utf8_lossy(&out).into_owned())
 }
 
-/// `/usr/bin/git` på macOS er en shim som gjør hvert kall flere ganger tregere, så vi
-/// slår opp den ekte binæren én gang.
+/// `/usr/bin/git` on macOS is a shim that makes each call several times slower, so we
+/// look up the real binary once.
 fn git_bin() -> &'static Path {
     static BIN: OnceLock<PathBuf> = OnceLock::new();
     BIN.get_or_init(|| {
@@ -363,7 +364,7 @@ fn gh(dir: &Path, args: &[&str]) -> Result<String, String> {
 fn run(mut cmd: Command, name: &str) -> Result<Vec<u8>, String> {
     let out = cmd
         .output()
-        .map_err(|e| format!("kunne ikke kjøre {name}: {e}"))?;
+        .map_err(|e| format!("could not run {name}: {e}"))?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
         return Err(err.trim_end().to_owned());
@@ -371,7 +372,7 @@ fn run(mut cmd: Command, name: &str) -> Result<Vec<u8>, String> {
     Ok(out.stdout)
 }
 
-/// `R100\0gammel\0ny\0M\0sti\0`. Type-endring og konflikt vises som endret.
+/// `R100\0old\0new\0M\0path\0`. Type changes and conflicts are shown as modified.
 fn parse_name_status(out: &str) -> Vec<FileChange> {
     let mut fields = out.split_terminator('\0');
     let mut changes = Vec::new();
@@ -406,7 +407,7 @@ fn parse_name_status(out: &str) -> Vec<FileChange> {
     changes
 }
 
-/// `hash\x1ftid\x1fmelding\0` per commit.
+/// `hash\x1ftime\x1fmessage\0` per commit.
 fn parse_log(out: &str) -> Vec<Commit> {
     out.split_terminator('\0')
         .filter_map(|entry| {
@@ -454,7 +455,7 @@ mod tests {
             self.git(&["commit", "-q", "-m", "c"]);
         }
 
-        /// Som etter en fetch der `origin/main` står på HEAD.
+        /// As after a fetch where `origin/main` is at HEAD.
         fn origin_main(&self) {
             self.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
             self.git(&[
@@ -489,21 +490,21 @@ mod tests {
     }
 
     #[test]
-    fn parser_name_status() {
-        let c = parse_name_status("M\0a.rs\0R087\0gammel.rs\0ny.rs\0D\0borte.rs\0");
+    fn parses_name_status() {
+        let c = parse_name_status("M\0a.rs\0R087\0old.rs\0new.rs\0D\0gone.rs\0");
         assert_eq!(
             summary(&c),
             [
                 (Status::Modified, "a.rs", None),
-                (Status::Deleted, "borte.rs", None),
-                (Status::Renamed, "ny.rs", Some("gammel.rs")),
+                (Status::Deleted, "gone.rs", None),
+                (Status::Renamed, "new.rs", Some("old.rs")),
             ]
         );
     }
 
     #[test]
-    fn forste_commit_mot_tomt_tre() {
-        let r = TempRepo::new("forste");
+    fn first_commit_against_empty_tree() {
+        let r = TempRepo::new("first");
         r.write("src/a.rs", "fn a() {}\n");
         r.commit();
         let repo = Repo::commit(&r.0, "HEAD").unwrap();
@@ -513,22 +514,22 @@ mod tests {
     }
 
     #[test]
-    fn commit_med_rename_og_sletting() {
+    fn commit_with_rename_and_deletion() {
         let r = TempRepo::new("rename");
-        let long = "linje\n".repeat(20);
-        r.write("gammel.rs", &long);
-        r.write("borte.rs", "x\n");
+        let long = "line\n".repeat(20);
+        r.write("old.rs", &long);
+        r.write("gone.rs", "x\n");
         r.commit();
-        std::fs::rename(r.0.join("gammel.rs"), r.0.join("ny.rs")).unwrap();
-        std::fs::remove_file(r.0.join("borte.rs")).unwrap();
+        std::fs::rename(r.0.join("old.rs"), r.0.join("new.rs")).unwrap();
+        std::fs::remove_file(r.0.join("gone.rs")).unwrap();
         r.commit();
         let repo = Repo::commit(&r.0, "HEAD").unwrap();
         let changes = repo.changes().unwrap();
         assert_eq!(
             summary(&changes),
             [
-                (Status::Deleted, "borte.rs", None),
-                (Status::Renamed, "ny.rs", Some("gammel.rs")),
+                (Status::Deleted, "gone.rs", None),
+                (Status::Renamed, "new.rs", Some("old.rs")),
             ]
         );
         let renamed = changes
@@ -539,38 +540,38 @@ mod tests {
     }
 
     #[test]
-    fn working_tree_med_nye_filer() {
+    fn local_changes_with_new_files() {
         let r = TempRepo::new("worktree");
-        r.write("a.rs", "gammel\n");
+        r.write("a.rs", "old\n");
         r.commit();
-        r.write("a.rs", "ny\n");
-        r.write("ny/b.rs", "b\n");
+        r.write("a.rs", "new\n");
+        r.write("new/b.rs", "b\n");
         let repo = Repo::work_tree(&r.0).unwrap();
         let changes = repo.changes().unwrap();
         assert_eq!(
             summary(&changes),
             [
                 (Status::Modified, "a.rs", None),
-                (Status::Added, "ny/b.rs", None)
+                (Status::Added, "new/b.rs", None)
             ]
         );
-        assert_eq!(repo.read(&changes[0]).unwrap(), ["gammel\n", "ny\n"]);
+        assert_eq!(repo.read(&changes[0]).unwrap(), ["old\n", "new\n"]);
     }
 
     #[test]
-    fn bytt_linjer() {
+    fn replace_lines() {
         let replace = |l: &str, r: &str, lines: [Range<usize>; 2]| {
             String::from_utf8(replace_with_left(l.as_bytes(), r.as_bytes(), lines).unwrap())
                 .unwrap()
         };
-        // Områdene er det `FileDiff` gir for disse parene
+        // The ranges are what `FileDiff` gives for these pairs
         assert_eq!(replace("a\nb\nc\n", "a\nx\nc\n", [1..2, 1..2]), "a\nb\nc\n");
         assert_eq!(replace("a\nb\n", "a\nx\nb\n", [1..1, 1..2]), "a\nb\n");
         assert_eq!(replace("a\nx\nb\n", "a\nb\n", [1..2, 1..1]), "a\nx\nb\n");
         let (l, r) = ("a\nb\nc\nd\n", "x\nb\nc\ny\n");
         assert_eq!(replace(l, r, [0..1, 0..1]), "a\nb\nc\ny\n");
         assert_eq!(replace(l, r, [3..4, 3..4]), "x\nb\nc\nd\n");
-        // Slutten av fila, med og uten linjeskift
+        // The end of the file, with and without a line break
         assert_eq!(replace("a\nb", "a\nb\nc", [2..2, 2..3]), "a\nb");
         assert_eq!(replace("a\nb\nc", "a\nb", [2..3, 2..2]), "a\nb\nc");
         assert_eq!(replace("a\nb", "a\nb\n", [2..2, 2..3]), "a\nb");
@@ -582,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    fn ruller_tilbake_bare_uendret_fil() {
+    fn rolls_back_only_unchanged_file() {
         let r = TempRepo::new("rollback");
         r.write("a.rs", "a\nb\n");
         r.commit();
@@ -590,8 +591,8 @@ mod tests {
         let repo = Repo::work_tree(&r.0).unwrap();
         let change = repo.changes().unwrap().remove(0);
         assert_eq!(
-            repo.rollback(&change, [1..2, 1..2], "annet\n"),
-            Err("a.rs er endret på disk".into())
+            repo.rollback(&change, [1..2, 1..2], "other\n"),
+            Err("a.rs has changed on disk".into())
         );
         assert_eq!(
             repo.rollback(&change, [1..2, 1..2], "a\nx\n"),
@@ -604,7 +605,7 @@ mod tests {
     }
 
     #[test]
-    fn latin1_beholder_bytene() {
+    fn latin1_keeps_the_bytes() {
         let r = TempRepo::new("latin1");
         std::fs::write(r.0.join("a.txt"), b"bl\xe5b\xe6r\nr\xf8d\n").unwrap();
         r.commit();
@@ -620,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn venstre_side_med_autocrlf() {
+    fn left_side_with_autocrlf() {
         let r = TempRepo::new("autocrlf");
         r.write(".gitattributes", "*.txt eol=crlf\n");
         r.write("a.txt", "a\nb\n");
@@ -634,14 +635,14 @@ mod tests {
     }
 
     #[test]
-    fn branch_viser_bare_det_som_ikke_er_committet() {
+    fn branch_shows_only_what_is_not_committed() {
         let r = TempRepo::new("branch");
         r.write("a.rs", "a\n");
         r.commit();
         r.git(&["checkout", "-q", "-b", "feature"]);
         r.write("b.rs", "b\n");
         r.commit();
-        r.write("a.rs", "endret\n");
+        r.write("a.rs", "changed\n");
         let repo = Repo::work_tree(&r.0).unwrap();
         assert_eq!(
             summary(&repo.changes().unwrap()),
@@ -650,59 +651,59 @@ mod tests {
     }
 
     #[test]
-    fn commits_mot_origin_foran_lokal_main() {
+    fn commits_against_origin_ahead_of_local_main() {
         let r = TempRepo::new("origin");
         r.write("a.rs", "a\n");
         r.commit();
-        // Andres endring er merget til origin/main, men lokal main er ikke pullet
-        r.git(&["checkout", "-q", "-b", "andre"]);
+        // Someone else's change is merged into origin/main, but local main is not pulled
+        r.git(&["checkout", "-q", "-b", "other"]);
         r.write("c.rs", "c\n");
         r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "andres"]);
+        r.git(&["commit", "-q", "-m", "theirs"]);
         r.origin_main();
         r.git(&["checkout", "-q", "-b", "feature"]);
         r.write("b.rs", "b\n");
         r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "min"]);
-        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["min"]);
+        r.git(&["commit", "-q", "-m", "mine"]);
+        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["mine"]);
     }
 
     #[test]
-    fn main_med_upushede_commits() {
-        let r = TempRepo::new("upushet");
+    fn main_with_unpushed_commits() {
+        let r = TempRepo::new("unpushed");
         r.write("a.rs", "a\n");
         r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "pushet"]);
+        r.git(&["commit", "-q", "-m", "pushed"]);
         r.origin_main();
         r.write("b.rs", "b\n");
         r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "upushet"]);
-        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["upushet"]);
+        r.git(&["commit", "-q", "-m", "unpushed"]);
+        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["unpushed"]);
     }
 
     #[test]
-    fn commits_pa_branchen_ellers_de_siste() {
+    fn commits_on_the_branch_otherwise_the_latest() {
         let r = TempRepo::new("commits");
         assert!(Repo::work_tree(&r.0).unwrap().commits().unwrap().is_empty());
         r.write("a.rs", "a\n");
         r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "første"]);
+        r.git(&["commit", "-q", "-m", "first"]);
         r.write("a.rs", "b\n");
-        r.git(&["commit", "-q", "-am", "andre\n\nmer tekst"]);
+        r.git(&["commit", "-q", "-am", "second\n\nmore text"]);
         assert_eq!(
             subjects(&Repo::work_tree(&r.0).unwrap()),
-            ["andre", "første"]
+            ["second", "first"]
         );
         r.git(&["checkout", "-q", "-b", "feature"]);
         r.write("a.rs", "c\n");
-        r.git(&["commit", "-q", "-am", "på branchen"]);
-        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["på branchen"]);
+        r.git(&["commit", "-q", "-am", "on the branch"]);
+        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["on the branch"]);
     }
 
     #[test]
-    fn parser_log() {
-        // Resten av linja er meldingen, også \x1f. Ødelagte oppføringer hoppes over.
-        let c = parse_log("abc\x1f1700000000\x1fen: a\x1fb\0ødelagt\0def\x1f1\x1fto\0");
+    fn parses_log() {
+        // The rest of the line is the message, also \x1f. Broken entries are skipped.
+        let c = parse_log("abc\x1f1700000000\x1fone: a\x1fb\0broken\0def\x1f1\x1ftwo\0");
         let commit = |hash: &str, time, subject: &str| Commit {
             hash: hash.into(),
             subject: subject.into(),
@@ -711,51 +712,56 @@ mod tests {
         assert_eq!(
             c,
             [
-                commit("abc", 1_700_000_000, "en: a\x1fb"),
-                commit("def", 1, "to")
+                commit("abc", 1_700_000_000, "one: a\x1fb"),
+                commit("def", 1, "two")
             ]
         );
     }
 
     #[test]
-    fn parser_pr_lenke() {
-        let pr = PullRequest::parse("https://github.com/eier/repo/pull/12/files#diff-1").unwrap();
-        assert_eq!((pr.slug.as_str(), pr.number), ("eier/repo", 12));
-        assert!(PullRequest::parse("https://github.com/eier/repo/issues/12").is_none());
-        assert!(PullRequest::parse("https://github.com/eier/repo/pull/").is_none());
-        assert!(PullRequest::parse("https://gitlab.com/eier/repo/pull/12").is_none());
+    fn parses_pr_link() {
+        let pr = PullRequest::parse("https://github.com/owner/repo/pull/12/files#diff-1").unwrap();
+        assert_eq!((pr.slug.as_str(), pr.number), ("owner/repo", 12));
+        assert!(PullRequest::parse("https://github.com/owner/repo/issues/12").is_none());
+        assert!(PullRequest::parse("https://github.com/owner/repo/pull/").is_none());
+        assert!(PullRequest::parse("https://gitlab.com/owner/repo/pull/12").is_none());
     }
 
     #[test]
-    fn slug_fra_remote() {
+    fn slug_from_remote() {
         for remote in [
-            "git@github.com:eier/repo.git",
-            "ssh://git@github.com/eier/repo.git",
-            "https://github.com/eier/repo",
+            "git@github.com:owner/repo.git",
+            "ssh://git@github.com/owner/repo.git",
+            "https://github.com/owner/repo",
         ] {
-            assert_eq!(github_slug(remote), Some("eier/repo"), "{remote}");
+            assert_eq!(github_slug(remote), Some("owner/repo"), "{remote}");
         }
-        assert_eq!(github_slug("git@gitlab.com:eier/repo.git"), None);
+        assert_eq!(github_slug("git@gitlab.com:owner/repo.git"), None);
     }
 
     #[test]
-    fn pr_fra_annet_repo_gir_feil() {
+    fn pr_from_other_repo_fails() {
         let r = TempRepo::new("pr");
-        let pr = PullRequest::parse("https://github.com/eier/repo/pull/1").unwrap();
+        let pr = PullRequest::parse("https://github.com/owner/repo/pull/1").unwrap();
         let err = |r: &TempRepo| Repo::pull_request(&r.0, &pr).err().unwrap();
-        assert_eq!(err(&r), "repoet har ingen origin");
-        r.git(&["remote", "add", "origin", "git@github.com:eier/annet.git"]);
+        assert_eq!(err(&r), "the repo has no origin");
+        r.git(&[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/owner/other.git",
+        ]);
         assert_eq!(
             err(&r),
-            "PR-en hører til eier/repo, ikke git@github.com:eier/annet.git"
+            "the PR belongs to owner/repo, not https://github.com/owner/other.git"
         );
     }
 
     #[test]
-    fn ukjent_commit_gir_feil() {
-        let r = TempRepo::new("ukjent");
+    fn unknown_commit_fails() {
+        let r = TempRepo::new("unknown");
         r.write("a", "a");
         r.commit();
-        assert!(Repo::commit(&r.0, "finnes-ikke").is_err());
+        assert!(Repo::commit(&r.0, "missing").is_err());
     }
 }
