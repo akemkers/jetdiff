@@ -1,5 +1,5 @@
-//! Visningsmodellen mot fixtures fra `fixtures/`, med kjente tall for unicode og manglende
-//! linjeskift, og invarianter over alle.
+//! The view model against fixtures from `fixtures/`, with known numbers for unicode and missing
+//! line breaks, and invariants over all of them.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -50,7 +50,7 @@ fn h(cols: std::ops::Range<usize>, diff_type: DiffType) -> InlineHighlight {
 }
 
 #[test]
-fn norsk_tekst_gir_byte_kolonner() {
+fn norwegian_text_gives_byte_columns() {
     let d = load("unicode-norwegian");
     let left0 = d.line_highlight(L, 0);
     let block = &d.blocks()[left0.block.unwrap()];
@@ -65,14 +65,14 @@ fn norsk_tekst_gir_byte_kolonner() {
 }
 
 #[test]
-fn emoji_med_tomme_markorer() {
+fn emoji_with_empty_markers() {
     let d = load("unicode-emoji");
     assert_eq!(
         d.line_highlight(L, 0).inline,
         [h(8..12, DiffType::Modified)]
     );
     assert_eq!(&d.line(L, 0)[8..12], "🚀");
-    // Tomme sider av ord-fragmentene blir 2px-streker
+    // Empty sides of word fragments become 2px strokes
     assert_eq!(
         d.line_highlight(L, 1).inline,
         [h(8..8, DiffType::Inserted), h(11..11, DiffType::Inserted)]
@@ -86,19 +86,19 @@ fn emoji_med_tomme_markorer() {
 }
 
 #[test]
-fn manglende_linjeskift_til_venstre() {
+fn missing_line_break_on_left() {
     let d = load("missing-trailing-newline-left");
     assert_eq!(d.line_count(L), 3);
     assert_eq!(d.line_count(R), 4);
     let b = &d.blocks()[0];
     assert_eq!(b.lines, [3..3, 3..4]);
     assert_eq!(b.diff_type, DiffType::Inserted);
-    // `Some(vec![])`: ignored-farge, ingen ord
+    // `Some(vec![])`: ignored color, no words
     assert_eq!(b.inner, Some(vec![]));
     let right = d.line_highlight(R, 3);
     assert!(d.blocks()[right.block.unwrap()].ignored());
     assert!(right.inline.is_empty());
-    // Blokken ligger etter siste venstre linje, så 2px-båndet går under linje 2
+    // The hunk is after the last Left line, so the 2px band goes below line 2
     let none = Folding::none(&d);
     let layout = none.layout(L, 18.);
     assert_eq!(layout.block_band(b.lines(L)), (53., 55.));
@@ -108,7 +108,7 @@ fn manglende_linjeskift_til_venstre() {
 }
 
 #[test]
-fn manglende_linjeskift_til_hoyre() {
+fn missing_line_break_on_right() {
     let d = load("missing-trailing-newline-right");
     let b = &d.blocks()[0];
     assert_eq!(b.lines, [3..4, 3..3]);
@@ -116,19 +116,19 @@ fn manglende_linjeskift_til_hoyre() {
 }
 
 #[test]
-fn manglende_linjeskift_og_endring() {
+fn missing_line_break_and_change() {
     let d = load("missing-trailing-newline-both-changed");
     assert_eq!(d.blocks()[0].lines, [2..3, 2..3]);
     let left = d.line_highlight(L, 2);
     assert_eq!(left.inline, [h(9..9, DiffType::Inserted)]);
     let right = d.line_highlight(R, 2);
-    // Siste linje uten linjeskift, så fargen stopper ved teksten
+    // Last line without a line break, so the color stops at the text
     assert_eq!(right.inline, [h(9..d.line(R, 2).len(), DiffType::Inserted)]);
     assert_eq!(d.line(R, 2).len(), 17);
 }
 
 #[test]
-fn highlights_ligger_pa_tegngrenser() {
+fn highlights_lie_on_char_boundaries() {
     for (name, d) in all() {
         for side in [L, R] {
             let blocks_lines: Vec<_> = d.blocks().iter().map(|b| b.lines(side)).collect();
@@ -138,7 +138,7 @@ fn highlights_ligger_pa_tegngrenser() {
                 let in_block = blocks_lines.iter().any(|r| r.contains(&line));
                 assert_eq!(hl.block.is_some(), in_block, "{name} {side:?} {line}");
                 if hl.block.is_some_and(|b| !d.blocks()[b].ignored()) {
-                    assert!(hl.inline.is_empty(), "{name}: hel-linje har ikke ord");
+                    assert!(hl.inline.is_empty(), "{name}: whole line has no words");
                 }
                 for i in hl.inline {
                     assert!(i.cols.end <= text.len(), "{name} {side:?} {line} {i:?}");
@@ -154,7 +154,7 @@ fn highlights_ligger_pa_tegngrenser() {
 }
 
 #[test]
-fn scroll_og_divider_holder_seg_innenfor() {
+fn scroll_and_divider_stay_within_bounds() {
     for (name, d) in all() {
         let mut s = ScrollState::default();
         let max = [
@@ -168,7 +168,7 @@ fn scroll_og_divider_holder_seg_innenfor() {
             for band in divider_bands(&d, &Folding::none(&d), s.y, VP, 24.) {
                 assert!(band.top.p0.y < band.bottom.p0.y, "{name}");
                 assert!(band.top.p3.y < band.bottom.p3.y, "{name}");
-                // Lukket intervall: en blokk som slutter på første malte linje er med
+                // Closed interval: a hunk that ends on the first painted line is included
                 let min = -VP.line_height - 1.;
                 assert!(band.bottom.p0.y >= min || band.bottom.p3.y >= min, "{name}");
             }
@@ -178,13 +178,13 @@ fn scroll_og_divider_holder_seg_innenfor() {
 }
 
 #[test]
-fn navigasjon_besoker_alle_blokker() {
+fn navigation_visits_all_hunks() {
     for (name, d) in all() {
         if d.blocks().is_empty() {
             continue;
         }
         let f = Folding::none(&d);
-        // Startposisjon er første endring, som i `InitialScrollPositionSupport`
+        // The start position is the first hunk, as in `InitialScrollPositionSupport`
         let mut seen = vec![0];
         let mut caret = target_for_block(&d, &f, 0, VP).caret_lines[1];
         while let Some(block) = next_block(&d, R, caret) {
@@ -201,7 +201,7 @@ fn navigasjon_besoker_alle_blokker() {
         }
         let expected: Vec<usize> = (0..d.blocks().len()).collect();
         assert_eq!(seen, expected, "{name}");
-        // Og tilbake igjen
+        // And back again
         let mut back = vec![];
         while let Some(block) = prev_block(&d, R, caret) {
             back.push(block);
@@ -226,12 +226,12 @@ fn stripe_per_side() {
 }
 
 #[test]
-fn folds_ligger_i_gapene_pa_alle_nivaer() {
+fn folds_lie_in_the_gaps_on_all_levels() {
     for (name, d) in all() {
         let f = Folding::new(&d);
         for (i, side) in [L, R].into_iter().enumerate() {
             let count = d.line_count(side);
-            // Gapene per side: før første blokk, mellom og etter siste
+            // The gaps per side: before the first hunk, between, and after the last
             let mut bounds = vec![0];
             for b in d.blocks() {
                 bounds.extend([b.lines[i].start, b.lines[i].end]);
@@ -247,16 +247,16 @@ fn folds_ligger_i_gapene_pa_alle_nivaer() {
                     let g = gaps
                         .iter()
                         .position(|(s, e)| *s <= r.start && r.end <= *e)
-                        .unwrap_or_else(|| panic!("{name} {side:?} {r:?} utenfor gap"));
+                        .unwrap_or_else(|| panic!("{name} {side:?} {r:?} outside gap"));
                     let (gs, ge) = gaps[g];
-                    // Første og siste gap går helt ut til kanten
+                    // The first and last gap go all the way out to the edge
                     let start = if g == 0 { 0 } else { gs + shift };
                     let end = if g == gaps.len() - 1 {
                         count
                     } else {
                         ge - shift
                     };
-                    assert_eq!(r, start..end, "{name} {side:?} nivå {level}");
+                    assert_eq!(r, start..end, "{name} {side:?} level {level}");
                     if let Some(o) = &outer {
                         assert!(o.start <= r.start && r.end <= o.end, "{name}");
                     }
@@ -274,13 +274,13 @@ fn kotlin_folds() {
     let f = Folding::new(&d);
     let folds: Vec<_> = f.visible(L).map(|(_, v)| v.lines.clone()).collect();
     assert_eq!(blocks[5..7], [[45..46, 42..43], [47..47, 44..45]]);
-    // Bare gapet 47..57 er langt nok, 4 linjer kontekst på hver side
+    // Only the gap 47..57 is long enough, 4 lines of context on each side
     assert_eq!(folds, vec![51..53]);
     assert_eq!(f.layout(L, 18.).visual_line_count(), 58);
 }
 
 #[test]
-fn scroll_og_navigasjon_med_folds() {
+fn scroll_and_navigation_with_folds() {
     for (name, d) in all() {
         for f in [Folding::new(&d), Folding::none(&d)] {
             let layouts = f.layouts(VP.line_height);
@@ -303,7 +303,7 @@ fn scroll_og_navigasjon_med_folds() {
                 for (i, side) in [L, R].into_iter().enumerate() {
                     let layout = &layouts[i];
                     let line = d.blocks()[block].lines(side).start;
-                    // Endringer ligger aldri i en fold
+                    // Hunks never lie in a fold
                     assert_eq!(f.caret_after(side, line), line, "{name}");
                     assert!(t.scroll_y[i] <= layout.max_scroll(VP.height), "{name}");
                     let top = layout.line_top(line) - t.scroll_y[i];
@@ -320,9 +320,9 @@ fn scroll_og_navigasjon_med_folds() {
     }
 }
 
-/// Samme rekkefølge som UI-et: lagre posisjon, endre folds, flytt caret og gjenopprett.
+/// The same order as the UI: save position, change folds, move the caret and restore.
 #[test]
-fn fold_operasjoner_holder_seg_innenfor() {
+fn fold_operations_stay_within_bounds() {
     for (name, d) in all() {
         let mut f = Folding::new(&d);
         let mut state = ScrollState::default();
@@ -354,7 +354,7 @@ fn fold_operasjoner_holder_seg_innenfor() {
             for (i, s) in [L, R].into_iter().enumerate() {
                 let layout = f.layout(s, VP.line_height);
                 assert!(state.y[i] >= 0. && state.y[i] <= layout.max_scroll(VP.height));
-                // Caret er aldri skjult i en fold
+                // The caret is never hidden in a fold
                 assert_eq!(f.caret_after(s, carets[i]), carets[i], "{name}");
                 assert_eq!(
                     stripe_markers(&d, &f, s, VP.line_height).len(),
@@ -368,22 +368,22 @@ fn fold_operasjoner_holder_seg_innenfor() {
     }
 }
 
-/// Cursoren står på en gyldig linje, aldri skjult i en fold, og scroll er innenfor.
+/// The cursor is on a valid line, never hidden in a fold, and scroll is within bounds.
 fn assert_cursor_valid(name: &str, s: &DiffState, vp: Viewport, cmd: Command) {
     let c = s.cursor;
     let d = &s.diff;
     assert!(
         c.line < d.line_count(c.side),
-        "{name} {cmd:?}: linje {}",
+        "{name} {cmd:?}: line {}",
         c.line
     );
     assert_eq!(
         s.folding.caret_after(c.side, c.line),
         c.line,
-        "{name} {cmd:?}: i fold"
+        "{name} {cmd:?}: in fold"
     );
     let t = s.transferred_cursor();
-    assert!(t.line < d.line_count(t.side), "{name} {cmd:?}: overført");
+    assert!(t.line < d.line_count(t.side), "{name} {cmd:?}: transferred");
     for side in [L, R] {
         let layout = s.folding.layout(side, vp.line_height);
         let y = s.scroll.y(side);
@@ -396,7 +396,7 @@ fn assert_cursor_valid(name: &str, s: &DiffState, vp: Viewport, cmd: Command) {
 }
 
 #[test]
-fn cursor_holder_seg_gyldig() {
+fn cursor_stays_valid() {
     use Command::*;
     let cmds = [
         MoveDown,
@@ -433,7 +433,7 @@ fn cursor_holder_seg_gyldig() {
             let mut s = DiffState::new(diff.clone(), folding);
             s.init(vp);
             assert_cursor_valid(&name, &s, vp, MoveDown);
-            // Deterministisk pseudotilfeldig rekkefølge
+            // Deterministic pseudo-random order
             let mut seed: u32 = 7;
             for _ in 0..400 {
                 seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);

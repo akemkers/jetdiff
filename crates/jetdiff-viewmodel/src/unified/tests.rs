@@ -2,7 +2,7 @@ use super::*;
 use jetdiff_core::ComparisonPolicy;
 
 const LINE_HEIGHT: f32 = 10.;
-/// 20 hele linjer.
+/// 20 whole lines.
 const VIEWPORT: Viewport = Viewport {
     height: 200.,
     line_height: LINE_HEIGHT,
@@ -29,7 +29,7 @@ fn numbered(prefix: &str, count: usize) -> String {
     (0..count).map(|i| format!("{prefix}{i}\n")).collect()
 }
 
-/// Endringer på linjene 10, 40 og 90 av 100, én linje hver.
+/// Hunks on lines 10, 40 and 90 of 100, one line each.
 fn three_changes() -> Rc<FileDiff> {
     let old = numbered("a", 100);
     let mut new: Vec<String> = old.lines().map(str::to_owned).collect();
@@ -50,7 +50,7 @@ fn run(state: &mut UnifiedState, command: Command) -> Outcome {
 }
 
 #[test]
-fn slettet_over_ny() {
+fn deleted_above_added() {
     let diff = unified("a\nb\nc\n", "a\nB\nc\n");
     assert_eq!(
         lines(&diff),
@@ -71,17 +71,17 @@ fn slettet_over_ny() {
 }
 
 #[test]
-fn linje_til_rad() {
+fn line_to_row() {
     let diff = unified("a\nb\nc\n", "a\nB\nc\n");
     assert_eq!(diff.row_of(Side::Left, 1), 1);
     assert_eq!(diff.row_of(Side::Right, 1), 2);
-    // Uendret linje på venstre side har samme rad som på høyre
+    // An unchanged line on Left has the same row as on Right
     assert_eq!(diff.row_of(Side::Left, 2), 3);
     assert_eq!(diff.row_of(Side::Right, 2), 3);
 }
 
 #[test]
-fn ny_fil_har_bare_nye_numre() {
+fn added_file_has_only_new_numbers() {
     let diff = unified("", "a\nb\n");
     assert!(diff.rows().iter().all(|row| row.lines[0].is_none()));
     assert_eq!(diff.row_count(), 3);
@@ -91,7 +91,7 @@ fn ny_fil_har_bare_nye_numre() {
 }
 
 #[test]
-fn endret_blokk_gir_to_markorer() {
+fn modified_hunk_gives_two_marks() {
     let diff = unified("a\nb\nc\n", "a\nB\nc\n");
     let markers = diff.stripe_markers(LINE_HEIGHT);
     let types: Vec<_> = markers.iter().map(|marker| marker.diff_type).collect();
@@ -101,38 +101,38 @@ fn endret_blokk_gir_to_markorer() {
 }
 
 #[test]
-fn apnes_pa_forste_endring() {
+fn opens_on_first_hunk() {
     let state = state(three_changes());
-    // Linje 10 slettet og ny: rad 10 og 11
+    // Line 10 deleted and added: row 10 and 11
     assert_eq!(state.row, 10);
     assert_eq!(state.cursor_block(), Some(0));
 }
 
 #[test]
-fn n_og_p_lander_pa_starten_av_blokken() {
+fn n_and_p_land_on_start_of_hunk() {
     let mut state = state(three_changes());
     assert!(run(&mut state, Command::NextChange).animate);
-    // Rad 40 for den slettede, pluss raden for ny linje 10
+    // Row 40 for the deleted one, plus the row for added line 10
     assert_eq!(state.row, 41);
     run(&mut state, Command::NextChange);
     assert_eq!(state.row, 92);
     assert!(!run(&mut state, Command::NextChange).changed);
     run(&mut state, Command::PrevChange);
     assert_eq!(state.row, 41);
-    // Inne i blokken går p til forrige blokk, ikke starten av denne
+    // Inside the hunk, p goes to the previous hunk, not the start of this one
     run(&mut state, Command::MoveDown);
     run(&mut state, Command::PrevChange);
     assert_eq!(state.row, 10);
 }
 
 #[test]
-fn j_k_og_g_holder_scrolloff() {
+fn j_k_and_g_keep_scrolloff() {
     let mut state = state(file_diff(&numbered("a", 200), &numbered("a", 200)));
     for _ in 0..30 {
         run(&mut state, Command::MoveDown);
     }
     assert_eq!(state.row, 30);
-    // 8 rader under cursoren i 20 rader høyt vindu
+    // 8 rows below the cursor in a window 20 rows high
     assert_eq!(state.scroll_y(), (30. + 1. + 8.) * LINE_HEIGHT - 200.);
     run(&mut state, Command::GoToBottom);
     assert_eq!(state.row, 200);
@@ -142,7 +142,7 @@ fn j_k_og_g_holder_scrolloff() {
 }
 
 #[test]
-fn slettet_rad_gir_linja_under_pa_hoyre_side() {
+fn deleted_row_gives_line_below_on_right() {
     let mut state = state(three_changes());
     assert_eq!(state.location(), Cursor::new(Side::Right, 10));
     run(&mut state, Command::MoveDown);
@@ -152,7 +152,7 @@ fn slettet_rad_gir_linja_under_pa_hoyre_side() {
 }
 
 #[test]
-fn bytte_beholder_linja_og_hoyden() {
+fn switching_keeps_line_and_height() {
     let diff = three_changes();
     let mut split = DiffState::new(diff.clone(), Rc::new(Folding::none(&diff)));
     split.init(VIEWPORT);
@@ -173,7 +173,7 @@ fn bytte_beholder_linja_og_hoyden() {
 }
 
 #[test]
-fn slettet_rad_gir_venstre_side_i_split() {
+fn deleted_row_gives_left_side_in_split() {
     let diff = three_changes();
     let state = state(diff.clone());
     let split = state.to_split(Rc::new(Folding::none(&diff)), VIEWPORT);
@@ -183,23 +183,23 @@ fn slettet_rad_gir_venstre_side_i_split() {
 }
 
 #[test]
-fn hjul_dytter_cursoren() {
+fn wheel_pushes_the_cursor() {
     let mut state = state(file_diff(&numbered("a", 200), &numbered("a", 200)));
     assert!(state.wheel(100., VIEWPORT));
-    // Scrolloff 8 under toppen
+    // Scrolloff 8 below the top
     assert_eq!(state.row, 18);
-    // Litt tilbake: cursoren har fortsatt scrolloff
+    // A little back: the cursor still has scrolloff
     assert!(!state.wheel(-5., VIEWPORT));
     assert_eq!(state.row, 18);
 }
 
 #[test]
-fn ny_tekst_beholder_linja() {
+fn new_text_keeps_the_line() {
     let mut state = state(three_changes());
     run(&mut state, Command::NextChange);
     run(&mut state, Command::MoveDown);
     assert_eq!(state.location(), Cursor::new(Side::Right, 40));
-    // Endringen på linje 10 er borte, så radene flytter seg
+    // The hunk on line 10 is gone, so the rows move
     let old = numbered("a", 100);
     let new = old.replace("a40\n", "x40\n");
     state.replace_diff(file_diff(&old, &new), VIEWPORT);
@@ -207,11 +207,11 @@ fn ny_tekst_beholder_linja() {
 }
 
 #[test]
-fn split_setter_linjene_parvis() {
+fn split_places_lines_in_pairs() {
     let diff =
         UnifiedDiff::with_layout(file_diff("a\nb\nc\nd\n", "a\nB\nd\ne\n"), RowLayout::Split);
     let rows = lines(&diff);
-    // `b c` mot `B`, og `e` er ny
+    // `b c` against `B`, and `e` is added
     assert_eq!(rows[0], [Some(0), Some(0)]);
     assert_eq!(rows[1], [Some(1), Some(1)]);
     assert_eq!(rows[2], [Some(2), None]);
@@ -222,10 +222,10 @@ fn split_setter_linjene_parvis() {
 }
 
 #[test]
-fn realign_beholder_linja() {
+fn realign_keeps_the_line() {
     let mut state = UnifiedState::new(Rc::new(unified("a\nb\nc\n", "a\nB\nc\n")));
     state.init(VIEWPORT);
-    // Unified: a, b, B, c. Cursoren på c.
+    // Unified: a, b, B, c. The cursor on c.
     state.click(3);
     let split = state.realign(RowLayout::Split, VIEWPORT);
     assert_eq!(split.diff.row_layout(), RowLayout::Split);
@@ -235,12 +235,12 @@ fn realign_beholder_linja() {
 }
 
 #[test]
-fn split_parrer_linjer_med_felles_tekst() {
+fn split_pairs_lines_with_common_text() {
     let old = "a\nuse x::{\n    A,\n};\nuse app::{Keys, B};\nz\n";
     let new = "a\nuse app::C;\nz\n";
     let diff = UnifiedDiff::with_layout(file_diff(old, new), RowLayout::Split);
     let rows = lines(&diff);
-    // `use x::{ A, };` er borte, `use app::` står mot `use app::`
+    // `use x::{ A, };` is gone, `use app::` sits against `use app::`
     assert_eq!(rows[1], [Some(1), None]);
     assert_eq!(rows[3], [Some(3), None]);
     assert_eq!(rows[4], [Some(4), Some(1)]);

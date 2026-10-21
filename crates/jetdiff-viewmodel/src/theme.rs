@@ -1,13 +1,13 @@
-//! Farger fra IntelliJ sine default-temaer i New UI: "Islands Dark" og "Islands Light"
-//! (`LafManagerImpl.DefaultNewUiThemeStrategy`). Dark bruker editor-skjemaet
-//! `IslandSchemeDark.xml` med Darcula som forelder. Light bruker `expUI_lightScheme.xml` med
-//! Default som forelder. I tillegg Catppuccin Mocha.
+//! Colors from IntelliJ's default themes in New UI: "Islands Dark" and "Islands Light"
+//! (`LafManagerImpl.DefaultNewUiThemeStrategy`). Dark uses the editor scheme
+//! `IslandSchemeDark.xml` with Darcula as parent. Light uses `expUI_lightScheme.xml` with
+//! Default as parent. Plus Catppuccin Mocha.
 
 use jetdiff_syntax::Token;
 
 use crate::model::DiffType;
 
-/// RGBA, alfa 255 er ugjennomsiktig.
+/// RGBA, alpha 255 is opaque.
 pub type Rgba = [u8; 4];
 
 const fn rgb(hex: u32) -> Rgba {
@@ -16,11 +16,11 @@ const fn rgb(hex: u32) -> Rgba {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DiffColors {
-    /// Linjebakgrunn og ord-highlight, og fyllet i divideren.
+    /// Line background and inline highlight, and the fill in the divider.
     pub background: Rgba,
-    /// `ERROR_STRIPE_COLOR` i scrollbaren.
+    /// `ERROR_STRIPE_COLOR` in the scrollbar.
     pub stripe: Rgba,
-    /// Bakgrunn for linjer med ord-highlight (`TextDiffTypeFactory.getIgnoredBackgroundColor`).
+    /// Background for lines with inline highlight (`TextDiffTypeFactory.getIgnoredBackgroundColor`).
     pub ignored: Rgba,
 }
 
@@ -65,46 +65,46 @@ const fn bold(hex: u32) -> SyntaxStyle {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
-    /// Velger `_dark`-ikonene.
+    /// Picks the `_dark` icons.
     pub dark: bool,
-    /// Også gutter og divider. `EDITOR_GUTTER_BACKGROUND` er tom i IntelliJ, så de arver den.
+    /// Also the gutter and divider. `EDITOR_GUTTER_BACKGROUND` is empty in IntelliJ, so they inherit it.
     pub editor_bg: Rgba,
     pub editor_fg: Rgba,
     pub line_number: Rgba,
     pub line_number_caret_row: Rgba,
-    /// Markert linje. Gjennomsiktig og sterkere enn `CARET_ROW_COLOR`, siden den er
-    /// eneste markering og skal synes over diff-bakgrunnene.
+    /// The cursor's line. Transparent and stronger than `CARET_ROW_COLOR`, since it is
+    /// the only highlight and must show over the diff backgrounds.
     pub row_highlight: Rgba,
-    /// Linjenummeret til markert linje. Gul, siden ingen diff-farge er gul.
+    /// The line number of the cursor's line. Yellow, since no diff color is yellow.
     pub gutter_highlight: Rgba,
     pub indent_guide: Rgba,
-    /// `DIFF_SEPARATOR_WAVE`, streken over foldede områder.
+    /// `DIFF_SEPARATOR_WAVE`, the stroke over folded areas.
     pub separator_wave: Rgba,
-    /// Grå tommel med alfa, som macOS-scrollbaren i IntelliJ.
+    /// Gray thumb with alpha, like the macOS scrollbar in IntelliJ.
     pub scrollbar_thumb: Rgba,
     /// `Tree.selectionBackground`.
     pub tree_selection: Rgba,
-    /// `Tree.selectionInactiveBackground`, når panelet ikke har fokus.
+    /// `Tree.selectionInactiveBackground`, when the panel doesn't have focus.
     pub tree_selection_inactive: Rgba,
-    /// Linja og prikkene i commit-lista.
+    /// The line and dots in the commit list.
     pub commit_graph: Rgba,
-    /// Beskjed over tastelinja. Advarsler er gule.
+    /// Message above the keymap bar. Warnings are yellow.
     pub message_bg: Rgba,
     pub warning_bg: Rgba,
     pub message_fg: Rgba,
-    /// `FileStatus` ADDED, DELETED og MODIFIED. Rename bruker MODIFIED.
+    /// `FileStatus` ADDED, DELETED and MODIFIED. Rename uses MODIFIED.
     pub file_added: Rgba,
     pub file_deleted: Rgba,
     pub file_modified: Rgba,
     pub inserted: DiffColors,
     pub deleted: DiffColors,
     pub modified: DiffColors,
-    /// Indeksert med `Token as usize`.
+    /// Indexed with `Token as usize`.
     syntax: [SyntaxStyle; Token::ALL.len()],
 }
 
 impl Theme {
-    /// Islands Dark. Ingen `DIFF_*`-nøkler i skjemaet, så diff-fargene kommer fra Darcula.
+    /// Islands Dark. No `DIFF_*` keys in the scheme, so the diff colors come from Darcula.
     pub fn dark() -> Self {
         let bg = rgb(0x191A1C);
         let fg = 0xBCBEC4;
@@ -150,7 +150,7 @@ impl Theme {
                 Token::Strong => bold(fg),
                 Token::Emphasis => italic(fg),
                 Token::Punctuation | Token::Operator => style(fg),
-                // Islands Dark arver Darcula, så Rust-pluginen bruker `RustDarcula.xml`
+                // Islands Dark inherits Darcula, so the Rust plugin uses `RustDarcula.xml`
                 Token::Struct => style(0x86985D),
                 Token::Enum => italic(0x86985D),
                 Token::EnumVariant => italic(0x6DA1AB),
@@ -162,7 +162,7 @@ impl Theme {
         }
     }
 
-    /// Islands Light. MODIFIED kommer fra Light, INSERTED og DELETED fra Default.
+    /// Islands Light. MODIFIED comes from Light, INSERTED and DELETED from Default.
     pub fn light() -> Self {
         let bg = rgb(0xFFFFFF);
         let fg = 0x080808;
@@ -207,7 +207,7 @@ impl Theme {
                 Token::Strong => bold(fg),
                 Token::Emphasis => italic(fg),
                 Token::Punctuation | Token::Operator => style(fg),
-                // `RustDefault.xml` i Rust-pluginen
+                // `RustDefault.xml` in the Rust plugin
                 Token::Struct => style(0xA04908),
                 Token::Enum => italic(0xA04908),
                 Token::EnumVariant => italic(0x0E7FC5),
@@ -219,9 +219,9 @@ impl Theme {
         }
     }
 
-    /// Catppuccin Mocha (no italics) fra `catppuccin/jetbrains` (`editor.tera`,
-    /// `ui.theme.tera`). Blandede farger er regnet ut på forhånd, som
-    /// `farge | mix(color=base, amount=a)`.
+    /// Catppuccin Mocha (no italics) from `catppuccin/jetbrains` (`editor.tera`,
+    /// `ui.theme.tera`). Mixed colors are computed in advance, like
+    /// `color | mix(color=base, amount=a)`.
     pub fn mocha() -> Self {
         const BASE: u32 = 0x1E1E2E;
         const SURFACE0: u32 = 0x313244;
@@ -246,17 +246,17 @@ impl Theme {
             editor_fg: rgb(TEXT),
             line_number: rgb(OVERLAY0),
             line_number_caret_row: rgb(LAVENDER),
-            // Som Islands Dark
+            // Like Islands Dark
             row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
-            // Yellow med 0.5
+            // Yellow with 0.5
             gutter_highlight: rgb(0x8C806E),
             indent_guide: rgb(SURFACE0),
-            // Arvet fra Darcula
+            // Inherited from Darcula
             separator_wave: rgb(0x555555),
-            // Som Islands Dark
+            // Like Islands Dark
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x353748),
-            // Mellom base og valgt, siden surface0 er nesten lik valgt
+            // Between base and selected, since surface0 is almost the same as selected
             tree_selection_inactive: rgb(0x2A2B3C),
             commit_graph: rgb(TEAL),
             message_bg: rgb(GREEN),
@@ -265,7 +265,7 @@ impl Theme {
             file_added: rgb(GREEN),
             file_deleted: rgb(SURFACE2),
             file_modified: rgb(BLUE),
-            // Green, red og blue med 0.25 for bakgrunn og 0.2 for stripe
+            // Green, red and blue with 0.25 for the background and 0.2 for the stripe
             inserted: DiffColors::new(rgb(0x404F4B), rgb(0x394545), base),
             deleted: DiffColors::new(rgb(0x53394C), rgb(0x493446), base),
             modified: DiffColors::new(rgb(0x394461), rgb(0x333C57), base),
@@ -288,7 +288,7 @@ impl Theme {
                 Token::Emphasis => style(RED),
                 Token::Punctuation => style(OVERLAY2),
                 Token::Operator | Token::QOperator => style(SKY),
-                // Skjemaet har ingen Rust-nøkler, så som før
+                // The scheme has no Rust keys, so as before
                 Token::Struct | Token::Enum | Token::EnumVariant => style(YELLOW),
                 Token::Crate => style(TEXT),
                 Token::Macro => style(BLUE),
@@ -310,18 +310,18 @@ impl Theme {
     }
 }
 
-/// `ColorUtil.mix(background, editorBg, 0.6)`. Ingen av skjemaene setter FOREGROUND på
-/// diff-nøklene, så ignored-fargen er alltid avledet.
+/// `ColorUtil.mix(background, editorBg, 0.6)`. None of the schemes set FOREGROUND on
+/// the diff keys, so the ignored color is always derived.
 fn ignored_color(background: Rgba, editor_bg: Rgba) -> Rgba {
     mix(background, editor_bg, 0.6)
 }
 
-/// `MixedColorProducer`: `c0 + (int) Math.round(ratio * (c1 - c0))` per kanal.
+/// `MixedColorProducer`: `c0 + (int) Math.round(ratio * (c1 - c0))` per channel.
 fn mix(c0: Rgba, c1: Rgba, ratio: f64) -> Rgba {
     let mut out = [0; 4];
     for i in 0..4 {
         let (a, b) = (c0[i] as f64, c1[i] as f64);
-        // Java `Math.round` er floor(x + 0.5), også for negative tall
+        // Java `Math.round` is floor(x + 0.5), also for negative numbers
         out[i] = (a + (ratio * (b - a) + 0.5).floor()) as u8;
     }
     out
@@ -332,7 +332,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ignored_i_dark() {
+    fn ignored_in_dark() {
         let t = Theme::dark();
         assert_eq!(t.inserted.ignored, rgb(0x1F2B26));
         assert_eq!(t.deleted.ignored, rgb(0x2C2D2E));
@@ -340,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    fn ignored_i_light() {
+    fn ignored_in_light() {
         let t = Theme::light();
         assert_eq!(t.inserted.ignored, rgb(0xE5F5E5));
         assert_eq!(t.deleted.ignored, rgb(0xEFEFEF));
@@ -348,8 +348,8 @@ mod tests {
     }
 
     #[test]
-    fn mix_runder_som_java() {
-        // 0.6 * -5 = -3.0, 0.6 * -1 = -0.6 gir -1, 0.5 * -1 = -0.5 gir 0 i Java
+    fn mix_rounds_like_java() {
+        // 0.6 * -5 = -3.0, 0.6 * -1 = -0.6 gives -1, 0.5 * -1 = -0.5 gives 0 in Java
         assert_eq!(mix([10, 0, 0, 255], [5, 0, 0, 255], 0.6)[0], 7);
         assert_eq!(mix([1, 0, 0, 255], [0, 0, 0, 255], 0.6)[0], 0);
         assert_eq!(mix([1, 0, 0, 255], [0, 0, 0, 255], 0.5)[0], 1);

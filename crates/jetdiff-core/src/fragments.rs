@@ -1,11 +1,11 @@
-//! Resultattyper og linjeoffsets. Port av `LineOffsetsImpl.kt`, `LineFragment`/`DiffFragment`
-//! og `convertIntoLineFragments` fra `ComparisonManagerImpl.java`. Offsets er UTF-8 bytes.
+//! Result types and line offsets. Port of `LineOffsetsImpl.kt`, `LineFragment`/`DiffFragment`
+//! and `convertIntoLineFragments` from `ComparisonManagerImpl.java`. Offsets are UTF-8 bytes.
 
 use std::ops::Range;
 
 use crate::lcs::Changes;
 
-/// Endring inni et `LineFragment`, offsets relativt til fragmentets start.
+/// A change inside a `LineFragment`, offsets relative to the fragment's start.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffFragment {
     pub offsets1: Range<usize>,
@@ -14,18 +14,18 @@ pub struct DiffFragment {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineFragment {
-    /// Linjer, halvåpne og 0-baserte.
+    /// Lines, half-open and 0-based.
     pub lines1: Range<usize>,
     pub lines2: Range<usize>,
-    /// Hele linjer inkludert `'\n'`, som kan mangle på siste linje.
+    /// Whole lines including `'\n'`, which can be missing on the last line.
     pub offsets1: Range<usize>,
     pub offsets2: Range<usize>,
-    /// `None` er hel-linje-highlight. `Some(vec![])` er endret, men ingenting synlig under policyen.
+    /// `None` is a whole-line highlight. `Some(vec![])` is changed, but nothing is visible under the policy.
     pub inner: Option<Vec<DiffFragment>>,
 }
 
 impl LineFragment {
-    /// `LineFragmentImpl`: ett inner fragment som dekker alt blir `None`.
+    /// `LineFragmentImpl`: a single inner fragment that covers everything becomes `None`.
     pub fn new(
         lines1: Range<usize>,
         lines2: Range<usize>,
@@ -68,7 +68,7 @@ fn drop_whole_changed_fragments(
     }
 }
 
-/// Linjeslutter delt på `'\n'`. Teksten har alltid minst én linje, siste kan være tom.
+/// Line ends split on `'\n'`. The text always has at least one line; the last one can be empty.
 #[derive(Debug, Clone)]
 pub struct LineOffsets {
     line_ends: Vec<usize>,
@@ -99,18 +99,18 @@ impl LineOffsets {
         }
     }
 
-    /// Uten `'\n'`.
+    /// Without `'\n'`.
     pub fn line_end(&self, line: usize) -> usize {
         self.line_ends[line]
     }
 
-    /// Med `'\n'`, som mangler på siste linje.
+    /// With `'\n'`, which is missing on the last line.
     pub fn line_end_with_newline(&self, line: usize) -> usize {
         let last = line == self.line_count() - 1;
         self.line_ends[line] + usize::from(!last)
     }
 
-    /// Linjeinnhold uten `'\n'`. `ComparisonManagerImpl.getLineContents`.
+    /// Line content without `'\n'`. `ComparisonManagerImpl.getLineContents`.
     pub fn line_contents<'t>(&self, text: &'t str) -> Vec<&'t str> {
         (0..self.line_count())
             .map(|line| &text[self.line_start(line)..self.line_end(line)])
@@ -152,8 +152,8 @@ pub fn create_line_fragment(
     }
 }
 
-/// Tom side peker på starten av linja, eller slutten av teksten etter siste linje.
-/// Da havner en '\n' som legges til på slutten utenfor fragmentet.
+/// An empty side points at the start of the line, or the end of the text after the last line.
+/// Then a '\n' added at the end ends up outside the fragment.
 fn offsets(line_offsets: &LineOffsets, start: usize, end: usize) -> Range<usize> {
     if start == end {
         let offset = if start < line_offsets.line_count() {
@@ -172,7 +172,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn linjeoffsets() {
+    fn line_offsets() {
         let lo = LineOffsets::new("a\nbc\n");
         assert_eq!(lo.line_count(), 3);
         assert_eq!(lo.line_contents("a\nbc\n"), vec!["a", "bc", ""]);
@@ -186,11 +186,11 @@ mod tests {
     }
 
     #[test]
-    fn offsets_for_tom_side() {
+    fn offsets_for_empty_side() {
         let lo = LineOffsets::new("a\nb");
         assert_eq!(offsets(&lo, 0, 0), 0..0);
         assert_eq!(offsets(&lo, 1, 1), 2..2);
-        // Etter siste linje: slutten av teksten, uten ekstra '\n'
+        // After the last line: the end of the text, without an extra '\n'
         assert_eq!(offsets(&lo, 2, 2), 3..3);
 
         let lo = LineOffsets::new("a\nb\n");
@@ -199,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn offsets_inkluderer_newline() {
+    fn offsets_include_newline() {
         let lo = LineOffsets::new("a\nb\nc");
         assert_eq!(offsets(&lo, 0, 1), 0..2);
         assert_eq!(offsets(&lo, 1, 3), 2..5);

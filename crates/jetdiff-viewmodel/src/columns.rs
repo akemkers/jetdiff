@@ -1,9 +1,9 @@
-//! Kolonner i en linje. Modellen bruker UTF-8 bytes, visningen trenger celler for bredde.
-//! Tab går til neste tabstopp med bredde 4, som IntelliJ sin default `TAB_SIZE`.
+//! Columns in a line. The model uses UTF-8 bytes; the view needs cells for width.
+//! Tab goes to the next tab stop with width 4, like IntelliJ's default `TAB_SIZE`.
 
 pub const TAB_SIZE: usize = 4;
 
-/// Tegn som hører til forrige tegn og ikke tar egen plass.
+/// Characters that belong to the previous character and take no space of their own.
 fn is_combining(ch: char) -> bool {
     matches!(
         ch as u32,
@@ -11,7 +11,7 @@ fn is_combining(ch: char) -> bool {
     )
 }
 
-/// Grov East Asian Width uten tabell-crate. Brede tegn tar to celler, som i vim.
+/// Rough East Asian Width without a table crate. Wide characters take two cells, as in vim.
 fn char_cells(ch: char) -> usize {
     if is_combining(ch) {
         return 0;
@@ -36,7 +36,7 @@ fn char_cells(ch: char) -> usize {
     if wide { 2 } else { 1 }
 }
 
-/// Bredde i celler etter tab-utvidelse.
+/// Width in cells after tab expansion.
 pub fn display_width(line: &str) -> usize {
     line.chars().fold(0, |cell, ch| {
         cell + if ch == '\t' {
@@ -50,8 +50,8 @@ pub fn display_width(line: &str) -> usize {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpandedLine {
     pub text: String,
-    /// Per tab: byte-posisjon i originalen og ekstra bytes lagt til etter den.
-    /// Tom når linja ikke har tabs, så vanlige linjer mappes uten oppslag.
+    /// Per tab: byte position in the original and extra bytes added after it.
+    /// Empty when the line has no tabs, so ordinary lines are mapped without a lookup.
     tabs: Vec<(usize, usize)>,
 }
 
@@ -82,7 +82,7 @@ impl ExpandedLine {
         Self { text, tabs }
     }
 
-    /// Byte i originalen til byte i vist tekst. En kolonne på en tab peker på starten av den.
+    /// Byte in the original to byte in the shown text. A column on a tab points at its start.
     pub fn display_index(&self, col: usize) -> usize {
         let before = self.tabs.partition_point(|&(pos, _)| pos < col);
         match before {
@@ -97,7 +97,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn uten_tabs_er_identitet() {
+    fn without_tabs_is_identity() {
         let l = ExpandedLine::new("abc");
         assert_eq!(l.text, "abc");
         assert_eq!(l.display_index(2), 2);
@@ -105,7 +105,7 @@ mod tests {
     }
 
     #[test]
-    fn tab_gaar_til_neste_stopp() {
+    fn tab_goes_to_next_stop() {
         let l = ExpandedLine::new("\tab\tc");
         assert_eq!(l.text, "    ab  c");
         assert_eq!(l.display_index(0), 0);
@@ -117,15 +117,15 @@ mod tests {
     }
 
     #[test]
-    fn tab_rett_paa_stopp_blir_fire() {
+    fn tab_right_on_stop_becomes_four() {
         let l = ExpandedLine::new("abcd\te");
         assert_eq!(l.text, "abcd    e");
         assert_eq!(l.display_index(5), 8);
     }
 
     #[test]
-    fn flerbyte_tegn_teller_som_en_kolonne() {
-        // 'ø' er to bytes, men én kolonne
+    fn multibyte_char_counts_as_one_column() {
+        // 'ø' is two bytes, but one column
         let l = ExpandedLine::new("ø\tx");
         assert_eq!(l.text, "ø   x");
         assert_eq!(l.display_index(2), 2);
@@ -134,12 +134,12 @@ mod tests {
     }
 
     #[test]
-    fn bredde() {
+    fn width() {
         assert_eq!(display_width(""), 0);
         assert_eq!(display_width("\t\t"), 8);
         assert_eq!(display_width("a\tb"), 5);
         assert_eq!(display_width("日本"), 4);
-        // "e" + kombinerende akutt aksent
+        // "e" + combining acute accent
         assert_eq!(display_width("e\u{301}x"), 2);
     }
 }

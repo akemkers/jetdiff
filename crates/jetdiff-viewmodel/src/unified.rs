@@ -1,7 +1,7 @@
-//! Unified diff: én kodevisning der slettede linjer står over de nye i hver endring. Port av
-//! `UnifiedFragmentBuilder`, men radene peker inn i `FileDiff` i stedet for å bygge ny
-//! tekst, så syntaks og ord-markering gjenbrukes. Ingen folding. `RowLayout::Split` gir samme
-//! rader med slettet og ny linje side om side, for split i terminalen.
+//! Unified diff: one code view where deleted lines sit above the added ones in each hunk. Port of
+//! `UnifiedFragmentBuilder`, but the rows point into `FileDiff` instead of building new
+//! text, so syntax and inline highlights are reused. No folding. `RowLayout::Split` gives the same
+//! rows with the deleted and added line next to each other, for Split in the terminal.
 
 use std::ops::Range;
 use std::rc::Rc;
@@ -20,19 +20,19 @@ use crate::scrolloff;
 use crate::state::{DiffState, Horizontal, Outcome};
 use crate::stripe::{StripeMarker, marker_y};
 
-/// `h` og `l` scroller så mange tegn, som i split.
+/// `h` and `l` scroll this many characters, as in Split.
 const SCROLL_COLUMNS: f32 = 4.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Row {
-    /// Linja på hver side. Slettet er `[Some, None]`, ny er `[None, Some]` og uendret har
-    /// begge. Nye og slettede filer har bare den ene siden.
+    /// The line on each side. Deleted is `[Some, None]`, added is `[None, Some]` and unchanged has
+    /// both. Added and deleted files have only one side.
     pub lines: [Option<usize>; 2],
     pub block: Option<usize>,
 }
 
 impl Row {
-    /// Siden teksten hentes fra. Uendrede linjer tas fra høyre, som `UnifiedFragmentBuilder`.
+    /// The side the text is taken from. Unchanged lines are taken from Right, like `UnifiedFragmentBuilder`.
     pub fn side(&self) -> Side {
         if self.lines[1].is_some() {
             Side::Right
@@ -45,8 +45,8 @@ impl Row {
         self.lines[idx(self.side())].unwrap_or(0)
     }
 
-    /// Slettede rader får slettet-farge og nye får ny-farge, også på ordnivå. Unified har
-    /// ikke `Modified`.
+    /// Deleted rows get the deleted color and added rows the added color, also at word level. Unified has
+    /// no `Modified`.
     pub fn diff_type(&self) -> DiffType {
         match self.side() {
             Side::Left => DiffType::Deleted,
@@ -55,13 +55,13 @@ impl Row {
     }
 }
 
-/// Hvordan linjene i en endring står i radene.
+/// How the lines in a hunk are placed in the rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowLayout {
-    /// Slettede linjer over de nye.
+    /// Deleted lines above the added ones.
     Unified,
-    /// Slettet og ny linje side om side, for split i terminalen. Den korteste siden får rader
-    /// uten linje. Split med trakt i GPUI er `DiffState`, ikke dette.
+    /// Deleted and added line next to each other, for Split in the terminal. The shorter side gets rows
+    /// without a line. Split with the diff divider in GPUI is `DiffState`, not this.
     Split,
 }
 
@@ -69,10 +69,10 @@ pub enum RowLayout {
 pub struct UnifiedDiff {
     pub diff: Rc<FileDiff>,
     rows: Vec<Row>,
-    /// Raden hver linje står på, per side. Uendrede linjer på venstre side peker på samme
-    /// rad som linja på høyre.
+    /// The row each line is on, per side. Unchanged lines on Left point at the same
+    /// row as the line on Right.
     row_of: [Vec<usize>; 2],
-    /// Radene til hver blokk.
+    /// The rows of each hunk.
     block_rows: Vec<Range<usize>>,
     row_layout: RowLayout,
 }
@@ -131,7 +131,7 @@ impl UnifiedDiff {
             push([Some(left), Some(right)], None);
         }
 
-        // Den tomme siden har én tom linje, og den skal ikke ha nummer
+        // The empty side has one empty line, and it should not have a number
         if let Some(shown) = diff.single_side() {
             for row in &mut rows {
                 row.lines[idx(shown.other())] = None;
@@ -176,8 +176,8 @@ impl UnifiedDiff {
         LineLayout::new(self.row_count(), line_height)
     }
 
-    /// To markører for en endret blokk: én for slettet del og én for ny del. Split har én per
-    /// blokk.
+    /// Two hunk minimap marks for a Modified hunk: one for the deleted part and one for the added part. Split has one per
+    /// hunk.
     pub fn stripe_markers(&self, line_height: f32) -> Vec<StripeMarker> {
         let layout = self.layout(line_height);
         let mut markers = Vec::new();
@@ -215,8 +215,8 @@ impl UnifiedDiff {
     }
 }
 
-/// Linjer i en endring som har uendret tekst felles står på samme rad. Resten parres i
-/// rekkefølge, og den korteste siden får rader uten linje.
+/// Lines in a hunk that have unchanged text in common sit on the same row. The rest are paired in
+/// order, and the shorter side gets rows without a line.
 fn pair_lines(diff: &FileDiff, block: &Block) -> Vec<[Option<usize>; 2]> {
     let [left, right] = &block.lines;
     let mut rows = Vec::new();
@@ -270,9 +270,9 @@ fn pair_lines(diff: &FileDiff, block: &Block) -> Vec<[Option<usize>; 2]> {
 #[derive(Debug, Clone)]
 pub struct UnifiedState {
     pub diff: Rc<UnifiedDiff>,
-    /// Markert rad.
+    /// The cursor's row.
     pub row: usize,
-    /// Begge y er like, så animasjon og tegning kan dele typen med split.
+    /// Both y are equal, so animation and drawing can share the type with Split.
     pub scroll: ScrollState,
 }
 
@@ -285,8 +285,8 @@ impl UnifiedState {
         }
     }
 
-    /// Fra split. Cursorens side og linje beholdes, og linja står på samme høyde i
-    /// viewporten.
+    /// From Split. The cursor's side and line are kept, and the line sits at the same height in
+    /// the viewport.
     pub fn from_split(split: &DiffState, viewport: Viewport) -> Self {
         let cursor = split.cursor;
         let layout = split.folding.layout(cursor.side, viewport.line_height);
@@ -295,7 +295,7 @@ impl UnifiedState {
         Self::place(diff, cursor, offset, split.scroll.x, viewport)
     }
 
-    /// Bytter radoppsett på samme måte som mot split.
+    /// Switches row layout the same way as toward Split.
     pub fn realign(&self, row_layout: RowLayout, viewport: Viewport) -> Self {
         let row = self.diff.row(self.row);
         let cursor = Cursor::new(row.side(), row.line());
@@ -304,7 +304,7 @@ impl UnifiedState {
         Self::place(diff, cursor, offset, self.scroll.x, viewport)
     }
 
-    /// Linja står `offset` under toppen av viewporten.
+    /// The line sits `offset` below the top of the viewport.
     fn place(
         diff: Rc<UnifiedDiff>,
         cursor: Cursor,
@@ -321,7 +321,7 @@ impl UnifiedState {
         state
     }
 
-    /// Til split. Slettede rader gir venstre side, alt annet høyre.
+    /// To Split. Deleted rows give Left, everything else Right.
     pub fn to_split(&self, folding: Rc<Folding>, viewport: Viewport) -> DiffState {
         let row = self.diff.row(self.row);
         let offset = self.row as f32 * viewport.line_height - self.scroll_y();
@@ -332,7 +332,7 @@ impl UnifiedState {
         state
     }
 
-    /// Første endring, som `DiffState::init`.
+    /// The first hunk, like `DiffState::init`.
     pub fn init(&mut self, viewport: Viewport) {
         if self.diff.block_rows.is_empty() {
             return;
@@ -369,7 +369,7 @@ impl UnifiedState {
         self.set_scroll_y(y, viewport);
     }
 
-    /// Etter scroll uten cursor: flytt cursoren inn hvis scrolloff krever det.
+    /// After scroll without the cursor: move the cursor in if scrolloff requires it.
     fn push_cursor(&mut self, viewport: Viewport) -> bool {
         let layout = self.layout(viewport);
         let (min, max) = scrolloff::cursor_range(&layout, self.scroll_y(), viewport);
@@ -402,9 +402,9 @@ impl UnifiedState {
             HalfPageUp => self.half_page(-1, viewport),
             NextChange => self.change(true, viewport),
             PrevChange => self.change(false, viewport),
-            // Én side og ingen folding
+            // One side and no folding
             FocusSide(_) | FoldOpen | ToggleFolds => Outcome::default(),
-            // Eies av UI-et, som i split
+            // Owned by the UI, as in Split
             CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
         }
     }
@@ -425,7 +425,7 @@ impl UnifiedState {
         Outcome::animated()
     }
 
-    /// Scroll og cursor flyttes like mange rader, som `DiffState`.
+    /// Scroll and cursor move the same number of rows, like `DiffState`.
     fn half_page(&mut self, direction: isize, viewport: Viewport) -> Outcome {
         let rows = (scrolloff::screen_lines(viewport) / 2).max(1);
         let scroll_y = self.scroll_y();
@@ -448,14 +448,14 @@ impl UnifiedState {
         Outcome::instant()
     }
 
-    /// Slutten av linja ett tegn inn fra høyre kant.
+    /// The end of the line, one character in from the right edge.
     fn scroll_to_end(&mut self, horizontal: Horizontal) -> Outcome {
         let cells = columns::display_width(self.diff.text(self.row));
         let x = (cells + 1) as f32 * horizontal.char_width - horizontal.text_width;
         self.scroll_x(x.max(0.), horizontal)
     }
 
-    /// Samme landing som split: starten av blokken omtrent 1/3 ned.
+    /// The same landing as Split: the start of the hunk about 1/3 down.
     fn target_for_block(&self, block: usize, viewport: Viewport) -> (usize, f32) {
         let rows = self.diff.block_rows[block].clone();
         let layout = self.layout(viewport);
@@ -468,7 +468,7 @@ impl UnifiedState {
         (rows.start, y)
     }
 
-    /// `n` går til første blokk under cursoren, `p` til siste blokk helt over.
+    /// `n` goes to the first hunk below the cursor, `p` to the last hunk entirely above.
     fn change(&mut self, next: bool, viewport: Viewport) -> Outcome {
         let blocks = &self.diff.block_rows;
         let block = if next {
@@ -489,13 +489,13 @@ impl UnifiedState {
         Outcome::animated()
     }
 
-    /// Blokken cursoren står i.
+    /// The hunk the cursor is in.
     pub fn cursor_block(&self) -> Option<usize> {
         self.diff.row(self.row).block
     }
 
-    /// Markert linje i nyeste versjon, som `DiffState::location`. En slettet rad gir linja
-    /// rett under på høyre side. Slettede filer har bare venstre side.
+    /// The cursor's line in the newest version, like `DiffState::location`. A deleted row gives the line
+    /// right below on Right. Deleted files only have Left.
     pub fn location(&self) -> Cursor {
         let row = self.diff.row(self.row);
         let diff = &self.diff.diff;
@@ -506,8 +506,8 @@ impl UnifiedState {
         Cursor::new(Side::Right, line.min(diff.line_count(Side::Right) - 1))
     }
 
-    /// Samme fil med nytt innhold. Cursoren blir på samme linje, og scroll beholdes så
-    /// langt det går.
+    /// The same file with new content. The cursor stays on the same line, and scroll is kept as
+    /// far as possible.
     pub fn replace_diff(&mut self, diff: Rc<FileDiff>, viewport: Viewport) {
         let row = *self.diff.row(self.row);
         self.diff = Rc::new(UnifiedDiff::with_layout(diff, self.diff.row_layout));
@@ -516,13 +516,13 @@ impl UnifiedState {
         self.follow(viewport, false);
     }
 
-    /// Musehjul eller trackpad. Cursoren flyttes bare når scrolloff krever det.
+    /// Mouse wheel or trackpad. The cursor is only moved when scrolloff requires it.
     pub fn wheel(&mut self, delta_y: f32, viewport: Viewport) -> bool {
         self.set_scroll_y(self.scroll_y() + delta_y, viewport);
         self.push_cursor(viewport)
     }
 
-    /// Klikk markerer raden uten å scrolle.
+    /// A click selects the row without scrolling.
     pub fn click(&mut self, row: usize) {
         self.row = row.min(self.last_row());
     }
@@ -532,7 +532,7 @@ impl UnifiedState {
         self.push_cursor(viewport);
     }
 
-    /// Zoom: cursorraden holdes på samme sted i viewporten, målt i rader.
+    /// Zoom: the cursor row is kept at the same place in the viewport, measured in rows.
     pub fn rescale(&mut self, old_line_height: f32, viewport: Viewport, x_scale: f32) {
         let row = self.row as f32;
         let offset = row - self.scroll_y() / old_line_height;

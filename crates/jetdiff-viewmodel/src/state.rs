@@ -1,5 +1,5 @@
-//! Diffen som helhet: markert linje, folding og scroll. Utfører `Command` og holder
-//! linja og scroll i takt med scrolloff. `scroll` er målet, UI-et animerer dit selv.
+//! The diff as a whole: cursor, folding and scroll. Carries out `Command` and keeps
+//! the line and scroll in step with scrolloff. `scroll` is the target; the UI animates there itself.
 
 use std::rc::Rc;
 
@@ -15,10 +15,10 @@ use crate::nav::{next_block, prev_block, target_for_block};
 use crate::scroll::{PositionKeeper, ScrollState};
 use crate::scrolloff;
 
-/// `h` og `l` scroller så mange tegn.
+/// `h` and `l` scroll this many characters.
 const SCROLL_COLUMNS: f32 = 4.;
 
-/// Horisontal geometri fra UI-et, som kjenner tekstbredden.
+/// Horizontal geometry from the UI, which knows the text width.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Horizontal {
     pub text_width: f32,
@@ -29,7 +29,7 @@ pub struct Horizontal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Outcome {
     pub changed: bool,
-    /// Scroll skal animeres til målet i stedet for å hoppe.
+    /// Scroll should be animated to the target instead of jumping.
     pub animate: bool,
     pub folding_changed: bool,
 }
@@ -55,14 +55,14 @@ pub struct DiffState {
     pub diff: Rc<FileDiff>,
     pub folding: Rc<Folding>,
     pub scroll: ScrollState,
-    /// Siden sync scroll regnes fra. Følger cursoren, men musehjulet kan ta den.
+    /// The side sync scroll is computed from. Follows the cursor, but the mouse wheel can take it.
     pub master: Side,
     pub cursor: Cursor,
 }
 
 impl DiffState {
     pub fn new(diff: Rc<FileDiff>, folding: Rc<Folding>) -> Self {
-        // `getCurrentSide` er RIGHT som default i SimpleDiffViewer
+        // `getCurrentSide` is RIGHT by default in SimpleDiffViewer
         let side = Side::Right;
         Self {
             diff,
@@ -73,7 +73,7 @@ impl DiffState {
         }
     }
 
-    /// `InitialScrollPositionSupport`: første endring, med cursoren på høyre side.
+    /// `InitialScrollPositionSupport`: the first hunk, with the cursor on Right.
     pub fn init(&mut self, vp: Viewport) {
         if self.diff.blocks().is_empty() {
             return;
@@ -93,7 +93,7 @@ impl DiffState {
         self.diff.line(side, line)
     }
 
-    /// Gyldig linje utenfor kollapsede folds.
+    /// A valid line outside collapsed folds.
     fn clamp_line(&self, side: Side, line: usize) -> usize {
         let line = line.min(self.diff.line_count(side) - 1);
         self.folding.caret_after(side, line)
@@ -125,7 +125,7 @@ impl DiffState {
         scrolloff::follow_y(&layout, cursor, scroll_y, viewport, allow_center)
     }
 
-    /// Cursoren eier master-siden. Slave følger via sync.
+    /// The cursor owns the master side. The slave follows through sync.
     fn scroll_cursor_side_to(&mut self, y: f32, vp: Viewport) {
         let side = self.cursor.side;
         self.master = side;
@@ -147,7 +147,7 @@ impl DiffState {
         Outcome::instant()
     }
 
-    /// Slutten av linja ett tegn inn fra høyre kant. En kollapset fold har ingen tekst.
+    /// The end of the line, one character in from the right edge. A collapsed fold has no text.
     fn scroll_to_end(&mut self, hx: Horizontal) -> Outcome {
         let c = self.cursor;
         let cells = if self.folding.fold_at_line(c.side, c.line).is_some() {
@@ -159,7 +159,7 @@ impl DiffState {
         self.scroll_x(x.max(0.), hx)
     }
 
-    /// Etter scroll uten cursor: flytt cursoren inn hvis scrolloff krever det.
+    /// After scroll without the cursor: move the cursor in if scrolloff requires it.
     fn push_cursor(&mut self, vp: Viewport) -> bool {
         let (min, max) = self.cursor_range(self.scroll.y(self.cursor.side), vp);
         let cv = self.cursor_visual(vp);
@@ -195,7 +195,7 @@ impl DiffState {
                 let any_closed = f.visible(Side::Left).next().is_some();
                 f.expand_all(any_closed)
             }),
-            // Eies av UI-et. Etter zoom kalles `rescale`.
+            // Owned by the UI. After zoom, `rescale` is called.
             CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
         }
     }
@@ -218,7 +218,7 @@ impl DiffState {
         Outcome::animated()
     }
 
-    /// `d` og `u`: scroll og cursor flyttes like mange linjer, vim sin `scroll`.
+    /// `d` and `u`: scroll and cursor move the same number of lines, vim's `scroll`.
     fn half_page(&mut self, dir: isize, vp: Viewport) -> Outcome {
         let n = (scrolloff::screen_lines(vp) / 2).max(1);
         let side = self.cursor.side;
@@ -230,8 +230,8 @@ impl DiffState {
         Outcome::animated()
     }
 
-    /// `n` og `p` bruker IntelliJ sin navigasjon og landing, så cursoren til starten av
-    /// endringen. Scroll justeres bare hvis landingen bryter scrolloff.
+    /// `n` and `p` use IntelliJ's navigation and landing, so the cursor goes to the start of
+    /// the hunk. Scroll is only adjusted if the landing breaks scrolloff.
     fn change(&mut self, next: bool, vp: Viewport) -> Outcome {
         let side = self.cursor.side;
         let block = if next {
@@ -255,7 +255,7 @@ impl DiffState {
         Outcome::animated()
     }
 
-    /// Linja på den andre siden, via `BaseSyncScrollable.transfer`.
+    /// The line on the other side, via `BaseSyncScrollable.transfer`.
     fn transferred_line(&self) -> usize {
         let c = self.cursor;
         let other = c.side.other();
@@ -263,12 +263,12 @@ impl DiffState {
         self.clamp_line(other, line)
     }
 
-    /// `TwosideTextDiffViewer.transferPosition`, uten kolonne.
+    /// `TwosideTextDiffViewer.transferPosition`, without a column.
     pub fn transferred_cursor(&self) -> Cursor {
         Cursor::new(self.cursor.side.other(), self.transferred_line())
     }
 
-    /// Blokken cursoren står i. `None` på en kollapset fold.
+    /// The hunk the cursor is in. `None` on a collapsed fold.
     pub fn cursor_block(&self) -> Option<usize> {
         let c = self.cursor;
         if self.folding.fold_at_line(c.side, c.line).is_some() {
@@ -277,7 +277,7 @@ impl DiffState {
         self.diff.block_at(c.side, c.line)
     }
 
-    /// Samme fil med nytt innhold. Cursor og scroll beholdes så langt det går.
+    /// The same file with new content. Cursor and scroll are kept as far as possible.
     pub fn replace_diff(&mut self, diff: Rc<FileDiff>, folding: Rc<Folding>, vp: Viewport) {
         self.folding = folding;
         self.diff = diff;
@@ -290,8 +290,8 @@ impl DiffState {
         self.follow(vp, false);
     }
 
-    /// Cursoren settes, og linja havner `offset` piksler under toppen av viewporten. For
-    /// bytte fra unified, så teksten under cursoren står i ro.
+    /// The cursor is set, and the line ends up `offset` pixels below the top of the viewport. For
+    /// switching from Unified, so the text under the cursor stays still.
     pub fn place_cursor(&mut self, cursor: Cursor, offset: f32, vp: Viewport) {
         let side = cursor.side;
         self.cursor = Cursor::new(side, self.clamp_line(side, cursor.line));
@@ -303,7 +303,7 @@ impl DiffState {
         self.follow(vp, false);
     }
 
-    /// Markert linje i nyeste versjon.
+    /// The cursor's line in the newest version.
     pub fn location(&self) -> Cursor {
         if self.cursor.side == Side::Right {
             self.cursor
@@ -312,7 +312,7 @@ impl DiffState {
         }
     }
 
-    /// `MyFocusOppositePaneAction`: cursoren flyttes, siden blir master, og så
+    /// `MyFocusOppositePaneAction`: the cursor moves, the side becomes the master, and then
     /// `scrollToCaret(MAKE_VISIBLE)`.
     fn focus_side(&mut self, side: Side, vp: Viewport) -> Outcome {
         if self.cursor.side == side {
@@ -323,8 +323,8 @@ impl DiffState {
         Outcome::animated()
     }
 
-    /// `runBatchFoldingOperation` med `PositionKeeper`. Den andre sidens caret er
-    /// overført posisjon, siden vi bare har én cursor.
+    /// `runBatchFoldingOperation` with `PositionKeeper`. The other side's caret is
+    /// the transferred position, since we only have one cursor.
     fn change_folding(
         &mut self,
         vp: Viewport,
@@ -347,7 +347,7 @@ impl DiffState {
         }
     }
 
-    /// Musehjul eller trackpad på en side. Cursoren flyttes bare når scrolloff krever det.
+    /// Mouse wheel or trackpad on one side. The cursor is only moved when scrolloff requires it.
     pub fn wheel(&mut self, side: Side, dy: f32, vp: Viewport) -> bool {
         self.master = side;
         self.scroll
@@ -355,13 +355,13 @@ impl DiffState {
         self.push_cursor(vp)
     }
 
-    /// Klikk setter side og linje uten å scrolle.
+    /// A click sets the side and line without scrolling.
     pub fn click(&mut self, side: Side, line: usize) {
         self.master = side;
         self.cursor = Cursor::new(side, self.clamp_line(side, line));
     }
 
-    /// Ny viewport-høyde: klem master, regn slave på nytt og hold cursoren synlig.
+    /// New viewport height: clamp the master, recompute the slave and keep the cursor visible.
     pub fn resize(&mut self, vp: Viewport) {
         let master = self.master;
         let layout = self.layout(master, vp);
@@ -370,7 +370,7 @@ impl DiffState {
         self.push_cursor(vp);
     }
 
-    /// Zoom: cursorlinja holdes på samme sted i viewporten, målt i linjer.
+    /// Zoom: the cursor line is kept at the same place in the viewport, measured in lines.
     pub fn rescale(&mut self, old_line_height: f32, vp: Viewport, x_scale: f32) {
         let side = self.cursor.side;
         let cv = self.cursor_visual(vp) as f32;
@@ -394,7 +394,7 @@ mod tests {
     const L: Side = Side::Left;
     const R: Side = Side::Right;
     const LH: f32 = 10.;
-    /// 20 hele linjer.
+    /// 20 whole lines.
     const VP: Viewport = Viewport {
         height: 200.,
         line_height: LH,
@@ -419,13 +419,13 @@ mod tests {
         DiffState::new(Rc::new(diff), Rc::new(folding))
     }
 
-    /// Like filer på 200 linjer, ingen folds.
+    /// Equal files of 200 lines, no folds.
     fn plain() -> DiffState {
         let a = lines("a", 200);
         state(&a, &a, false)
     }
 
-    /// Endringer på linjene 10, 40 og 90 av 100, én linje hver.
+    /// Hunks on lines 10, 40 and 90 of 100, one line each.
     fn three_changes(folds: bool) -> DiffState {
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
@@ -449,15 +449,15 @@ mod tests {
         s.scroll.y(s.cursor.side)
     }
 
-    /// Cursoren har scrolloff, eller står ved kanten av fila.
+    /// The cursor has scrolloff, or is at the edge of the file.
     fn assert_scrolloff(s: &DiffState) {
         let (min, max) = s.cursor_range(top(s), VP);
         let cv = s.cursor_visual(VP);
-        assert!(min <= cv && cv <= max, "cursor {cv} utenfor {min}..={max}");
+        assert!(min <= cv && cv <= max, "cursor {cv} outside {min}..={max}");
     }
 
     #[test]
-    fn j_og_k() {
+    fn j_and_k() {
         let mut s = plain();
         times(&mut s, MoveDown, 3);
         assert_eq!(s.cursor.line, 3);
@@ -470,11 +470,11 @@ mod tests {
     }
 
     #[test]
-    fn scrolloff_ved_j() {
+    fn scrolloff_on_j() {
         let mut s = plain();
         times(&mut s, MoveDown, 11);
         assert_eq!(top(&s), 0.);
-        // Linje 12 er åtte fra bunnen av 20
+        // Line 12 is eight from the bottom of 20
         run(&mut s, MoveDown);
         assert_eq!(top(&s), 10.);
         assert_scrolloff(&s);
@@ -484,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn j_i_lite_vindu_holder_scrolloff() {
+    fn j_in_small_window_keeps_scrolloff() {
         let small = Viewport {
             height: 50.,
             line_height: LH,
@@ -499,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn gg_og_g() {
+    fn gg_and_g() {
         let mut s = plain();
         let out = run(&mut s, GoToBottom);
         assert!(out.animate);
@@ -510,17 +510,17 @@ mod tests {
     }
 
     #[test]
-    fn langt_hopp_sentrerer() {
+    fn long_jump_centers() {
         let mut s = plain();
         s.click(R, 100);
         s.follow(VP, true);
-        // 9 linjer over cursoren i et vindu på 20, som vim sin `scroll_cursor_halfway`
+        // 9 lines above the cursor in a window of 20, like vim's `scroll_cursor_halfway`
         assert_eq!(top(&s), 910.);
         assert_scrolloff(&s);
     }
 
     #[test]
-    fn halv_side_flytter_scroll_og_cursor_likt() {
+    fn half_page_moves_scroll_and_cursor_equally() {
         let mut s = plain();
         times(&mut s, MoveDown, 10);
         let out = run(&mut s, HalfPageDown);
@@ -532,13 +532,13 @@ mod tests {
         run(&mut s, HalfPageUp);
         run(&mut s, HalfPageUp);
         assert_eq!((s.cursor.line, top(&s)), (10, 0.));
-        // Øverst kan ikke scroll gå lenger, men cursoren går
+        // At the top scroll can't go further, but the cursor can
         run(&mut s, HalfPageUp);
         assert_eq!((s.cursor.line, top(&s)), (0, 0.));
     }
 
     #[test]
-    fn neste_og_forrige_endring() {
+    fn next_and_previous_hunk() {
         let mut s = three_changes(false);
         s.init(VP);
         assert_eq!((s.cursor.side, s.cursor.line), (R, 10));
@@ -557,8 +557,8 @@ mod tests {
     }
 
     #[test]
-    fn endring_lander_der_intellij_lander() {
-        // Høyt nok vindu til at landingen ikke bryter scrolloff
+    fn hunk_lands_where_intellij_lands() {
+        // A window tall enough that the landing doesn't break scrolloff
         let vp = Viewport {
             height: 400.,
             line_height: LH,
@@ -571,7 +571,7 @@ mod tests {
     }
 
     #[test]
-    fn plassering_er_i_nyeste_versjon() {
+    fn cursor_location_is_in_newest_version() {
         let mut s = state("x\nny1\nny2\nfelles\n", "x\nfelles\n", false);
         s.click(L, 3);
         assert_eq!(s.location(), Cursor::new(R, 1));
@@ -580,8 +580,8 @@ mod tests {
     }
 
     #[test]
-    fn bytte_side_overforer_linja() {
-        // Venstre har tre linjer mer i endringen
+    fn switching_side_transfers_the_line() {
+        // Left has three more lines in the hunk
         let a = "x\nny1\nny2\nny3\nfelles æøå\ny\n";
         let b = "x\nfelles æøå\ny\n";
         let mut s = state(a, b, false);
@@ -591,37 +591,37 @@ mod tests {
         assert!(out.animate);
         assert_eq!((s.cursor.side, s.cursor.line), (R, 1));
         assert_eq!(s.master, R);
-        // Linje i en blokk som er tom på høyre side går til linja etter
+        // A line in a hunk that is empty on Right goes to the line after it
         s.click(L, 2);
         run(&mut s, FocusSide(R));
         assert_eq!((s.cursor.side, s.cursor.line), (R, 1));
-        // `transferLine` på starten av en tom blokk gir starten av blokken på andre siden
+        // `transferLine` at the start of an empty hunk side gives the start of the hunk on the other side
         run(&mut s, FocusSide(L));
         assert_eq!((s.cursor.side, s.cursor.line), (L, 1));
     }
 
     #[test]
-    fn j_hopper_over_kollapset_fold() {
+    fn j_skips_collapsed_fold() {
         let mut s = three_changes(true);
-        // Første fold er 0..6, så linje 6
+        // The first fold is 0..6, so line 6
         assert_eq!(s.cursor.line, 0);
         run(&mut s, MoveDown);
         assert_eq!(s.cursor.line, 6);
         run(&mut s, MoveUp);
         assert_eq!(s.cursor.line, 0);
-        // Fra 14 til folden 15..36 og videre til 36
+        // From 14 to the fold 15..36 and on to 36
         s.click(R, 14);
         run(&mut s, MoveDown);
         assert_eq!(s.cursor.line, 15);
         run(&mut s, MoveDown);
         assert_eq!(s.cursor.line, 36);
         s.click(R, 20);
-        // Klikk inne i en fold havner på starten av den
+        // A click inside a fold lands on its start
         assert_eq!(s.cursor.line, 15);
     }
 
     #[test]
-    fn fold_kommandoer_holder_cursoren() {
+    fn fold_commands_keep_the_cursor() {
         let mut s = three_changes(true);
         s.click(R, 45);
         let y = top(&s);
@@ -635,12 +635,12 @@ mod tests {
         times(&mut s, MoveDown, 20);
         run(&mut s, ToggleFolds);
         assert!(s.folding.visible(R).count() > 0);
-        // Cursoren var inne i en fold som lukket seg
+        // The cursor was inside a fold that closed
         assert_eq!(s.cursor.line, 45);
     }
 
     #[test]
-    fn musehjul_skyver_cursoren() {
+    fn mouse_wheel_pushes_the_cursor() {
         let mut s = plain();
         times(&mut s, MoveDown, 11);
         assert!(!s.wheel(L, 30., VP));
@@ -648,13 +648,13 @@ mod tests {
         assert!(s.wheel(L, 100., VP));
         assert_eq!(s.cursor.line, 21);
         assert_eq!(s.master, L);
-        // Brøkdel av en linje fra trackpad
+        // A fraction of a line from the trackpad
         s.wheel(R, 3.5, VP);
         assert_scrolloff(&s);
     }
 
     #[test]
-    fn sideveis_scroll() {
+    fn sideways_scroll() {
         let long = format!("{}\n", "x".repeat(200));
         let mut s = state(&long, &long, false);
         let hx = Horizontal {
@@ -672,7 +672,7 @@ mod tests {
         s.execute(ScrollToStart, VP, hx);
         assert_eq!(s.scroll.x, 0.);
         assert!(!s.execute(ScrollLeft, VP, hx).changed);
-        // Linja på bunnen er tom, så `$` går helt til venstre
+        // The line at the bottom is empty, so `$` goes all the way to the left
         run(&mut s, GoToBottom);
         s.execute(ScrollRight, VP, hx);
         s.execute(ScrollToEnd, VP, hx);
@@ -680,7 +680,7 @@ mod tests {
     }
 
     #[test]
-    fn zoom_holder_cursorlinja_paa_plass() {
+    fn zoom_keeps_cursor_line_in_place() {
         let mut s = plain();
         times(&mut s, MoveDown, 50);
         let before = s.cursor_visual(VP) as f32 - top(&s) / LH;
@@ -694,7 +694,7 @@ mod tests {
     }
 
     #[test]
-    fn resize_holder_cursoren_synlig() {
+    fn resize_keeps_cursor_visible() {
         let mut s = plain();
         times(&mut s, MoveDown, 18);
         let small = Viewport {
@@ -708,8 +708,8 @@ mod tests {
     }
 
     #[test]
-    fn rull_tilbake_beholder_cursor_og_scroll() {
-        // Tett nok til at gapet 37..44 ikke foldes etter at 40 er rullet tilbake
+    fn rollback_keeps_cursor_and_scroll() {
+        // Close enough that the gap 37..44 is not folded after 40 is rolled back
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [36, 40, 44] {

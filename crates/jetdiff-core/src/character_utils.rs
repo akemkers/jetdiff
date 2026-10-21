@@ -1,7 +1,7 @@
-//! Port av `CharacterUtils.kt`. Tabellene er kopiert fra IntelliJ (Unicode 16.0).
+//! Port of `CharacterUtils.kt`. The tables are copied from IntelliJ (Unicode 16.0).
 //!
-//! `isAlphabetic` er `char::is_alphabetic`, som følger Rust sin Unicode-versjon. Nyere bokstaver
-//! enn JDK-en til IntelliJ kjenner kan derfor splitte ord ulikt. Det godtar vi.
+//! `isAlphabetic` is `char::is_alphabetic`, which follows Rust's Unicode version. Letters newer
+//! than the JDK IntelliJ knows can therefore split words differently. We accept that.
 
 pub(crate) fn is_ideographic(c: u32) -> bool {
     in_ranges(c, IDEOGRAPHIC)
@@ -199,7 +199,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn klassifisering() {
+    fn classification() {
         assert!(is_ideographic('中' as u32));
         assert!(!is_ideographic('a' as u32));
         assert!(is_hiragana_script('ひ' as u32));

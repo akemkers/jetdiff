@@ -1,4 +1,4 @@
-//! Alt brukeren kan be diffen om. Tastene oversettes hit i `keys`, og `DiffState` utfører.
+//! Everything the user can ask the diff to do. Keys are translated to this in `keys`, and `DiffState` carries it out.
 
 use jetdiff_core::side::Side;
 
@@ -8,9 +8,9 @@ pub enum Command {
     MoveUp,
     ScrollLeft,
     ScrollRight,
-    /// Helt til venstre.
+    /// All the way to the left.
     ScrollToStart,
-    /// Slutten av den markerte linja til høyre kant.
+    /// The end of the cursor's line to the right edge.
     ScrollToEnd,
     GoToTop,
     GoToBottom,
@@ -18,15 +18,15 @@ pub enum Command {
     HalfPageUp,
     NextChange,
     PrevChange,
-    /// Gjør ingenting når bare én side vises, eller siden alt er aktiv.
+    /// Does nothing when only one side is shown, or the side is already active.
     FocusSide(Side),
-    /// Ett nivå, som `ExpandRegionAction`.
+    /// One level, like `ExpandRegionAction`.
     FoldOpen,
-    /// Åpner alle hvis noen er lukket, ellers lukkes alle.
+    /// Opens all if any are closed, otherwise closes all.
     ToggleFolds,
-    /// `fil:linje` for markert linje til utklippstavla.
+    /// `file:line` for the cursor's line to the clipboard.
     CopyLocation,
-    /// Rull tilbake endringen på markert linje til venstre side, i fila på disk.
+    /// Roll back the hunk on the cursor's line to Left, in the file on disk.
     Rollback,
     ZoomIn,
     ZoomOut,
