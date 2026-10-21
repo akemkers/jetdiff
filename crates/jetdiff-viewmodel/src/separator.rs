@@ -1,13 +1,13 @@
-//! Bølgen på kollapsede folds og koblingen i divideren. Port av `DiffLineSeparatorRenderer`.
-//! Stier er rene data som UI-laget streker med `stroke_width`.
+//! The wave on collapsed folds and the fold link in the divider. Port of `DiffLineSeparatorRenderer`.
+//! Paths are plain data that the UI layer strokes with `stroke_width`.
 
 use std::ops::Range;
 
 use crate::divider::{DIVIDER_WIDTH, Point};
 
-/// `getStepSize`: kvart periode. Divideren trenger 6 steg for å se pen ut.
+/// `getStepSize`: a quarter period. The divider needs 6 steps to look nice.
 const STEP: f32 = DIVIDER_WIDTH / 6.;
-/// `getHeight`: halv høyde på bølgen.
+/// `getHeight`: half the height of the wave.
 const HEIGHT: f32 = 3.;
 /// `getAAGap`.
 const AA_GAP: f32 = 1.;
@@ -24,12 +24,12 @@ pub fn stroke_width(hovered: bool) -> f32 {
     if hovered { 2. } else { 1. }
 }
 
-/// `getVerticalOffset`, i heltall som i Java.
+/// `getVerticalOffset`, in integers as in Java.
 fn vertical_offset(line_height: f32) -> f32 {
     ((line_height - 2. * HEIGHT - 2. * AA_GAP) / 2.).floor()
 }
 
-/// Kvartene i bølgebildet fra `createImage`, som (start, kontroll, slutt) i y.
+/// The quarters in the wave image from `createImage`, as (start, control, end) in y.
 const QUARTERS: [(f32, f32, f32); 4] = {
     let (upper, center, lower) = (AA_GAP, HEIGHT + AA_GAP, 2. * HEIGHT + AA_GAP);
     [
@@ -40,9 +40,9 @@ const QUARTERS: [(f32, f32, f32); 4] = {
     ]
 };
 
-/// Bølge over `x` på linja som starter på `top`. `edge` er kanten mot divideren. Fasen
-/// regnes fra den, så bølgen møter koblingen midt på (`getStartPhase`) og står stille ved
-/// horisontal scroll. Speilet på venstre side, men bildet er symmetrisk.
+/// Wave over `x` on the line that starts at `top`. `edge` is the edge toward the divider. The phase
+/// is counted from it, so the wave meets the fold link in the middle (`getStartPhase`) and stands still during
+/// horizontal scroll. Mirrored on Left, but the image is symmetric.
 pub fn wave(x: Range<f32>, edge: f32, mirrored: bool, top: f32, line_height: f32) -> Vec<PathSeg> {
     let sign = if mirrored { -1. } else { 1. };
     let (d0, d1) = {
@@ -57,7 +57,7 @@ pub fn wave(x: Range<f32>, edge: f32, mirrored: bool, top: f32, line_height: f32
     let (k0, k1) = ((d0 / STEP).floor() as i64, (d1 / STEP).ceil() as i64);
     let mut path = Vec::with_capacity((k1 - k0) as usize + 1);
     for k in k0..k1 {
-        // Ved kanten er vi midt i fallende kvart: `(d + 3 * STEP) mod 4 * STEP`
+        // At the edge we are in the middle of the falling quarter: `(d + 3 * STEP) mod 4 * STEP`
         let (start, ctrl, end) = QUARTERS[(k + 3).rem_euclid(4) as usize];
         let d = k as f32 * STEP;
         if k == k0 {
@@ -71,8 +71,8 @@ pub fn wave(x: Range<f32>, edge: f32, mirrored: bool, top: f32, line_height: f32
     path
 }
 
-/// `drawConnectorLine` fra venstre fold (y1) til høyre (y2). y er toppen av linja, lokalt
-/// for divideren.
+/// `drawConnectorLine` from the Left fold (y1) to the Right one (y2). y is the top of the line, local
+/// to the divider.
 pub fn connector(width: f32, y1: f32, y2: f32, line_height: f32) -> Vec<PathSeg> {
     let (x1, x2) = (0., width);
     let (s, h) = (STEP, HEIGHT);
@@ -88,7 +88,7 @@ pub fn connector(width: f32, y1: f32, y2: f32, line_height: f32) -> Vec<PathSeg>
         c2: p(bx, by),
         to: p(x, y),
     };
-    // 0.5: avrunding i speilet modus
+    // 0.5: rounding in mirrored mode
     let mut path = vec![PathSeg::Move(p(x1 - 0.5, y1))];
     let delta = (y2 - y1).abs() / (x2 - x1).abs();
     if delta < 0.2 {
@@ -103,7 +103,7 @@ pub fn connector(width: f32, y1: f32, y2: f32, line_height: f32) -> Vec<PathSeg>
                 quad(x2 - s * 0.5, y2 + h, x2, y2),
             ]);
         } else {
-            // For smal divider: to halvperioder i stedet for seks
+            // Divider too narrow: two half periods instead of six
             path.push(quad(mx, my + 2. * h, x2, y2));
         }
     } else if y1 > y2 {
@@ -153,26 +153,26 @@ mod tests {
     }
 
     #[test]
-    fn parametere_for_standard_divider() {
+    fn parameters_for_default_divider() {
         assert_eq!(STEP, 4.);
-        // Linjehøyde 18 gir bølgen i y 5..13
+        // Line height 18 gives the wave in y 5..13
         assert_eq!(vertical_offset(18.), 5.);
         assert_eq!(vertical_offset(17.), 4.);
     }
 
     #[test]
-    fn bolgen_har_periode_16_og_3px_utslag() {
+    fn wave_has_period_16_and_3px_amplitude() {
         let path = wave(100. ..132., 100., false, 0., 18.);
         assert_eq!(path.len(), 9);
         assert_eq!(path[0], PathSeg::Move(Point { x: 100., y: 9. }));
         let ys: Vec<f32> = path.iter().map(|s| end(s).y).collect();
-        // Midt, opp, midt, ned, midt, opp ...
+        // Middle, up, middle, down, middle, up ...
         assert_eq!(ys, [9., 6., 9., 12., 9., 6., 9., 12., 9.]);
         assert!(ys.iter().all(|y| (y - 9.).abs() <= HEIGHT));
     }
 
     #[test]
-    fn venstre_side_er_speilet_om_divideren() {
+    fn left_side_is_mirrored_around_divider() {
         let right = wave(100. ..120., 100., false, 0., 18.);
         let left = wave(80. ..100., 100., true, 0., 18.);
         assert_eq!(left.len(), right.len());
@@ -184,8 +184,8 @@ mod tests {
     }
 
     #[test]
-    fn fasen_folger_kanten_ikke_starten() {
-        // Starter midt i en periode: samme y som bølgen fra kanten på samme x
+    fn phase_follows_edge_not_start() {
+        // Starts in the middle of a period: the same y as the wave from the edge at the same x
         let whole = wave(100. ..140., 100., false, 0., 18.);
         let part = wave(109. ..140., 100., false, 0., 18.);
         let at = |path: &[PathSeg], x: f32| path.iter().map(end).find(|p| p.x == x).unwrap().y;
@@ -196,13 +196,13 @@ mod tests {
     }
 
     #[test]
-    fn kobling_mot_midten_av_bolgen() {
-        // Rett kobling, seks halvperioder
+    fn fold_link_to_middle_of_wave() {
+        // Straight fold link, six half periods
         let path = connector(24., 10., 10., 18.);
         assert_eq!(path.len(), 7);
         assert_eq!(path[0], PathSeg::Move(Point { x: -0.5, y: 19. }));
         assert_eq!(end(&path[6]), Point { x: 24., y: 19. });
-        // Samme y som bølgen ved kanten
+        // The same y as the wave at the edge
         assert_eq!(end(&wave(0. ..4., 0., false, 10., 18.)[0]).y, 19.);
         assert_eq!(
             path[3],
@@ -214,14 +214,14 @@ mod tests {
     }
 
     #[test]
-    fn bratt_kobling_er_to_kurver() {
+    fn steep_fold_link_is_two_curves() {
         let down = connector(24., 0., 100., 18.);
         assert_eq!(down.len(), 3);
         assert!(matches!(down[1], PathSeg::Cubic { .. }));
         assert_eq!(end(&down[2]), Point { x: 24., y: 109. });
         let up = connector(24., 100., 0., 18.);
         assert_eq!(end(&up[1]), Point { x: 2., y: 110.5 });
-        // Smal divider faller tilbake til én kvadratisk
+        // A narrow divider falls back to a single quadratic
         assert_eq!(connector(10., 0., 1., 18.).len(), 2);
     }
 }

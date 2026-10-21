@@ -1,6 +1,6 @@
-//! Innstillinger fra `$XDG_CONFIG_HOME/jetdiff/config.toml`, eller `~/.config` uten den.
-//! Mangler fila, lages den fra malen i `config.toml`. Malen har også standardverdiene for
-//! nøkler fila mangler, så eldre filer virker etter at nye innstillinger er lagt til.
+//! Settings from `$XDG_CONFIG_HOME/jetdiff/config.toml`, or `~/.config` without it.
+//! If the file is missing, it is made from the template in `config.toml`. The template also has the defaults for
+//! keys the file is missing, so older files work after new settings are added.
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -53,7 +53,7 @@ pub fn load() -> Result<Config, String> {
     };
     let text = match std::fs::read_to_string(&path) {
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            // Feiler det, brukes malen uten å lagres
+            // If that fails, the template is used without being saved
             let _ = create(&path);
             Ok(TEMPLATE.to_owned())
         }
@@ -64,7 +64,7 @@ pub fn load() -> Result<Config, String> {
 }
 
 fn parse(text: &str) -> Result<Config, String> {
-    let mut config: Table = TEMPLATE.parse().expect("malen er gyldig toml");
+    let mut config: Table = TEMPLATE.parse().expect("the template is valid toml");
     merge(
         &mut config,
         text.parse().map_err(|e: toml::de::Error| e.to_string())?,
@@ -91,7 +91,7 @@ fn theme<'de, D: Deserializer<'de>>(d: D) -> Result<Theme, D::Error> {
         .map(|(_, t)| t())
         .ok_or_else(|| {
             let names = THEMES.map(|(n, _)| n).join(", ");
-            D::Error::custom(format!("må være en av {names}"))
+            D::Error::custom(format!("must be one of {names}"))
         })
 }
 
@@ -100,7 +100,7 @@ fn font_size<'de, D: Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
     if (MIN_FONT_SIZE..=MAX_FONT_SIZE).contains(&size) {
         Ok(size)
     } else {
-        let msg = format!("må være mellom {MIN_FONT_SIZE} og {MAX_FONT_SIZE}");
+        let msg = format!("must be between {MIN_FONT_SIZE} and {MAX_FONT_SIZE}");
         Err(D::Error::custom(msg))
     }
 }
@@ -109,7 +109,7 @@ fn view<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
     match String::deserialize(d)?.as_str() {
         "split" => Ok(false),
         "unified" => Ok(true),
-        _ => Err(D::Error::custom("må være split eller unified")),
+        _ => Err(D::Error::custom("must be split or unified")),
     }
 }
 
@@ -121,7 +121,7 @@ fn create(path: &Path) -> std::io::Result<()> {
 }
 
 fn path() -> Option<PathBuf> {
-    // XDG-spesifikasjonen sier at relative stier skal ignoreres
+    // The XDG specification says relative paths should be ignored
     let dir = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .filter(|d| d.is_absolute())
@@ -136,7 +136,7 @@ mod tests {
     const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\ncollapse_unchanged = false\nview = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\n";
 
     #[test]
-    fn malen_er_gyldig() {
+    fn template_is_valid() {
         let config = parse(TEMPLATE).unwrap();
         assert_eq!(config.theme, Theme::mocha());
         assert_eq!(config.font_size, 14.);
@@ -147,14 +147,14 @@ mod tests {
     }
 
     #[test]
-    fn malen_nevner_alle_temaene() {
+    fn template_names_all_themes() {
         for (name, _) in THEMES {
-            assert!(TEMPLATE.contains(name), "{name} mangler i config.toml");
+            assert!(TEMPLATE.contains(name), "{name} missing in config.toml");
         }
     }
 
     #[test]
-    fn leser_alle_innstillingene() {
+    fn reads_all_settings() {
         let config = parse(OK).unwrap();
         assert_eq!(config.theme, Theme::dark());
         assert_eq!(config.font_size, 16.);
@@ -165,32 +165,32 @@ mod tests {
     }
 
     #[test]
-    fn ukjent_visning_er_feil() {
+    fn unknown_view_is_an_error() {
         let err = parse(&OK.replace("unified", "side-by-side")).unwrap_err();
-        assert!(err.contains("må være split eller unified"), "{err}");
+        assert!(err.contains("must be split or unified"), "{err}");
     }
 
     #[test]
-    fn ukjent_tema_er_feil() {
+    fn unknown_theme_is_an_error() {
         let err = parse(&OK.replace("jetbrains-dark", "nope")).unwrap_err();
-        assert!(err.contains("må være en av catppuccin-mocha"), "{err}");
+        assert!(err.contains("must be one of catppuccin-mocha"), "{err}");
     }
 
     #[test]
-    fn fontstorrelse_utenfor_grensene_er_feil() {
+    fn font_size_outside_limits_is_an_error() {
         let err = parse(&OK.replace("16", "41")).unwrap_err();
-        assert!(err.contains("må være mellom 8 og 40"), "{err}");
+        assert!(err.contains("must be between 8 and 40"), "{err}");
         assert!(parse(&OK.replace("16", "7.5")).is_err());
     }
 
     #[test]
-    fn ukjente_nokler_er_feil() {
-        assert!(parse(&format!("tema = \"x\"\n{OK}")).is_err());
-        assert!(parse(&format!("{OK}apen = true\n")).is_err());
+    fn unknown_keys_are_an_error() {
+        assert!(parse(&format!("color_theme = \"x\"\n{OK}")).is_err());
+        assert!(parse(&format!("{OK}is_open = true\n")).is_err());
     }
 
     #[test]
-    fn manglende_nokler_hentes_fra_malen() {
+    fn missing_keys_come_from_the_template() {
         let config = parse("theme = \"jetbrains-dark\"\n[side_panel]\nopen = true\n").unwrap();
         assert_eq!(config.theme, Theme::dark());
         assert_eq!(config.font_size, 14.);

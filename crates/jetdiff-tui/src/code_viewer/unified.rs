@@ -1,4 +1,4 @@
-//! Én linje per rad, med gammelt og nytt linjenummer i gutteren. Ordene får radens farge.
+//! One line per row, with old and new line number in the gutter. The words get the row's color.
 
 use ratatui::layout::Rect;
 
@@ -6,7 +6,7 @@ use super::change::Change;
 use super::painter::Painter;
 use crate::geometry;
 
-/// Gir kolonnen scrollbaren står i.
+/// Gives the column the scrollbar is in.
 pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
     let cells = geometry::unified(painter.diff(), area);
     let columns = &cells.columns;

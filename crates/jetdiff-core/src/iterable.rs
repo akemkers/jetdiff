@@ -1,14 +1,14 @@
-//! Port av `DiffIterableUtil.kt` og `iterables/*`. `Changes` spiller rollen til både
-//! `DiffIterable` og `FairDiffIterable`. Fair-egenskapen er ikke i typen, den følger av
-//! hvordan `Changes` er bygd, som i originalen der `fair()` bare er en wrapper.
+//! Port of `DiffIterableUtil.kt` and `iterables/*`. `Changes` plays the role of both
+//! `DiffIterable` and `FairDiffIterable`. Being fair is not in the type; it follows from
+//! how `Changes` is built, as in the original where `fair()` is just a wrapper.
 
 use std::iter;
 
 use crate::lcs::{Changes, Range};
 use crate::trim::expand;
 
-/// Bygger `Changes` fra `mark_equal`-kall i stigende rekkefølge. Hullene blir endringer.
-/// `adjust` kan krympe hver endring før den legges til, se `expand_change_builder`.
+/// Builds `Changes` from `mark_equal` calls in ascending order. The holes become changes.
+/// `adjust` can shrink each change before it is added; see `expand_change_builder`.
 pub struct ChangeBuilder<F = fn(Range) -> Range> {
     index1: usize,
     index2: usize,
@@ -24,7 +24,7 @@ impl ChangeBuilder {
     }
 }
 
-/// `ExpandChangeBuilder`: skreller like elementer i kantene av hver endring.
+/// `ExpandChangeBuilder`: peels equal elements off the edges of each change.
 pub fn expand_change_builder<'a, T: Eq>(
     data1: &'a [T],
     data2: &'a [T],
@@ -62,7 +62,7 @@ impl<F: Fn(Range) -> Range> ChangeBuilder<F> {
         self.mark_equal_range(index1, index2, index1 + count, index2 + count);
     }
 
-    /// Lengdene kan være ulike, da blir resultatet ikke fair (brukes på tegn-nivå).
+    /// The lengths can differ; then the result is not fair (used at character level).
     pub fn mark_equal_range(&mut self, index1: usize, index2: usize, end1: usize, end2: usize) {
         if index1 == end1 && index2 == end2 {
             return;
@@ -102,7 +102,7 @@ impl<F: Fn(Range) -> Range> ChangeBuilder<F> {
 }
 
 impl Changes {
-    /// `DiffIterableUtil.createUnchanged`: endringene er hullene mellom de gitte uendrede områdene.
+    /// `DiffIterableUtil.createUnchanged`: the changes are the holes between the given unchanged ranges.
     pub fn from_unchanged(unchanged: &[Range], len1: usize, len2: usize) -> Self {
         let mut ranges = Vec::new();
         let mut last = (0, 0);
@@ -119,8 +119,8 @@ impl Changes {
         Self { len1, len2, ranges }
     }
 
-    /// `SubiterableDiffIterable`: endringene klippet til et vindu, relativt til vinduets start.
-    /// `first_index` er første endring som kan treffe vinduet, så vi slipper å lete fra start hver gang.
+    /// `SubiterableDiffIterable`: the changes clipped to a window, relative to the window's start.
+    /// `first_index` is the first change that can hit the window, so we don't have to search from the start every time.
     pub fn subiterable(
         changed: &[Range],
         start1: usize,
@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn builder_lager_hull_som_endringer() {
+    fn builder_makes_holes_into_changes() {
         let mut b = ChangeBuilder::new(5, 6);
         b.mark_equal(0, 0);
         b.mark_equal_count(2, 3, 2);
@@ -177,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn expand_builder_trimmer_kantene() {
+    fn expand_builder_trims_the_edges() {
         let a = [1, 2, 3, 4];
         let b = [1, 9, 3, 4];
         let mut builder = expand_change_builder(&a, &b);
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn from_unchanged_gir_hullene() {
+    fn from_unchanged_gives_the_holes() {
         let unchanged = [Range::new(0, 2, 0, 2), Range::new(3, 4, 5, 6)];
         let changes = Changes::from_unchanged(&unchanged, 6, 6);
         assert_eq!(tuples(&changes), vec![(2, 3, 2, 5), (4, 6, 6, 6)]);
@@ -199,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn subiterable_klipper() {
+    fn subiterable_clips() {
         let changed = [Range::new(1, 3, 1, 2), Range::new(5, 6, 4, 6)];
         let sub = Changes::subiterable(&changed, 2, 6, 2, 5, 0);
         assert_eq!((sub.len1, sub.len2), (4, 3));

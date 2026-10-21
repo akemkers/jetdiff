@@ -1,5 +1,5 @@
-//! Split eller unified for samme fil. Det UI-et gjør likt i begge visningene går gjennom
-//! her, så det ikke trenger å vite hvilken som vises.
+//! Split or Unified for the same file. What the UI does the same way in both diff modes goes through
+//! here, so it doesn't need to know which one is shown.
 
 use std::rc::Rc;
 
@@ -19,7 +19,7 @@ pub enum DiffMode {
 }
 
 impl DiffMode {
-    /// `folding` brukes bare i split.
+    /// `folding` is only used in Split.
     pub fn new(diff: Rc<FileDiff>, folding: Rc<Folding>, unified: bool) -> Self {
         if unified || !diff.can_split() {
             Self::Unified(UnifiedState::new(Rc::new(UnifiedDiff::new(diff))))
@@ -28,8 +28,8 @@ impl DiffMode {
         }
     }
 
-    /// Bytter visning med cursoren på samme linje og høyde. `folding` brukes når det
-    /// byttes til split, og lages på nytt fordi unified ikke har folding.
+    /// Switches diff mode with the cursor on the same line and height. `folding` is used when
+    /// switching to Split, and is made again because Unified has no folding.
     pub fn toggle(&mut self, folding: Rc<Folding>, viewport: Viewport) {
         *self = match self {
             Self::Split(state) => Self::Unified(UnifiedState::from_split(state, viewport)),
@@ -48,7 +48,7 @@ impl DiffMode {
         }
     }
 
-    /// Målet for scroll. UI-et animerer dit.
+    /// The target for scroll. The UI animates there.
     pub fn scroll(&self) -> ScrollState {
         match self {
             Self::Split(state) => state.scroll,
@@ -96,7 +96,7 @@ impl DiffMode {
         }
     }
 
-    /// Markert linje i nyeste versjon, for `y`.
+    /// The cursor's line in the newest version, for `y`.
     pub fn location(&self) -> Cursor {
         match self {
             Self::Split(state) => state.location(),
@@ -104,7 +104,7 @@ impl DiffMode {
         }
     }
 
-    /// Blokken cursoren står i, for rollback.
+    /// The hunk the cursor is in, for rollback.
     pub fn cursor_block(&self) -> Option<usize> {
         match self {
             Self::Split(state) => state.cursor_block(),
@@ -112,9 +112,9 @@ impl DiffMode {
         }
     }
 
-    /// Samme fil med nytt innhold. Blir fila ny eller slettet, byttes det til unified før
-    /// innholdet byttes, så posisjonen beholdes. Er den ikke det lenger, og `unified` er av,
-    /// byttes det tilbake til split etterpå.
+    /// The same file with new content. If the file becomes added or deleted, it switches to Unified before
+    /// the content is replaced, so the position is kept. If it no longer is, and `unified` is off,
+    /// it switches back to Split afterwards.
     pub fn replace_diff(
         &mut self,
         diff: Rc<FileDiff>,
@@ -148,7 +148,7 @@ mod tests {
     };
 
     #[test]
-    fn bytte_fram_og_tilbake() {
+    fn switch_back_and_forth() {
         let old: String = (0..100).map(|i| format!("a{i}\n")).collect();
         let new = old.replace("a50\n", "x\n");
         let diff = Rc::new(FileDiff::new(&old, &new, ComparisonPolicy::Default).unwrap());
@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn nye_og_slettede_filer_vises_unified() {
+    fn added_and_deleted_files_are_shown_unified() {
         let diff = |old: &str, new: &str| {
             Rc::new(FileDiff::new(old, new, ComparisonPolicy::Default).unwrap())
         };

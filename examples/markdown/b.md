@@ -1,18 +1,18 @@
-# Kurs-app
+# Quote App
 
-Viser kurser for **norske og amerikanske aksjer** i *sanntid*.
+Shows quotes for **Norwegian and US stocks** in *real time*.
 
-## Kom i gang
+## Getting started
 
-Krever Node 22. Installer avhengigheter og start:
+Requires Node 22. Install dependencies and start:
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Se [dokumentasjonen](https://example.com/docs) og `CHANGELOG.md` for mer.
+See [the documentation](https://example.com/docs) and `CHANGELOG.md` for more.
 
-## Lisens
+## License
 
 MIT

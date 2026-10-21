@@ -1,5 +1,5 @@
-//! Error stripe i scrollbaren. Diff-highlighterne har `ERROR_STRIPE_COLOR` over
-//! `DiffUtil.getLinesRange(start, end, false)`, og posisjonen regnes ut som i
+//! The hunk minimap in the scrollbar. The diff highlighters have `ERROR_STRIPE_COLOR` over
+//! `DiffUtil.getLinesRange(start, end, false)`, and the position is computed as in
 //! `EditorMarkupModelImpl.offsetsToYPositions`.
 
 use jetdiff_core::side::Side;
@@ -14,14 +14,14 @@ const MIN_MARK_HEIGHT: f32 = 2.;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StripeMarker {
     pub diff_type: DiffType,
-    /// Y i kodevisningen, piksler fra toppen av dokumentet.
+    /// Y in the code view, pixels from the top of the document.
     pub start_y: f32,
     pub end_y: f32,
 }
 
 impl StripeMarker {
-    /// Piksler i sporet. Er dokumentet lavere enn sporet mappes det 1:1, ellers skaleres det
-    /// og kuttes til heltall. Minst 2px høy.
+    /// Pixels in the track. If the document is shorter than the track it maps 1:1, otherwise it is scaled
+    /// and cut to integers. At least 2px high.
     pub fn track_range(&self, content_height: f32, track_height: f32) -> (f32, f32) {
         let map = |y: f32| {
             if content_height < track_height {
@@ -36,8 +36,8 @@ impl StripeMarker {
     }
 }
 
-/// Tommelen i sporet, `None` når alt innhold får plass. Proporsjonal som en Swing-scrollbar
-/// med `content_height` som maks og viewporten som extent.
+/// The thumb in the track, `None` when all the content fits. Proportional like a Swing scrollbar
+/// with `content_height` as the max and the viewport as the extent.
 pub fn thumb_range(
     scroll_y: f32,
     viewport_height: f32,
@@ -54,7 +54,7 @@ pub fn thumb_range(
     ))
 }
 
-/// Med folds: y er visuell, som `offsetToY` i `EditorMarkupModelImpl`.
+/// With folds: y is visual, like `offsetToY` in `EditorMarkupModelImpl`.
 pub fn stripe_markers(
     diff: &FileDiff,
     folding: &Folding,
@@ -75,8 +75,8 @@ pub fn stripe_markers(
         .collect()
 }
 
-/// Slutt-offset er uten siste linjeskift, så sluttlinja er `end - 1` og markøren slutter
-/// på toppen av den. Tom range ligger på `start`, klemt til siste linje.
+/// The end offset is without the last line break, so the end line is `end - 1` and the mark ends
+/// at its top. An empty range lies at `start`, clamped to the last line.
 pub(crate) fn marker_y(layout: &LineLayout, lines: std::ops::Range<usize>) -> (f32, f32) {
     let last = layout.line_count() - 1;
     let start = lines.start.min(last);
@@ -86,7 +86,7 @@ pub(crate) fn marker_y(layout: &LineLayout, lines: std::ops::Range<usize>) -> (f
         lines.end - 1
     };
     let start_y = layout.line_top(start);
-    // `startLineNumber == endLineNumber` gir `endY = startY`
+    // `startLineNumber == endLineNumber` gives `endY = startY`
     let end_y = if end == start {
         start_y
     } else {
@@ -105,21 +105,21 @@ mod tests {
     }
 
     #[test]
-    fn markorer_med_folds_er_visuelle() {
+    fn marks_with_folds_are_visual() {
         let a: String = (0..100).map(|i| format!("a{i}\n")).collect();
         let b = a.replace("a50\n", "x\n");
         let d = diff(&a, &b);
         let f = Folding::new(&d);
         let m = stripe_markers(&d, &f, Side::Left, 10.);
-        // 0..46 foldes til én linje, så linje 50 er visuell linje 5
+        // 0..46 folds to one line, so line 50 is visual line 5
         assert_eq!(f.layout(Side::Left, 10.).logical_to_visual(50), 5);
         assert_eq!(m[0].start_y, 50.);
         assert_eq!(m.len(), 1);
     }
 
     #[test]
-    fn markorer_per_side() {
-        // Venstre linje 1..2 slettet, høyre har tom side på linje 1
+    fn marks_per_side() {
+        // Left lines 1..2 deleted, Right has an empty side at line 1
         let d = diff("a\nb\nc\nd\ne\n", "a\nc\nx\ny\nz\n");
         let left = stripe_markers(&d, &Folding::none(&d), Side::Left, 10.);
         let right = stripe_markers(&d, &Folding::none(&d), Side::Right, 10.);
@@ -127,14 +127,14 @@ mod tests {
         assert_eq!((left[0].start_y, left[0].end_y), (10., 10.));
         assert_eq!((right[0].start_y, right[0].end_y), (10., 10.));
         assert_eq!(d.blocks()[1].lines, [3..5, 2..5]);
-        // Høyre 2..5: topp av linje 2 til topp av linje 4
+        // Right 2..5: top of line 2 to top of line 4
         assert_eq!((right[1].start_y, right[1].end_y), (20., 40.));
         assert_eq!(right[1].diff_type, DiffType::Modified);
     }
 
     #[test]
-    fn tom_range_etter_siste_linje_klemmes() {
-        // Venstre mangler '\n' på slutten, blokken ligger på linje 3 av 3
+    fn empty_range_after_last_line_is_clamped() {
+        // Left is missing '\n' at the end; the hunk is on line 3 of 3
         let d = diff("one\ntwo\nthree", "one\ntwo\nthree\n");
         assert_eq!(d.blocks()[0].lines, [3..3, 3..4]);
         let left = stripe_markers(&d, &Folding::none(&d), Side::Left, 10.);
@@ -142,14 +142,14 @@ mod tests {
     }
 
     #[test]
-    fn tommel_er_proporsjonal() {
+    fn thumb_is_proportional() {
         assert_eq!(thumb_range(0., 500., 400., 500.), None);
         assert_eq!(thumb_range(0., 250., 1000., 500.), Some((0., 125.)));
         assert_eq!(thumb_range(750., 250., 1000., 500.), Some((375., 500.)));
     }
 
     #[test]
-    fn sporet_skalerer_og_har_minstehoyde() {
+    fn track_scales_and_has_minimum_height() {
         let m = StripeMarker {
             diff_type: DiffType::Inserted,
             start_y: 150.,

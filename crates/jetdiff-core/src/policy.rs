@@ -1,9 +1,9 @@
-//! `ComparisonPolicy` med likhet og hash per policy. Port av `ComparisonUtil.kt` og
-//! whitespace-hjelperne i `StringsKmp.kt`.
+//! `ComparisonPolicy` with equality and hash per policy. Port of `ComparisonUtil.kt` and
+//! the whitespace helpers in `StringsKmp.kt`.
 //!
-//! Whitespace er kun `' '`, `'\t'` og `'\n'`, alle ASCII. Derfor kan likhet og trimming
-//! jobbe på UTF-8-bytes og gi samme svar som Java på UTF-16-enheter. Hashene regnes
-//! derimot på UTF-16-enheter som `String.hashCode`, så de blir identiske med IntelliJ sine.
+//! Whitespace is only `' '`, `'\t'` and `'\n'`, all ASCII. So equality and trimming can
+//! work on UTF-8 bytes and give the same answer as Java on UTF-16 units. The hashes, however,
+//! are computed on UTF-16 units like `String.hashCode`, so they are identical to IntelliJ's.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ComparisonPolicy {
@@ -12,7 +12,7 @@ pub enum ComparisonPolicy {
     IgnoreWhitespaces,
 }
 
-/// Linjer med så få tegn som ikke er whitespace er "uviktige". `DiffConfig.UNIMPORTANT_LINE_CHAR_COUNT`.
+/// Lines with this few non-whitespace characters are "unimportant". `DiffConfig.UNIMPORTANT_LINE_CHAR_COUNT`.
 pub const UNIMPORTANT_LINE_CHAR_COUNT: usize = 3;
 
 pub fn is_space_enter_or_tab(c: char) -> bool {
@@ -39,7 +39,7 @@ pub fn hash_code(text: &str, policy: ComparisonPolicy) -> i32 {
     }
 }
 
-/// Som `is_equals`, men TRIM trimmer hver linje i en flerlinjetekst.
+/// Like `is_equals`, but TRIM trims each line in a multi-line text.
 pub fn is_equal_texts(text1: &str, text2: &str, policy: ComparisonPolicy) -> bool {
     match policy {
         ComparisonPolicy::Default => text1 == text2,
@@ -48,7 +48,7 @@ pub fn is_equal_texts(text1: &str, text2: &str, policy: ComparisonPolicy) -> boo
     }
 }
 
-/// `ComparisonUtil.equalsTrimWhitespaces`: `"\nXY\n"` og `"\n XY \n"` er like.
+/// `ComparisonUtil.equalsTrimWhitespaces`: `"\nXY\n"` and `"\n XY \n"` are equal.
 pub fn equals_trim_whitespaces_per_line(s1: &str, s2: &str) -> bool {
     let next_line = |s: &str, index: usize| match s[index..].find('\n') {
         Some(i) => (index + i + 1, false),
@@ -108,7 +108,7 @@ fn trim_whitespace(text: &str) -> &str {
     text.trim_matches(is_space_enter_or_tab)
 }
 
-/// `String.hashCode` over UTF-16-enheter.
+/// `String.hashCode` over UTF-16 units.
 pub fn string_hash_code(text: &str) -> i32 {
     hash_chars(text.chars())
 }
@@ -133,12 +133,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn hash_er_lik_java() {
+    fn hash_equals_java() {
         assert_eq!(string_hash_code(""), 0);
         assert_eq!(string_hash_code("abc"), 96354);
-        // "Hello, World!".hashCode() i Java
+        // "Hello, World!".hashCode() in Java
         assert_eq!(string_hash_code("Hello, World!"), 1498789909);
-        // Surrogatpar teller som to enheter: "😀".hashCode()
+        // Surrogate pairs count as two units: "😀".hashCode()
         assert_eq!(string_hash_code("😀"), 0xD83D * 31 + 0xDE00);
     }
 
@@ -149,7 +149,7 @@ mod tests {
         assert!(equals_ignore_whitespaces("", " \t"));
         assert!(!equals_ignore_whitespaces("ab", "ba"));
         assert!(!equals_ignore_whitespaces("a", "a b"));
-        // '\r' er ikke whitespace her
+        // '\r' is not whitespace here
         assert!(!equals_ignore_whitespaces("a\r", "a"));
         assert!(equals_ignore_whitespaces("æ ø", "æø"));
         assert_eq!(
@@ -169,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn trim_per_linje() {
+    fn trim_per_line() {
         assert!(equals_trim_whitespaces_per_line("\nXY\n", "\n XY \n"));
         assert!(!equals_trim_whitespaces_per_line("\nXY\n", "\nX Y\n"));
         assert!(!equals_trim_whitespaces_per_line("a\nb", "a b"));

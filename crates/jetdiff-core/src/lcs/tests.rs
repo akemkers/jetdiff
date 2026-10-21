@@ -18,21 +18,17 @@ fn assert_valid<T: Eq + std::fmt::Debug>(a: &[T], b: &[T], changes: &Changes) {
     for r in &changes.ranges {
         assert!(
             r.start1 >= last.0 && r.start2 >= last.1,
-            "overlapp eller feil rekkefølge: {changes:?}"
+            "overlap or wrong order: {changes:?}"
         );
-        assert!(!r.is_empty(), "tom change: {changes:?}");
+        assert!(!r.is_empty(), "empty change: {changes:?}");
         last = (r.end1, r.end2);
     }
     for u in changes.unchanged() {
-        assert_eq!(
-            u.end1 - u.start1,
-            u.end2 - u.start2,
-            "unchanged er ikke 1:1"
-        );
+        assert_eq!(u.end1 - u.start1, u.end2 - u.start2, "unchanged is not 1:1");
         assert_eq!(
             a[u.start1..u.end1],
             b[u.start2..u.end2],
-            "unchanged er ikke like"
+            "unchanged is not equal"
         );
     }
 }
@@ -52,13 +48,13 @@ fn lcs_len<T: Eq>(a: &[T], b: &[T]) -> usize {
 }
 
 #[test]
-fn like_sekvenser_gir_ingen_endringer() {
+fn equal_sequences_give_no_changes() {
     assert_eq!(ranges("abc", "abc"), vec![]);
     assert_eq!(ranges("", ""), vec![]);
 }
 
 #[test]
-fn ren_insert_og_delete() {
+fn pure_insert_and_delete() {
     assert_eq!(ranges("ac", "abc"), vec![(1, 1, 1, 2)]);
     assert_eq!(ranges("abc", "ac"), vec![(1, 2, 1, 1)]);
     assert_eq!(ranges("", "ab"), vec![(0, 0, 0, 2)]);
@@ -66,18 +62,18 @@ fn ren_insert_og_delete() {
 }
 
 #[test]
-fn erstatning_i_midten() {
+fn replacement_in_the_middle() {
     assert_eq!(ranges("axc", "ayc"), vec![(1, 2, 1, 2)]);
 }
 
 #[test]
-fn unike_elementer_forkastes_av_reindexer() {
-    // x og y finnes bare på én side, så de kan aldri matches.
+fn unique_elements_are_discarded_by_reindexer() {
+    // x and y exist on one side only, so they can never be matched.
     assert_eq!(ranges("axbc", "abyc"), vec![(1, 2, 1, 1), (3, 3, 2, 3)]);
 }
 
 #[test]
-fn helt_ulike_sekvenser() {
+fn completely_different_sequences() {
     assert_eq!(ranges("abc", "xyz"), vec![(0, 3, 0, 3)]);
 }
 
@@ -98,7 +94,7 @@ impl Rng {
 }
 
 #[test]
-fn myers_gir_optimal_lcs_paa_tilfeldige_input() {
+fn myers_gives_optimal_lcs_on_random_input() {
     let mut rng = Rng(0x5eed);
     for _ in 0..3000 {
         let alphabet = 1 + rng.next() % 8;
@@ -107,12 +103,12 @@ fn myers_gir_optimal_lcs_paa_tilfeldige_input() {
         let changes = diff_ints(&a, &b).unwrap();
         assert_valid(&a, &b, &changes);
         let equal: usize = changes.unchanged().map(|u| u.end1 - u.start1).sum();
-        assert_eq!(equal, lcs_len(&a, &b), "ikke optimal for a={a:?} b={b:?}");
+        assert_eq!(equal, lcs_len(&a, &b), "not optimal for a={a:?} b={b:?}");
     }
 }
 
 #[test]
-fn patience_er_gyldig_paa_tilfeldige_input() {
+fn patience_is_valid_on_random_input() {
     let mut rng = Rng(0xfeed);
     for _ in 0..3000 {
         let alphabet = 1 + rng.next() % 30;
@@ -121,7 +117,7 @@ fn patience_er_gyldig_paa_tilfeldige_input() {
         let mut changes = [BitSet::new(a.len()), BitSet::new(b.len())];
         let [c1, c2] = &mut changes;
         PatienceLcs::new(&a, &b, c1, c2).execute(false).unwrap();
-        // Uendrede elementer må pares 1:1 og være like.
+        // Unchanged elements must be paired 1:1 and be equal.
         let kept1: Vec<u32> = (0..a.len())
             .filter(|&i| !changes[0].get(i))
             .map(|i| a[i])
@@ -135,7 +131,7 @@ fn patience_er_gyldig_paa_tilfeldige_input() {
 }
 
 #[test]
-fn store_input_uten_felles_elementer() {
+fn large_input_without_common_elements() {
     let a: Vec<u32> = (0..50_000).collect();
     let b: Vec<u32> = (50_000..100_000).collect();
     assert_eq!(

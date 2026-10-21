@@ -1,4 +1,4 @@
-//! Linja over diffen med stien til fila som vises.
+//! The line above the diff with the path of the file being shown.
 
 use gpui::{Div, FontWeight, div, prelude::*, px};
 
@@ -6,7 +6,7 @@ use crate::list::TEXT_SIZE;
 use crate::text::FAMILY;
 use crate::theme::UiTheme;
 
-/// Mappa kuttes når det blir trangt, filnavnet står alltid.
+/// The folder is cut when space is tight; the file name always stays.
 pub fn file_header(path: &str, scale: f32, theme: &UiTheme) -> Div {
     let (dir, name) = match path.rsplit_once('/') {
         Some((dir, name)) => (Some(format!("{dir}/")), name),

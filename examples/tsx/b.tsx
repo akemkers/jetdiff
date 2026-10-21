@@ -2,23 +2,23 @@ import { useState } from "react";
 
 type Props = {
   ticker: string;
-  kurs: number;
-  endring?: number;
+  price: number;
+  change?: number;
 };
 
-export function KursKort({ ticker, kurs, endring = 0 }: Props) {
-  const [vis, setVis] = useState(true);
-  const retning = endring >= 0 ? "opp" : "ned";
+export function QuoteCard({ ticker, price, change = 0 }: Props) {
+  const [show, setShow] = useState(true);
+  const direction = change >= 0 ? "up" : "down";
 
   return (
-    <section className="kort" aria-label={ticker}>
+    <section className="card" aria-label={ticker}>
       <h2>{ticker}</h2>
-      <button onClick={() => setVis((v) => !v)}>
-        {vis ? "Skjul" : "Vis"} kurs
+      <button onClick={() => setShow((v) => !v)}>
+        {show ? "Hide" : "Show"} price
       </button>
-      {vis && (
-        <span className={`kurs ${retning}`}>
-          {kurs.toFixed(2)} ({endring}%)
+      {show && (
+        <span className={`price ${direction}`}>
+          {price.toFixed(2)} ({change}%)
         </span>
       )}
     </section>

@@ -1,7 +1,7 @@
-//! Port av `ChunkOptimizer.kt`. Flytter rene insert/delete-blokker langs like elementer
-//! for å slå sammen endringer og legge grensene på "gode" steder.
+//! Port of `ChunkOptimizer.kt`. Shifts pure insert/delete blocks along equal elements
+//! to merge changes and put the boundaries in "good" places.
 //!
-//! Den generiske delen er `optimize`, strategien er `get_shift`.
+//! The generic part is `optimize`; the strategy is `get_shift`.
 
 use crate::by_line::Line;
 use crate::by_word::InlineChunk;
@@ -10,8 +10,8 @@ use crate::policy::{UNIMPORTANT_LINE_CHAR_COUNT, is_ws_byte};
 use crate::side::Side;
 use crate::trim::{expand_backward, expand_forward};
 
-/// `get_shift(touch_side, equal_forward, equal_backward, range1, range2)` gir 0 for ingen flytting,
-/// > 0 for å flytte forover og < 0 bakover.
+/// `get_shift(touch_side, equal_forward, equal_backward, range1, range2)` returns 0 for no shift,
+/// > 0 to shift forward and < 0 to shift backward.
 pub(crate) fn optimize<T: Eq>(
     data1: &[T],
     data2: &[T],
@@ -32,12 +32,12 @@ fn process_last_ranges<T: Eq>(
     ranges: &mut Vec<Range>,
     get_shift: &mut impl FnMut(Side, usize, usize, Range, Range) -> isize,
 ) {
-    // Løkke i stedet for rekursjonen i originalen, sammenslåing prøver på nytt med forrige par
+    // A loop instead of the recursion in the original; merging tries again with the previous pair
     while ranges.len() >= 2 {
         let range1 = ranges[ranges.len() - 2];
         let range2 = ranges[ranges.len() - 1];
         if range1.end1 != range2.start1 && range1.end2 != range2.start2 {
-            // Ikke en ren insert/delete. Ville bare vært flyttbar om input ikke var en LCS.
+            // Not a pure insert/delete. Would only be shiftable if the input were not an LCS.
             return;
         }
 
@@ -95,7 +95,7 @@ fn process_last_ranges<T: Eq>(
         if shift != 0 {
             let s = |x: usize| {
                 x.checked_add_signed(shift)
-                    .expect("shift utenfor sekvensen")
+                    .expect("shift outside the sequence")
             };
             ranges.truncate(ranges.len() - 2);
             ranges.push(Range::new(
@@ -115,7 +115,7 @@ fn process_last_ranges<T: Eq>(
     }
 }
 
-/// `WordChunkOptimizer`: foretrekk grenser der ordene er skilt med whitespace.
+/// `WordChunkOptimizer`: prefer boundaries where the words are separated by whitespace.
 pub(crate) fn optimize_word_chunks(
     text1: &str,
     text2: &str,
@@ -132,7 +132,7 @@ pub(crate) fn optimize_word_chunks(
             let touch_text = touch_side.select(text1, text2);
             let touch_start = touch_side.select(range2.start1, range2.start2);
 
-            // Allerede skilt med whitespace
+            // Already separated by whitespace
             if is_separated_with_whitespace(
                 touch_text,
                 &touch_words[touch_start - 1],
@@ -192,7 +192,7 @@ fn is_separated_with_whitespace(text: &str, word1: &InlineChunk, word2: &InlineC
         .any(|&b| is_ws_byte(b))
 }
 
-/// `LineChunkOptimizer`: foretrekk insert/delete avgrenset av tomme (eller "uviktige") linjer.
+/// `LineChunkOptimizer`: prefer insert/delete bounded by empty (or "unimportant") lines.
 pub(crate) fn optimize_line_chunks(lines1: &[Line], lines2: &[Line], changes: &Changes) -> Changes {
     let optimizer = LineChunkOptimizer { lines1, lines2 };
     optimize(
@@ -227,7 +227,7 @@ impl LineChunkOptimizer<'_, '_> {
             .unwrap_or(0)
     }
 
-    /// Tom linje i uendret kontekst: insert/delete skal ligge rett før eller etter den.
+    /// Empty line in unchanged context: the insert/delete should sit right before or after it.
     fn unchanged_boundary_shift(&self, args: ShiftArgs, threshold: usize) -> Option<isize> {
         let (touch_side, equal_forward, equal_backward, _, range2) = args;
         let touch_lines = touch_side.select(self.lines1, self.lines2);
@@ -241,7 +241,7 @@ impl LineChunkOptimizer<'_, '_> {
         pick_shift(shift_forward, shift_backward)
     }
 
-    /// Tom linje i den endrede blokken: insert/delete skal starte eller slutte med den.
+    /// Empty line in the changed block: the insert/delete should start or end with it.
     fn changed_boundary_shift(&self, args: ShiftArgs, threshold: usize) -> Option<isize> {
         let (touch_side, equal_forward, equal_backward, range1, range2) = args;
         let non_touch_side = touch_side.other();
@@ -282,7 +282,7 @@ fn find_prev_unimportant_line(
     (0..count).find(|&i| lines[offset - i].non_space_chars <= threshold)
 }
 
-/// `None` betyr prøv neste regel. Står vi allerede på en god grense flytter vi ikke.
+/// `None` means try the next rule. If we are already on a good boundary, we do not shift.
 fn pick_shift(shift_forward: Option<usize>, shift_backward: Option<usize>) -> Option<isize> {
     match (shift_forward, shift_backward) {
         (None, None) => None,
@@ -297,7 +297,7 @@ mod tests {
     use super::*;
     use crate::policy::ComparisonPolicy;
 
-    /// "" er tom linje, resten er vanlige linjer. Endringer inn, endringer ut.
+    /// "" is an empty line, the rest are ordinary lines. Changes in, changes out.
     fn run(
         a: &[&str],
         b: &[&str],
@@ -325,43 +325,43 @@ mod tests {
     }
 
     #[test]
-    fn allerede_ved_tom_linje_flyttes_ikke() {
+    fn already_at_empty_line_is_not_shifted() {
         let a = ["A", "", "B"];
         let b = ["A", "", "X", "", "B"];
         assert_eq!(run(&a, &b, &[(1, 1, 1, 3)]), vec![(1, 1, 1, 3)]);
     }
 
     #[test]
-    fn flytter_forover_til_tom_linje_i_konteksten() {
+    fn shifts_forward_to_empty_line_in_context() {
         let a = ["P", "Q", "", "R"];
         let b = ["P", "Q", "X", "Q", "", "R"];
         assert_eq!(run(&a, &b, &[(1, 1, 1, 3)]), vec![(2, 2, 2, 4)]);
     }
 
     #[test]
-    fn flytter_bakover_til_tom_linje_i_konteksten() {
+    fn shifts_backward_to_empty_line_in_context() {
         let a = ["R", "", "Q", "P"];
         let b = ["R", "", "Q", "X", "Q", "P"];
         assert_eq!(run(&a, &b, &[(3, 3, 3, 5)]), vec![(2, 2, 2, 4)]);
     }
 
     #[test]
-    fn innsatt_blokk_starter_med_tom_linje() {
+    fn inserted_block_starts_with_empty_line() {
         let a = ["P", "Q", "R"];
         let b = ["P", "Q", "", "X", "Q", "R"];
         assert_eq!(run(&a, &b, &[(1, 1, 1, 4)]), vec![(2, 2, 2, 5)]);
     }
 
     #[test]
-    fn uviktig_linje_brukes_naar_ingen_er_tomme() {
-        // Linjer med over 3 tegn er "store", så bare "}" er uviktig
+    fn unimportant_line_is_used_when_none_are_empty() {
+        // Lines with more than 3 characters are "big", so only "}" is unimportant
         let a = ["pppp", "qqqq", "}", "rrrr"];
         let b = ["pppp", "qqqq", "xxxx", "qqqq", "}", "rrrr"];
         assert_eq!(run(&a, &b, &[(1, 1, 1, 3)]), vec![(2, 2, 2, 4)]);
     }
 
     #[test]
-    fn slaar_sammen_med_neste_endring() {
+    fn merges_with_next_change() {
         // [A]B[B] -> [AB]B
         let a = ["P", "Q", "Z"];
         let b = ["P", "Q", "Q", "W"];
@@ -372,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn slaar_sammen_med_forrige_endring() {
+    fn merges_with_previous_change() {
         // [A]A[B] -> A[AB]
         let a = ["Z", "Q", "P"];
         let b = ["W", "Q", "Q", "P"];

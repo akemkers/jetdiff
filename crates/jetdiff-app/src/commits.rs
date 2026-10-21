@@ -1,4 +1,4 @@
-//! Commit-lista. Rad 0 og `None` er working tree. Hash i stedet for rad, så valget overlever en reload.
+//! The commit list. Row 0 and `None` are Local changes. A hash instead of a row, so the selection survives a reload.
 
 use std::rc::Rc;
 
@@ -6,7 +6,7 @@ use jetdiff_git::Commit;
 
 use crate::step;
 
-pub const LOCAL_CHANGES: &str = "Lokale endringer";
+pub const LOCAL_CHANGES: &str = "Local changes";
 
 #[derive(Default)]
 pub struct Commits {
@@ -45,13 +45,13 @@ impl Commits {
 
     pub fn set_commits(&mut self, commits: Vec<Commit>) {
         self.commits = commits.into();
-        // En commit som er borte, som etter en rebase, gir working tree
+        // A commit that is gone, as after a rebase, gives Local changes
         if self.row_of(&self.cursor) == 0 {
             self.cursor = None;
         }
     }
 
-    /// For når visningen ikke fikk byttet.
+    /// For when the view could not switch.
     pub fn set_selected(&mut self, hash: Option<String>) {
         self.selected = hash;
     }
@@ -62,7 +62,7 @@ impl Commits {
         row
     }
 
-    /// `Some` når valget endret seg.
+    /// `Some` when the selection changed.
     pub fn select(&mut self, row: usize) -> Option<Option<String>> {
         let hash = self.hash_at(row);
         self.cursor = hash.clone();
@@ -77,7 +77,7 @@ impl Commits {
         self.select(self.row_of(&self.cursor))
     }
 
-    /// En commit som ikke er i lista gir rad 0.
+    /// A commit that is not in the list gives row 0.
     fn row_of(&self, hash: &Option<String>) -> usize {
         hash.as_ref().map_or(0, |h| {
             self.commits
@@ -97,14 +97,14 @@ pub fn age(seconds: i64) -> String {
     const HOUR: i64 = 60 * MINUTE;
     const DAY: i64 = 24 * HOUR;
     let ago =
-        |n: i64, one: &str, many: &str| format!("{n} {} siden", if n == 1 { one } else { many });
+        |n: i64, one: &str, many: &str| format!("{n} {} ago", if n == 1 { one } else { many });
     match seconds {
-        s if s < MINUTE => "nå".into(),
-        s if s < HOUR => format!("{} min siden", s / MINUTE),
-        s if s < DAY => ago(s / HOUR, "time", "timer"),
-        s if s < 30 * DAY => ago(s / DAY, "dag", "dager"),
-        s if s < 365 * DAY => ago(s / (30 * DAY), "måned", "måneder"),
-        s => ago(s / (365 * DAY), "år", "år"),
+        s if s < MINUTE => "now".into(),
+        s if s < HOUR => format!("{} min ago", s / MINUTE),
+        s if s < DAY => ago(s / HOUR, "hour", "hours"),
+        s if s < 30 * DAY => ago(s / DAY, "day", "days"),
+        s if s < 365 * DAY => ago(s / (30 * DAY), "month", "months"),
+        s => ago(s / (365 * DAY), "year", "years"),
     }
 }
 
@@ -121,19 +121,19 @@ mod tests {
     }
 
     #[test]
-    fn alder() {
-        assert_eq!(age(-5), "nå");
-        assert_eq!(age(59), "nå");
-        assert_eq!(age(120), "2 min siden");
-        assert_eq!(age(3600), "1 time siden");
-        assert_eq!(age(5 * 3600), "5 timer siden");
-        assert_eq!(age(86400), "1 dag siden");
-        assert_eq!(age(40 * 86400), "1 måned siden");
-        assert_eq!(age(800 * 86400), "2 år siden");
+    fn age_text() {
+        assert_eq!(age(-5), "now");
+        assert_eq!(age(59), "now");
+        assert_eq!(age(120), "2 min ago");
+        assert_eq!(age(3600), "1 hour ago");
+        assert_eq!(age(5 * 3600), "5 hours ago");
+        assert_eq!(age(86400), "1 day ago");
+        assert_eq!(age(40 * 86400), "1 month ago");
+        assert_eq!(age(800 * 86400), "2 years ago");
     }
 
     #[test]
-    fn velger_bare_ved_endring() {
+    fn selects_only_on_change() {
         let mut c = Commits::new(vec![commit("a"), commit("b")]);
         assert_eq!(c.len(), 3);
         assert_eq!(c.select(0), None);
@@ -144,7 +144,7 @@ mod tests {
     }
 
     #[test]
-    fn borte_commit_gir_working_tree() {
+    fn missing_commit_gives_local_changes() {
         let mut c = Commits::new(vec![commit("a")]);
         c.move_cursor(true);
         c.set_commits(vec![commit("b")]);

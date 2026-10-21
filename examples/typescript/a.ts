@@ -1,34 +1,34 @@
 import { formatNumber } from "./format";
 
-/** Posisjon i en portefølje. */
-export interface Posisjon {
+/** A position in a portfolio. */
+export interface Position {
   ticker: string;
-  antall: number;
-  snittkurs: number;
+  quantity: number;
+  averagePrice: number;
 }
 
-export const MAKS_POSISJONER = 100;
+export const MAX_POSITIONS = 100;
 
-export function verdi(p: Posisjon, kurs: number): number {
-  return p.antall * kurs;
+export function value(p: Position, price: number): number {
+  return p.quantity * price;
 }
 
-export class Portefolje {
-  private posisjoner: Posisjon[] = [];
+export class Portfolio {
+  private positions: Position[] = [];
 
-  leggTil(p: Posisjon): void {
-    this.posisjoner.push(p);
+  add(p: Position): void {
+    this.positions.push(p);
   }
 
-  beskriv(): string {
-    return `Portefølje med ${this.posisjoner.length} posisjoner`;
+  describe(): string {
+    return `Portfolio with ${this.positions.length} positions`;
   }
 
-  // Sum uten kurs, bruker snittkurs
+  // Sum without prices, uses the average price
   sum(): number {
     let total = 0;
-    for (const p of this.posisjoner) {
-      total += verdi(p, p.snittkurs);
+    for (const p of this.positions) {
+      total += value(p, p.averagePrice);
     }
     return total;
   }

@@ -1,5 +1,5 @@
-//! Én side i split: bakgrunner, ord-markering, tekst, linjenumre og error stripe. Tegner bare
-//! det `jetdiff-viewmodel` gir, og bare synlige linjer.
+//! One side in Split: backgrounds, inline highlights, text, line numbers and the hunk minimap. Draws only
+//! what `jetdiff-viewmodel` gives, and only visible lines.
 
 use std::ops::{Range, RangeInclusive};
 
@@ -37,35 +37,35 @@ pub struct SplitSide<'a> {
     pub stripe: &'a StripeRects,
 }
 
-/// Den markerte linja slik denne siden tegner den.
+/// The cursor's line as this side draws it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CaretRow {
     pub line: usize,
-    /// Aktiv side med fokus får full farge, så man ser hvor `o` virker.
+    /// The active side with focus gets full color, so you can see where `o` acts.
     pub active: bool,
 }
 
-/// Det som er synlig i viewporten denne framen.
+/// What is visible in the viewport this frame.
 struct Visible {
-    /// Logiske linjer, også de som er skjult i en kollapset fold.
+    /// Logical lines, also those hidden in a collapsed fold.
     logical: RangeInclusive<usize>,
-    /// Visuelle linjer, der en kollapset fold er én linje.
+    /// Visual lines, where a collapsed fold is one line.
     visual: RangeInclusive<usize>,
-    /// Linjene som har tekst og nummer. Kollapsede folds har ingen av delene
+    /// The lines that have text and a number. Collapsed folds have neither
     /// (`hideLineNumberPredicate`).
     lines: Vec<usize>,
 }
 
 impl SplitSide<'_> {
-    /// Maler lagene nedenfra og opp. Returnerer bredden av den bredeste synlige linja, for
-    /// maks horisontal scroll.
+    /// Paints the layers from the bottom up. Returns the width of the widest visible line, for
+    /// max horizontal scroll.
     pub fn paint(&self, cache: &mut SideCache, window: &mut Window, cx: &mut App) -> f32 {
         let visible = self.visible();
         let widest = window.with_content_mask(mask(self.area(self.geom.bounds())), |window| {
             let bottom = self.top + self.height;
             paint_code_background(self.geom, self.top, bottom, self.theme, window);
             self.paint_block_backgrounds(&visible, window);
-            // Over diff-bakgrunnene, ellers forsvinner den i endringer
+            // Over the diff backgrounds, otherwise it disappears in hunks
             self.paint_caret_row(&visible, window);
             self.paint_folds(&visible, window);
             let widest = self.paint_text(&visible, cache, window, cx);
@@ -90,12 +90,12 @@ impl SplitSide<'_> {
             .layout(self.geom.side, self.style.line_height())
     }
 
-    /// Y på skjermen for en y i dokumentet.
+    /// Y on screen for a y in the document.
     fn screen_y(&self, y: f32) -> f32 {
         self.top + y - self.scroll_y
     }
 
-    /// Hele høyden til siden, fra `x.start` til `x.end`.
+    /// The whole height of the side, from `x.start` to `x.end`.
     fn area(&self, x: Range<f32>) -> Bounds<Pixels> {
         rect(x, self.top, self.top + self.height)
     }
@@ -117,7 +117,7 @@ impl SplitSide<'_> {
         }
     }
 
-    /// Per blokk, ikke per linje, så en stor endring blir ett rektangel.
+    /// Per hunk, not per line, so a large hunk becomes one rectangle.
     fn paint_block_backgrounds(&self, visible: &Visible, window: &mut Window) {
         let geom = self.geom;
         let side = geom.side;
@@ -160,7 +160,7 @@ impl SplitSide<'_> {
         );
     }
 
-    /// `DiffLineSeparatorRenderer`: bølge over gutter og tekst, med fasen fra divideren.
+    /// `DiffLineSeparatorRenderer`: a wave over the gutter and text, with the phase from the divider.
     fn paint_folds(&self, visible: &Visible, window: &mut Window) {
         let geom = self.geom;
         let line_height = self.style.line_height();
@@ -186,8 +186,8 @@ impl SplitSide<'_> {
         }
     }
 
-    /// Ord-markering og tekst, klippet så teksten ikke flyter inn i gutteren ved sidescroll.
-    /// Returnerer bredden av den bredeste linja.
+    /// Inline highlights and text, clipped so the text doesn't flow into the gutter on sideways scroll.
+    /// Returns the width of the widest line.
     fn paint_text(
         &self,
         visible: &Visible,
@@ -261,7 +261,7 @@ impl SplitSide<'_> {
             self.theme,
             window,
         );
-        // Standardfargen forsvinner mot diff-bakgrunnen, spesielt blå
+        // The default color disappears against the diff background, especially blue
         let changed = self.diff.line_highlight(side, line).block.is_some();
         let color = if changed {
             self.theme.line_number_caret_row

@@ -1,5 +1,5 @@
-//! Filtype-ikoner som Nerd Font-tegn, med samme utvalg som i GPUI-visningen. Fargene er fra
-//! SVG-ene i `jetdiff-ui/icons`, lys og mørk variant.
+//! File type icons as Nerd Font characters, with the same selection as in the GPUI view. The colors are from
+//! the SVGs in `jetdiff-ui/icons`, light and dark variant.
 
 use jetdiff_viewmodel::Language;
 use ratatui::style::Color;
@@ -48,7 +48,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ikonene_er_en_kolonne() {
+    fn the_icons_are_one_column() {
         for path in ["a.rs", "a.kt", "a.ts", "a.txt", "a.go"] {
             assert_eq!(file_icon(path, true).glyph.width(), Some(1), "{path}");
         }
@@ -56,7 +56,7 @@ mod tests {
     }
 
     #[test]
-    fn fargen_folger_temaet() {
+    fn the_color_follows_the_theme() {
         assert_eq!(file_icon("a.rs", true).color, Color::Rgb(0xC7, 0x7D, 0x55));
         assert_eq!(file_icon("a.rs", false).color, Color::Rgb(0xE6, 0x6D, 0x17));
     }

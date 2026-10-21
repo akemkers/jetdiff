@@ -1,4 +1,4 @@
-//! Utklippstavla via OSC 52, som virker over SSH i terminaler som støtter den.
+//! The clipboard via OSC 52, which works over SSH in terminals that support it.
 
 use std::io::Write;
 
@@ -30,7 +30,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn base64_som_rfc_4648() {
+    fn base64_like_rfc_4648() {
         assert_eq!(base64(b""), "");
         assert_eq!(base64(b"f"), "Zg==");
         assert_eq!(base64(b"fo"), "Zm8=");

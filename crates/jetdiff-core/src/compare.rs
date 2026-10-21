@@ -1,4 +1,4 @@
-//! Inngangen for diff. Tilsvarer `compareLines`, `compareLinesInner` og `processBlocks` i
+//! The entry point for diff. Corresponds to `compareLines`, `compareLinesInner` and `processBlocks` in
 //! `ComparisonManagerImpl.java`.
 
 use crate::by_line;
@@ -7,10 +7,10 @@ use crate::fragments::{DiffFragment, LineFragment, LineOffsets, convert_into_lin
 use crate::lcs::DiffTooBig;
 use crate::policy::{ComparisonPolicy, is_equal_texts};
 
-/// `DiffConfig.MAX_BAD_LINES`: etter så mange for store fragmenter gir vi opp ord-diff.
+/// `DiffConfig.MAX_BAD_LINES`: after this many fragments that are too big, we give up on the word diff.
 pub const MAX_BAD_LINES: usize = 3;
 
-/// Linjediff uten inner fragments. Linjer deles kun på `'\n'`, en `'\r'` er vanlig innhold.
+/// Line diff without inner fragments. Lines are split on `'\n'` only; a `'\r'` is ordinary content.
 pub fn compare_lines(
     text1: &str,
     text2: &str,
@@ -29,8 +29,8 @@ pub fn compare_lines(
     ))
 }
 
-/// Linjediff med ord-fragmenter (`InnerFragmentsPolicy.WORDS`). Bare linjediffen kan gi
-/// `DiffTooBig`, for store fragmenter får `inner: None`.
+/// Line diff with word fragments (`InnerFragmentsPolicy.WORDS`). Only the line diff can return
+/// `DiffTooBig`; fragments that are too big get `inner: None`.
 pub fn compare_lines_inner(
     text1: &str,
     text2: &str,
@@ -45,7 +45,7 @@ pub fn compare_lines_inner(
     ))
 }
 
-/// Det side-ved-side-viseren viser for BY_WORD: ord-diff, så `process_blocks` med squash.
+/// What the side-by-side viewer shows for BY_WORD: word diff, then `process_blocks` with squash.
 pub fn compare_for_viewer(
     text1: &str,
     text2: &str,
@@ -67,7 +67,7 @@ fn create_inner_fragments(
     for fragment in line_fragments {
         assert!(fragment.inner.is_none());
 
-        // Ikke prøv flere etter noen feil
+        // Don't try any more after some failures
         let try_compute_differences = too_big_chunks_count < MAX_BAD_LINES;
         match create_inner_fragments_for(fragment, text1, text2, policy, try_compute_differences) {
             Ok(fragments) => result.extend(fragments),
@@ -92,7 +92,7 @@ fn create_inner_fragments_for(
     let sub_sequence2 = &text2[fragment.offsets2.clone()];
 
     if fragment.lines1.is_empty() || fragment.lines2.is_empty() {
-        // Insert eller delete
+        // Insert or delete
         if is_equal_texts(sub_sequence1, sub_sequence2, policy) {
             return Ok(vec![fragment.with_inner(Some(Vec::new()))]);
         }
@@ -126,7 +126,7 @@ fn create_inner_word_fragments(
     for (i, block) in line_blocks.into_iter().enumerate() {
         let offsets = block.offsets;
 
-        // Siste blokk får fragmentets sluttlinje, ellers blir tom siste linje feil
+        // The last block gets the fragment's end line, otherwise an empty last line goes wrong
         let current_end_line1 = if i != last {
             current_start_line1 + block.newlines1
         } else {
@@ -152,8 +152,8 @@ fn create_inner_word_fragments(
     Ok(chunks)
 }
 
-/// `processBlocks` med squash: fragmenter som ligger inntil hverandre slås sammen. `trim`
-/// hører til "ignore whitespaces and empty lines", som vi ikke har.
+/// `processBlocks` with squash: fragments that touch each other are merged. `trim`
+/// belongs to "ignore whitespaces and empty lines", which we don't have.
 fn process_blocks(old_fragments: &[LineFragment]) -> Vec<LineFragment> {
     old_fragments
         .chunk_by(is_adjoining)

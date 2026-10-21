@@ -1,5 +1,5 @@
-//! Port av `ByLineRt.kt` (bare 2-veis). Linjer matches først whitespace-blindt, og
-//! etterpå strammes matchingen inn til valgt policy.
+//! Port of `ByLineRt.kt` (two-way only). Lines are first matched ignoring whitespace, and
+//! the matching is then tightened to the chosen policy.
 
 use std::hash::{Hash, Hasher};
 
@@ -12,7 +12,7 @@ use crate::policy::{
 };
 use crate::trim::expand;
 
-/// Linjer uten `'\n'`. Resultatet er fair.
+/// Lines without `'\n'`. The result is fair.
 pub fn compare(
     lines1: &[&str],
     lines2: &[&str],
@@ -39,18 +39,18 @@ fn do_compare(
         let iw_lines2 = convert_mode(lines2, ComparisonPolicy::IgnoreWhitespaces);
 
         let iw_changes = compare_smart(&iw_lines1, &iw_lines2)?;
-        // Med vilje original-policy her, som i IntelliJ
+        // Original policy on purpose here, as in IntelliJ
         let iw_changes = optimize_line_chunks(lines1, lines2, &iw_changes);
         Ok(correct_changes_second_step(lines1, lines2, &iw_changes))
     }
 }
 
-/// Gjør IW-matchingen strikt etter policy.
+/// Makes the IW matching strict according to the policy.
 ///
-/// Linjer som er matchet og like beholdes. Linjer som ikke er matchet forblir umatchet.
-/// Linjer som er matchet men ulike: finn alle IW-like linjer i samme umatchede blokk og
-/// velg matchingen med flest eksakt like par. Da blir `.{ ..{ ...{` mot `..{ ...{` matchet
-/// som (1,3)-(0,2), mens `.{ ..{ ...{` mot `...{ ..{ .{` ikke mister IW-matchede linjer.
+/// Lines that are matched and equal are kept. Lines that are not matched stay unmatched.
+/// Lines that are matched but differ: find all IW-equal lines in the same unmatched block and
+/// pick the matching with the most exactly equal pairs. Then `.{ ..{ ...{` against `..{ ...{` is matched
+/// as (1,3)-(0,2), while `.{ ..{ ...{` against `...{ ..{ .{` does not lose IW-matched lines.
 fn correct_changes_second_step(lines1: &[Line], lines2: &[Line], changes: &Changes) -> Changes {
     let mut step = SecondStep {
         lines1,
@@ -131,7 +131,7 @@ impl<F: Fn(Range) -> Range> SecondStep<'_, '_, ChangeBuilder<F>> {
 
     fn align_exact_matching(&mut self, sub_lines1: &[usize], sub_lines2: &[usize]) {
         let n = sub_lines1.len().max(sub_lines2.len());
-        // Brute force er C(n, k), grensen holder søkerommet på rundt 250 tilfeller
+        // Brute force is C(n, k); the limit keeps the search space at around 250 cases
         let skip_aligning = n > 10 || sub_lines1.len() == sub_lines2.len();
 
         let pairs: Vec<(usize, usize)> = if skip_aligning {
@@ -162,8 +162,8 @@ impl<F: Fn(Range) -> Range> SecondStep<'_, '_, ChangeBuilder<F>> {
     }
 }
 
-/// For hver linje i `sub_lines1`, indeksen i `sub_lines2` den skal pares med. Velger
-/// kombinasjonen med flest like par, første vinner ved likhet.
+/// For each line in `sub_lines1`, the index in `sub_lines2` it is paired with. Picks
+/// the combination with the most equal pairs; the first one wins on a tie.
 fn best_matching_alignment(
     sub_lines1: &[usize],
     sub_lines2: &[usize],
@@ -221,7 +221,7 @@ fn best_matching_alignment(
     search.best
 }
 
-/// Sammenlign i to steg: først uten "uviktige" linjer, så diff gapene mellom matchede blokker.
+/// Compare in two steps: first without "unimportant" lines, then diff the gaps between matched blocks.
 fn compare_smart(lines1: &[Line], lines2: &[Line]) -> Result<Changes, DiffTooBig> {
     let (big_lines1, indexes1) = get_big_lines(lines1, UNIMPORTANT_LINE_CHAR_COUNT);
     let (big_lines2, indexes2) = get_big_lines(lines2, UNIMPORTANT_LINE_CHAR_COUNT);
@@ -276,13 +276,13 @@ fn convert_mode<'t>(original: &[Line<'t>], policy: ComparisonPolicy) -> Vec<Line
         .collect()
 }
 
-/// En linje med likhet og hash etter policy.
+/// A line with equality and hash according to the policy.
 #[derive(Debug, Clone)]
 pub(crate) struct Line<'t> {
     pub(crate) content: &'t str,
     policy: ComparisonPolicy,
     hash: i32,
-    /// Teller UTF-16-enheter som Java, så tegn utenfor BMP teller dobbelt mot terskelen.
+    /// Counts UTF-16 units like Java, so characters outside the BMP count double toward the threshold.
     pub(crate) non_space_chars: usize,
 }
 

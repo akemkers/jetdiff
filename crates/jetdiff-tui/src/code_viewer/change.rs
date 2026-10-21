@@ -1,23 +1,23 @@
-//! Endringen en rad hører til, og fargen den skal ha.
+//! The hunk a row belongs to, and the color it should have.
 
 use jetdiff_viewmodel::{DiffType, FileDiff, Row};
 
 #[derive(Clone, Copy)]
 pub(super) struct Change {
     pub(super) diff_type: DiffType,
-    /// Blokken har ord-markering, så linja får svakere bakgrunn og ordene står ut. Navnet er
-    /// fra IntelliJ.
+    /// The hunk has inline highlights, so the line gets a fainter background and the words stand out. The name is
+    /// from IntelliJ.
     pub(super) ignored: bool,
 }
 
 impl Change {
-    /// Fargen til hele blokken, som i split.
+    /// The color of the whole hunk, as in Split.
     pub(super) fn of_block(diff: &FileDiff, row: &Row) -> Option<Self> {
         row.block
             .map(|block| Self::new(diff, block, diff.blocks()[block].diff_type))
     }
 
-    /// Fargen til raden, slettet eller ny, som i unified.
+    /// The color of the row, deleted or added, as in Unified.
     pub(super) fn of_row(diff: &FileDiff, row: &Row) -> Option<Self> {
         row.block
             .map(|block| Self::new(diff, block, row.diff_type()))

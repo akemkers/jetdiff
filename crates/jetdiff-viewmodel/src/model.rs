@@ -1,5 +1,5 @@
-//! Diffmodell for én fil. Tilsvarer det `SimpleDiffViewer` bygger av `SimpleDiffChange`
-//! og highlighterne fra `SimpleDiffChangeUi`. Kolonner er UTF-8 bytes innen linja.
+//! Diff model for one file. Corresponds to what `SimpleDiffViewer` builds from `SimpleDiffChange`
+//! and the highlighters from `SimpleDiffChangeUi`. Columns are UTF-8 bytes within the line.
 
 use std::ops::Range;
 
@@ -10,7 +10,7 @@ use jetdiff_syntax::{Language, Token};
 use crate::columns::display_width;
 use crate::scroll::LineMapping;
 
-/// `TextDiffType` uten CONFLICT, som bare brukes i merge.
+/// `TextDiffType` without CONFLICT, which is only used in merge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DiffType {
     Inserted,
@@ -24,7 +24,7 @@ impl DiffType {
         match (has_deleted, has_inserted) {
             (true, false) => DiffType::Deleted,
             (false, true) => DiffType::Inserted,
-            // Begge tomme logges som feil i IntelliJ og blir MODIFIED
+            // Both empty is logged as an error in IntelliJ and becomes MODIFIED
             _ => DiffType::Modified,
         }
     }
@@ -33,10 +33,10 @@ impl DiffType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
     pub lines: [Range<usize>; 2],
-    /// Absolutte byte-offsets for hele linjer, som i `LineFragment`.
+    /// Absolute byte offsets for whole lines, as in `LineFragment`.
     pub offsets: [Range<usize>; 2],
     pub diff_type: DiffType,
-    /// `None` er hel-linje-highlight i full farge. `Some(vec![])` er ignored-farge uten ord.
+    /// `None` is a whole-line highlight in full color. `Some(vec![])` is the ignored color without words.
     pub inner: Option<Vec<DiffFragment>>,
 }
 
@@ -51,18 +51,18 @@ impl Block {
     }
 }
 
-/// Ord-highlight i full farge for sin egen type.
+/// Inline highlight in full color for its own kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InlineHighlight {
-    /// Tom range er en tom side av et ord-fragment: 2px vertikal strek ved `cols.start`
+    /// An empty range is an empty side of a word fragment: a 2px vertical stroke at `cols.start`
     /// (`DiffEmptyHighlighterRenderer`).
     pub cols: Range<usize>,
     pub diff_type: DiffType,
-    /// Fragmentet dekker linjeskiftet, så fargen fortsetter til høyre kant av viewporten.
+    /// The fragment covers the line break, so the color continues to the right edge of the viewport.
     pub past_line_end: bool,
 }
 
-/// Syntaks-token innen én linje.
+/// Syntax token within one line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxSpan {
     pub cols: Range<usize>,
@@ -71,7 +71,7 @@ pub struct SyntaxSpan {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LineHighlight<'a> {
-    /// Blokken linja ligger i.
+    /// The hunk the line is in.
     pub block: Option<usize>,
     pub inline: &'a [InlineHighlight],
 }
@@ -80,12 +80,12 @@ pub struct LineHighlight<'a> {
 struct SideData {
     text: String,
     line_offsets: LineOffsets,
-    /// Blokk per linje, for oppslag uten søk.
+    /// Hunk per line, for lookup without searching.
     line_block: Vec<Option<usize>>,
-    /// Ord-highlights per linje, flatt og sortert på linje.
+    /// Inline highlights per line, flat and sorted by line.
     inline: Vec<InlineHighlight>,
     inline_start: Vec<usize>,
-    /// Tomt uten språk. Samme oppslag som `inline`.
+    /// Empty without a language. Same lookup as `inline`.
     syntax: Vec<SyntaxSpan>,
     syntax_start: Vec<usize>,
 }
@@ -126,8 +126,8 @@ impl FileDiff {
         &self.blocks
     }
 
-    /// Blokken linja ligger i. Slettede linjer finnes bare på venstre side og nye linjer bare
-    /// på høyre. På den andre siden gjelder linja rett under der de mangler.
+    /// The hunk the line is in. Deleted lines exist only on Left and added lines only
+    /// on Right. On the other side the line right below where they are missing applies.
     pub fn block_at(&self, side: Side, line: usize) -> Option<usize> {
         self.side(side)
             .line_block
@@ -149,7 +149,7 @@ impl FileDiff {
         &self.side(side).text
     }
 
-    /// Siden som vises alene når den andre er tom, som for nye og slettede filer.
+    /// The side shown alone when the other is empty, as for added and deleted files.
     pub fn single_side(&self) -> Option<Side> {
         if self.text(Side::Left).is_empty() {
             Some(Side::Right)
@@ -160,22 +160,22 @@ impl FileDiff {
         }
     }
 
-    /// Nye og slettede filer vises alltid unified, så split slipper å vise én side alene.
+    /// Added and deleted files are always shown Unified, so Split doesn't have to show one side alone.
     pub fn can_split(&self) -> bool {
         self.single_side().is_none()
     }
 
-    /// Minst én linje. Tekst som slutter på `'\n'` har en tom siste linje, som i IntelliJ.
+    /// At least one line. Text that ends with `'\n'` has an empty last line, as in IntelliJ.
     pub fn line_count(&self, side: Side) -> usize {
         self.side(side).line_count()
     }
 
-    /// Linja byte-offsetet står på.
+    /// The line the byte offset is on.
     pub fn line_of_offset(&self, side: Side, offset: usize) -> usize {
         line_of_offset(&self.side(side).line_offsets, offset)
     }
 
-    /// Bredeste linje på begge sider, i kolonner.
+    /// Widest line on both sides, in columns.
     pub fn max_display_width(&self) -> usize {
         [Side::Left, Side::Right]
             .into_iter()
@@ -186,7 +186,7 @@ impl FileDiff {
             .unwrap_or(0)
     }
 
-    /// Uten `'\n'`.
+    /// Without `'\n'`.
     pub fn line(&self, side: Side, line: usize) -> &str {
         let s = self.side(side);
         &s.text[s.line_offsets.line_start(line)..s.line_offsets.line_end(line)]
@@ -203,7 +203,7 @@ impl FileDiff {
         }
     }
 
-    /// Parser hele teksten på hver side, så også slettede linjer får riktig syntaks.
+    /// Parses the whole text on each side, so deleted lines also get the right syntax.
     pub fn highlight_syntax(&mut self, lang: Language) {
         for s in &mut self.sides {
             s.highlight_syntax(lang);
@@ -281,7 +281,7 @@ impl SideData {
             syntax_start.push(syntax.len());
             let (start, end) = (lo.line_start(line), lo.line_end(line));
             let last = line + 1 == count;
-            // Spenn over flere linjer (blokkommentarer) blir liggende til siste linje
+            // Spans over several lines (block comments) stay until the last line
             while let Some(span) = spans.peek() {
                 if span.range.start >= end && !last {
                     break;
@@ -310,9 +310,9 @@ impl SideData {
     }
 }
 
-/// EXACT_RANGE-highlighter delt på linjer. Etter linjeslutt males bakgrunnen til
-/// highlighteren som dekker linjeskiftet, men ikke en som starter på det
-/// (`IterationState.getPastLineEndBackgroundAttributes` og `atBreak`-sjekken i `setAttributes`).
+/// EXACT_RANGE highlighter split into lines. After the line end, the background is painted for
+/// the highlighter that covers the line break, but not one that starts on it
+/// (`IterationState.getPastLineEndBackgroundAttributes` and the `atBreak` check in `setAttributes`).
 fn split_into_lines(
     lo: &LineOffsets,
     range: Range<usize>,
@@ -320,7 +320,7 @@ fn split_into_lines(
     out: &mut [Vec<InlineHighlight>],
 ) {
     if range.is_empty() {
-        // `offsetToLogicalPosition`: offset rett etter '\n' hører til neste linje
+        // `offsetToLogicalPosition`: an offset right after '\n' belongs to the next line
         let line = line_of_offset(lo, range.start);
         let col = range.start - lo.line_start(line);
         out[line].push(InlineHighlight {
@@ -373,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn type_fra_tomme_sider() {
+    fn kind_from_empty_sides() {
         let d = diff("a\nb\n", "a\nx\nb\n");
         assert_eq!(d.blocks()[0].diff_type, DiffType::Inserted);
         let d = diff("a\nx\nb\n", "a\nb\n");
@@ -383,11 +383,11 @@ mod tests {
     }
 
     #[test]
-    fn blokk_ved_linje() {
+    fn hunk_at_line() {
         let d = diff("a\nb\nc\n", "a\nx\nc\n");
         assert_eq!(d.block_at(Side::Right, 1), Some(0));
         assert_eq!(d.block_at(Side::Right, 0), None);
-        // Slettet linje: tom på høyre side, treffes på linja etter
+        // Deleted line: empty on Right, hit on the line after
         let d = diff("a\nx\nb\n", "a\nb\n");
         assert_eq!(d.block_at(Side::Left, 1), Some(0));
         assert_eq!(d.block_at(Side::Right, 1), Some(0));
@@ -395,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn linjer_per_side() {
+    fn lines_per_side() {
         let d = diff("a\nb", "a\nb\n");
         assert_eq!(d.line_count(Side::Left), 2);
         assert_eq!(d.line_count(Side::Right), 3);
@@ -404,14 +404,14 @@ mod tests {
     }
 
     #[test]
-    fn linje_utenfor_blokk_har_ingen_highlight() {
+    fn line_outside_hunk_has_no_highlight() {
         let d = diff("a\nb\n", "a\nc\n");
         assert_eq!(d.line_highlight(Side::Left, 0), LineHighlight::default());
         assert_eq!(d.line_highlight(Side::Left, 99), LineHighlight::default());
     }
 
     #[test]
-    fn syntaks_per_linje() {
+    fn syntax_per_line() {
         let mut d = diff("fn a() {}\n", "/* x\ny */ fn b() {}\n");
         d.highlight_syntax(Language::Rust);
         let tokens = |side, line| -> Vec<_> {
@@ -431,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn line_of_offset_ved_grenser() {
+    fn line_of_offset_at_boundaries() {
         let lo = LineOffsets::new("ab\n\ncd");
         assert_eq!(line_of_offset(&lo, 0), 0);
         assert_eq!(line_of_offset(&lo, 2), 0);
@@ -441,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn fragment_over_linjeskift_deles() {
+    fn fragment_over_line_break_is_split() {
         let lo = LineOffsets::new("ab\ncd\nef");
         let mut out = vec![Vec::new(); 3];
         split_into_lines(&lo, 1..7, DiffType::Modified, &mut out);
@@ -456,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn fragment_som_starter_pa_linjeskiftet_forlenges_ikke() {
+    fn fragment_starting_on_line_break_is_not_extended() {
         let lo = LineOffsets::new("ab\ncd");
         let mut out = vec![Vec::new(); 2];
         split_into_lines(&lo, 2..4, DiffType::Inserted, &mut out);
@@ -465,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn tomt_fragment_etter_linjeskift_havner_pa_neste_linje() {
+    fn empty_fragment_after_line_break_lands_on_next_line() {
         let lo = LineOffsets::new("ab\ncd");
         let mut out = vec![Vec::new(); 2];
         split_into_lines(&lo, 3..3, DiffType::Deleted, &mut out);

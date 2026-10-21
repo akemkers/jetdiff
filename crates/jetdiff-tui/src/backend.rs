@@ -1,5 +1,5 @@
-//! `CrosstermBackend` som bare sender fargen som er endret. ratatui sender forgrunn og
-//! bakgrunn hver gang én av dem endres, og bakgrunnen er da det meste av det som sendes ved
+//! A `CrosstermBackend` that only sends the color that changed. ratatui sends the foreground and
+//! background each time one of them changes, and the background is then most of what is sent during
 //! scroll.
 
 use std::io::{self, Write};
@@ -14,7 +14,7 @@ use ratatui::crossterm::style::{
 use ratatui::layout::{Position, Size};
 use ratatui::style::{Color, Modifier};
 
-/// Bare de jetdiff bruker.
+/// Only the ones jetdiff uses.
 const ATTRIBUTES: [(Modifier, Attribute); 2] = [
     (Modifier::BOLD, Attribute::Bold),
     (Modifier::ITALIC, Attribute::Italic),
@@ -54,7 +54,7 @@ impl<W: Write> Backend for TermBackend<W> {
             }
             last = Some((x, y));
             if cell.modifier != modifier {
-                // Reset tar fargene også
+                // Reset clears the colors too
                 queue!(writer, SetAttribute(Attribute::Reset))?;
                 (fg, bg) = (Color::Reset, Color::Reset);
                 for (flag, attribute) in ATTRIBUTES {
@@ -140,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn sender_bare_fargen_som_endres() {
+    fn sends_only_the_changed_color() {
         let bg = Color::Rgb(1, 2, 3);
         let a = Style::default().fg(Color::Rgb(9, 9, 9)).bg(bg);
         let b = a.fg(Color::Rgb(8, 8, 8));
@@ -151,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn reset_av_stil_sender_fargene_igjen() {
+    fn style_reset_sends_the_colors_again() {
         let a = Style::default().fg(Color::Rgb(9, 9, 9));
         let bold = a.add_modifier(Modifier::BOLD);
         assert_eq!(

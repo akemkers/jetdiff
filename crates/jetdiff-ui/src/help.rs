@@ -1,4 +1,4 @@
-//! Tastelinja med de viktigste tastene, og alle tastene i en popup på `?`.
+//! The keymap bar with the most important keys, and all the keys in a popup on `?`.
 
 use gpui::{Div, FontWeight, actions, div, prelude::*, px};
 use jetdiff_app::help::{ALL, BAR};
@@ -8,10 +8,10 @@ use crate::theme::UiTheme;
 
 actions!(jetdiff, [ToggleHelp, HideHelp]);
 
-/// Høyden på tastelinja nederst.
+/// The height of the keymap bar at the bottom.
 pub const BAR_HEIGHT: f32 = 24.;
 
-/// Mål i popupen. Gir to kolonner med seksjoner.
+/// Sizes in the popup. Gives two columns with sections.
 const KEYS_WIDTH: f32 = 110.;
 const SECTION_WIDTH: f32 = 290.;
 const SECTION_GAP: f32 = 32.;
@@ -46,7 +46,7 @@ impl KeyHelp {
             }))
     }
 
-    /// Dekker forelderen og legger popupen i midten.
+    /// Covers the parent and puts the popup in the middle.
     pub fn popup(&self) -> Div {
         let theme = self.theme;
         let sections = ALL.iter().map(|(title, keys)| {
@@ -105,7 +105,7 @@ impl KeyHelp {
                             .gap_y(px(14.))
                             .children(sections),
                     )
-                    .child("? eller Esc lukker"),
+                    .child("? or Esc closes"),
             )
     }
 }

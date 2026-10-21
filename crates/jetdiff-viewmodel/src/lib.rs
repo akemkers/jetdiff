@@ -1,5 +1,5 @@
-//! Visningsmodell for diffen av én fil, split eller unified. Ingen GUI-avhengighet, all geometri er
-//! piksler som UI-laget tegner rett ut.
+//! View model for the diff of one file, Split or Unified. No GUI dependency; all geometry is
+//! pixels that the UI layer draws as is.
 
 pub mod anim;
 pub mod columns;

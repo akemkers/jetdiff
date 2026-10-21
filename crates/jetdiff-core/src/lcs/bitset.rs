@@ -1,4 +1,4 @@
-/// Enkel bitset med samme semantikk som IntelliJ sin: lesing utenfor lengden gir `false`.
+/// A simple bitset with the same semantics as IntelliJ's: reading past the length gives `false`.
 #[derive(Debug, Clone)]
 pub(crate) struct BitSet {
     bits: Vec<bool>,

@@ -1,6 +1,6 @@
-//! Cache for shapede linjer. Generisk over verdien så den kan testes uten GPUI.
-//! Nøkkelen er det verdien avhenger av utenom linja (font, størrelse, farge, tekstversjon).
-//! Endres nøkkelen tømmes alt.
+//! Cache for shaped lines. Generic over the value so it can be tested without GPUI.
+//! The key is what the value depends on besides the line (font, size, color, text version).
+//! If the key changes, everything is cleared.
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -32,8 +32,8 @@ impl<K: PartialEq, V> LineCache<K, V> {
         self.lines.entry(line).or_insert_with(make)
     }
 
-    /// Kalles etter en frame. Over kapasitet beholdes bare linjer nær det synlige, så
-    /// en lang scroll gjennom en stor fil ikke holder på alt.
+    /// Called after a frame. Over capacity, only lines near the visible ones are kept, so
+    /// a long scroll through a large file doesn't hold on to everything.
     pub fn trim(&mut self, visible: Range<usize>) {
         if self.lines.len() <= self.capacity {
             return;
@@ -49,7 +49,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lager_bare_en_gang() {
+    fn makes_only_once() {
         let mut c: LineCache<u32, String> = LineCache::new(100);
         c.set_key(1);
         let mut calls = 0;
@@ -64,7 +64,7 @@ mod tests {
     }
 
     #[test]
-    fn ny_nokkel_tommer() {
+    fn new_key_clears() {
         let mut c: LineCache<&str, u8> = LineCache::new(100);
         c.set_key("menlo 13");
         c.get_or_insert_with(1, || 1);
@@ -76,18 +76,18 @@ mod tests {
     }
 
     #[test]
-    fn trim_beholder_naer_viewport() {
+    fn trim_keeps_near_viewport() {
         let mut c: LineCache<(), usize> = LineCache::new(10);
         c.set_key(());
         for line in 0..20 {
             c.get_or_insert_with(line, || line);
         }
         c.trim(10..12);
-        // Margin 5 rundt 10..12
+        // Margin 5 around 10..12
         let mut kept: Vec<_> = c.lines.keys().copied().collect();
         kept.sort();
         assert_eq!(kept, (5..17).collect::<Vec<_>>());
-        // Under kapasitet røres ingenting
+        // Under capacity nothing is touched
         let mut c: LineCache<(), usize> = LineCache::new(10);
         for line in 0..5 {
             c.get_or_insert_with(line, || line);

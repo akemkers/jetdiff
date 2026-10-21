@@ -1,5 +1,5 @@
-//! Filtreet til venstre, som i commit-dialogen til IntelliJ. Klikk på en fil velger den,
-//! klikk på en mappe klapper den sammen.
+//! The file tree on the left, as in IntelliJ's commit dialog. A click on a file selects it,
+//! a click on a folder collapses it.
 
 use std::rc::Rc;
 
@@ -22,8 +22,8 @@ use crate::theme::UiTheme;
 const INDENT: f32 = 16.;
 const ICON_SIZE: f32 = 16.;
 
-/// Valgt fil, indeks i endringslista. `None` når lista er tom. Treet og ChangesView
-/// observerer den.
+/// The selected file, an index in the change list. `None` when the list is empty. The tree and ChangesView
+/// observe it.
 pub struct Selection(pub Option<usize>);
 
 impl Selection {
@@ -37,9 +37,9 @@ pub struct ChangesTree {
     tree: FileTree,
     selection: Entity<Selection>,
     scroll: UniformListScrollHandle,
-    /// Følger zoomen i diffen, som hele UI-et i IntelliJ.
+    /// Follows the zoom in the diff, like the whole UI in IntelliJ.
     scale: f32,
-    /// Bredden innholdet trenger, uskalert. Regnes ut på nytt når endringene byttes.
+    /// The width the content needs, unscaled. Recomputed when the changes are replaced.
     content_width: Option<f32>,
     focus: FocusHandle,
     _selection: Subscription,
@@ -83,7 +83,7 @@ impl ChangesTree {
         }
     }
 
-    /// Valgt fil blir synlig, også når den er valgt med tastaturet i en lukket mappe.
+    /// The selected file becomes visible, also when it was selected with the keyboard in a closed folder.
     fn reveal(&mut self, cx: &mut Context<Self>) {
         let Some(file) = self.selection.read(cx).0 else {
             return;
@@ -94,7 +94,7 @@ impl ChangesTree {
         cx.notify();
     }
 
-    /// Mapper klappes sammen eller opp, filer velges.
+    /// Folders are collapsed or expanded, files are selected.
     fn open(&mut self, file: Option<usize>, cx: &mut Context<Self>) {
         match file {
             Some(file) => self.selection.update(cx, |s, cx| s.set(Some(file), cx)),
@@ -102,7 +102,7 @@ impl ChangesTree {
         }
     }
 
-    /// Bredden innholdet trenger, uskalert.
+    /// The width the content needs, unscaled.
     pub fn content_width(&mut self, window: &Window) -> f32 {
         *self.content_width.get_or_insert_with(|| {
             let char_width = TextStyle::new(TEXT_SIZE, window).char_width;
@@ -147,7 +147,7 @@ impl ChangesTree {
         let theme = cx.global::<Settings>().theme;
         let dark = theme.dark;
         let s = |v: f32| px(v * self.scale);
-        // Eksplisitt Embedded, ellers tolker GPUI `java.svg` som en URI og henter over HTTP
+        // Explicitly Embedded, otherwise GPUI reads `java.svg` as a URI and fetches it over HTTP
         let icon = |path: String| {
             img(ImageSource::Resource(Resource::Embedded(path.into())))
                 .size(s(ICON_SIZE))
@@ -195,7 +195,7 @@ impl ChangesTree {
             &RowKind::File(f) => {
                 let change = &self.tree.changes()[f];
                 let name = file_name(&change.path);
-                // Plassen der mappene har pila, så ikonene står under hverandre
+                // The space where the folders have the arrow, so the icons line up under each other
                 base.child(div().w(s(ICON_SIZE)).flex_none())
                     .child(icon(file_icon(&change.path, dark)))
                     .child(
@@ -244,7 +244,7 @@ impl Render for ChangesTree {
     }
 }
 
-/// Bredden som får plass til alle rader med alle mapper åpne, uskalert. Fonten er monospace.
+/// The width that fits all rows with all folders open, unscaled. The font is monospace.
 fn content_width(changes: &[FileChange], char_width: f32) -> f32 {
     let text = |s: &str| display_width(s) as f32 * char_width;
     let icons = 2. * (ICON_SIZE + GAP);
@@ -273,14 +273,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bredde_etter_lengste_rad() {
+    fn width_follows_longest_row() {
         let change = |path: &str| FileChange {
             path: path.into(),
             old_path: None,
             status: Status::Modified,
         };
-        // Mappa `src` med «1 fil» er bredere enn `a.rs` ett nivå inn
-        let dir = PAD_LEFT + 2. * (ICON_SIZE + GAP) + 30. + GAP + 2. + 50.;
+        // The folder `src` with «1 file» is wider than `a.rs` one level in
+        let dir = PAD_LEFT + 2. * (ICON_SIZE + GAP) + 30. + GAP + 2. + 60.;
         assert_eq!(content_width(&[change("src/a.rs")], 10.), dir + PAD_RIGHT);
         let file = PAD_LEFT + INDENT + 2. * (ICON_SIZE + GAP) + 200.;
         let long = format!("src/{}.rs", "x".repeat(17));

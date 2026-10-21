@@ -1,5 +1,5 @@
-//! Port av `Reindexer.kt`. Fjerner elementer som ikke finnes på andre siden før LCS,
-//! og mapper resultatet tilbake til originale indekser etterpå.
+//! Port of `Reindexer.kt`. Removes elements that don't exist on the other side before the LCS,
+//! and maps the result back to the original indices afterwards.
 
 use super::ChangeBuilder;
 use super::bitset::BitSet;
