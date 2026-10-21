@@ -1,29 +1,29 @@
 # jetdiff
 
-Binæren. Leser argumentene og config-fila, laster innholdet og åpner vinduet eller terminalvisningen.
+The binary. Reads the arguments and the config file, loads the content and opens the window or the terminal view.
 
-## Hvorfor
+## Why
 
-Alt annet er biblioteker som ikke antar noe om appen rundt. Det er fordi diff-viewen skal kunne bli en modul i et større verktøy. Denne craten er det eneste stedet som bestemmer hvordan jetdiff startes: argumenter og config-fil.
+Everything else is libraries that assume nothing about the app around them. That's because the diff view should be able to become a module in a larger tool. This crate is the only place that decides how jetdiff starts: arguments and config file.
 
-## Bruk
+## Usage
 
 ```
-cargo run --release -p jetdiff -- [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
+cargo run --release -p jetdiff -- [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]
 ```
 
-`gui.rs` og `tui.rs` ligger bak featurene med samme navn. `--tui` velger terminalen, ellers brukes vinduet når `gui` er bygd inn.
+`gui.rs` and `tui.rs` are behind the features with the same names. `--tui` picks the terminal; otherwise the window is used when `gui` is built in.
 
-Se hoved-[README](../../README.md) for argumentene, innstillingene og tastene.
+See the main [README](../../README.md) for the arguments, settings and keys.
 
 ```mermaid
 graph LR
-    args[argumenter] --> source{Source}
-    source -- to filer --> fd[FileDiff] --> fdv[FileDiffView]
-    source -- mappe --> wt[Repo::work_tree] --> cv[ChangesView]
+    args[arguments] --> source{Source}
+    source -- file pair --> fd[FileDiff] --> fdv[FileDiffView]
+    source -- folder --> wt[Repo::work_tree] --> cv[ChangesView]
     source -- commit --> c[Repo::commit] --> cv
 ```
 
-Innholdet lastes før vinduet åpnes, så feil som ukjent commit skrives til terminalen med exit-kode 1. Feil i argumentene eller config-fila gir exit-kode 2.
+The content is loaded before the window opens, so errors like an unknown commit are written to the terminal with exit code 1. Errors in the arguments or the config file give exit code 2.
 
-Tastene som ikke går gjennom vim-parseren i `jetdiff-viewmodel` ligger i `jetdiff_app::keys`. `bind_keys` i `gui.rs` gjør dem til GPUI-bindinger.
+The keys that don't go through the vim parser in `jetdiff-viewmodel` are in `jetdiff_app::keys`. `bind_keys` in `gui.rs` turns them into GPUI bindings.

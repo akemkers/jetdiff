@@ -1,16 +1,16 @@
 # jetdiff-viewmodel
 
-Visningsmodellen for diffen av én fil, split eller unified: scroll, folding, markert linje, taster og geometri.
+The view model for the diff of one file, Split or Unified: scroll, folding, cursor, keys and geometry.
 
-## Hvorfor
+## Why
 
-Det meste av det som gjør diffen i IntelliJ god, er logikk og ikke tegning. Sidene scroller i takt med et anker 1/3 ned, uendrede linjer foldes parvis på begge sider, trakten mellom sidene har bestemte kurver. Alt dette ligger her, uten GUI, så det kan testes uten vindu.
+Most of what makes the diff in IntelliJ good is logic, not drawing. The sides scroll in step with an anchor 1/3 down, unchanged lines are folded in pairs on both sides, and the diff divider between the sides has specific curves. All of that lives here, without a GUI, so it can be tested without a window.
 
-`jetdiff-ui` tegner bare det denne craten regner ut. Geometrien er i piksler, klar til å tegnes.
+`jetdiff-ui` only draws what this crate computes. The geometry is in pixels, ready to draw.
 
-`model` (`FileDiff`) er diffdataene for én fil. De ligger her fordi de er bygd for visning: syntaks, ord-markering og linjemappingen sync scroll bruker.
+`model` (`FileDiff`) is the diff data for one file. It lives here because it is built for display: syntax, inline highlights and the line mapping sync scroll uses.
 
-## Bruk
+## Usage
 
 ```rust
 use jetdiff_viewmodel::{
@@ -21,7 +21,7 @@ let mut diff = FileDiff::new(left, right, ComparisonPolicy::Default)?;
 diff.highlight_syntax(Language::Rust);
 let folding = Folding::new(&diff);
 
-// Nye og slettede filer blir unified uansett
+// Added and deleted files become Unified regardless
 let mut mode = DiffMode::new(diff.into(), folding.into(), unified);
 mode.init(viewport);
 
@@ -29,15 +29,15 @@ let mut keys = KeyParser::default();
 if let Parsed::Command(cmd) = keys.feed(key) {
     mode.execute(cmd, viewport, horizontal);
 }
-// mode.scroll() er målet. UI-et animerer dit og tegner.
+// mode.scroll() is the target. The UI animates there and draws.
 
-// `v`: cursoren blir på samme linje og høyde
+// `v`: the cursor stays on the same line and height
 mode.toggle(Folding::new(mode.diff()).into(), viewport);
 ```
 
 ```mermaid
 graph TD
-    key[tastetrykk] --> keys[keys: KeyParser]
+    key[keystroke] --> keys[keys: KeyParser]
     keys --> cmd[Command]
     cmd --> mode[mode: DiffMode]
     mode --> state[state: DiffState]
@@ -48,29 +48,29 @@ graph TD
     scrolloff --> unified
     folding[folding] --> state
     state --> scroll[scroll: sync scroll]
-    state --> cursor[cursor: markert linje]
-    scroll --> layout[layout og geometry]
+    state --> cursor[cursor]
+    scroll --> layout[layout and geometry]
     folding --> layout
-    layout --> ui[jetdiff-ui tegner]
-    divider[divider: trakten] --> ui
-    stripe[stripe: error stripe] --> ui
+    layout --> ui[jetdiff-ui draws]
+    divider[divider: the diff divider] --> ui
+    stripe[stripe: hunk minimap] --> ui
 ```
 
-- `model`: blokker, linjer og syntaks per side
-- `mode`: split eller unified, og byttet mellom dem
-- `state`: split. Samler markert linje, folding og scroll, og utfører `Command`
-- `unified`: rader over `FileDiff` der slettede linjer står over de nye, og tilstanden for dem. Ingen folding
-- `scrolloff`: hvor cursoren kan stå uten å scrolle, felles for begge
-- `scroll`: master-siden scroller, den andre regnes ut i samme frame
-- `folding`: uendrede linjer foldes, felles for begge sider
-- `layout`, `geometry`: vertikal og horisontal plassering per side, og unified med to nummerkolonner
-- `divider`, `separator`, `stripe`: trakten, bølgen på folds og error stripe
-- `keys`, `command`: keymap og kommandoene det gir
-- `theme`, `metrics`: farger og linjehøyde som IntelliJ
+- `model`: hunks, lines and syntax per side
+- `mode`: Split or Unified, and switching between them
+- `state`: Split. Brings together the cursor, folding and scroll, and carries out `Command`
+- `unified`: rows over `FileDiff` where deleted lines sit above the added ones, and the state for them. No folding
+- `scrolloff`: where the cursor can be without scrolling, shared by both
+- `scroll`: the master side scrolls, and the other is computed in the same frame
+- `folding`: unchanged lines are folded, shared by both sides
+- `layout`, `geometry`: vertical and horizontal placement per side, and Unified with two number columns
+- `divider`, `separator`, `stripe`: the diff divider, the wave on folds and the hunk minimap
+- `keys`, `command`: the keymap and the commands it gives
+- `theme`, `metrics`: colors and line height like IntelliJ
 
-Mange moduler er porter av bestemte klasser i IntelliJ, og navnet står øverst i fila. Research ligger i [`docs/research/`](../../docs/research).
+Many modules are ports of specific classes in IntelliJ, and the name is at the top of the file. Research is in [`docs/research/`](../../docs/research).
 
-## Tester
+## Tests
 
 ```
 cargo test -p jetdiff-viewmodel

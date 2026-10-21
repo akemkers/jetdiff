@@ -1,32 +1,32 @@
 # jetdiff-git
 
-Endringer og filinnhold fra git.
+Changes and file content from git.
 
-## Hvorfor
+## Why
 
-Resultatet skal være det samme som `git diff` gir. Derfor kaller craten `git` i stedet for å bruke et bibliotek. Da følger brukerens config og rename-deteksjon med.
+The result should be the same as what `git diff` gives. That's why the crate calls `git` instead of using a library. Then the user's config and rename detection come along.
 
-Craten bestemmer også hva som sammenlignes. Working tree er mot HEAD. Commit-lista har commitene siden merge-base med default-branchen, eller de siste når branchen ikke har egne.
+The crate also decides what is compared. Local changes are against HEAD. The commit list has the commits since the merge base with the default branch, or the latest ones when the branch has none of its own.
 
-## Bruk
+## Usage
 
 ```rust
 use jetdiff_git::Repo;
 
-let repo = Repo::work_tree(Path::new("."))?;   // eller Repo::commit(dir, "HEAD~2")
+let repo = Repo::work_tree(Path::new("."))?;   // or Repo::commit(dir, "HEAD~2")
 let changes = repo.changes()?;                  // Vec<FileChange>
-let [left, right] = repo.read(&changes[0])?;    // innholdet på hver side
-let commits = repo.commits()?;                  // branchens commits, maks 50
+let [left, right] = repo.read(&changes[0])?;    // the content on each side
+let commits = repo.commits()?;                  // the branch's commits, at most 50
 ```
 
-`name()` er mappenavnet til repoet.
+`name()` is the folder name of the repo.
 
 ```mermaid
 graph LR
-    dir[mappe] --> repo[Repo]
+    dir[folder] --> repo[Repo]
     repo -- git diff --> changes[Vec FileChange]
-    repo -- git cat-file / disk --> read["[venstre, høyre]"]
+    repo -- git cat-file / disk --> read["[left, right]"]
     repo -- git log --> commits[Vec Commit]
 ```
 
-Feil kommer som `String`, klare til å vises.
+Errors come as a `String`, ready to be shown.

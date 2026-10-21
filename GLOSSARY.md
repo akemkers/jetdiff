@@ -103,5 +103,5 @@ The line across the diff divider joining a closed fold on Left to the same fold 
 _Avoid_: connector
 
 **Hunk minimap**:
-Coloured marks in the scrollbar showing where the hunks are in the file.
+Colored marks in the scrollbar showing where the hunks are in the file.
 _Avoid_: error stripe, minimap, hunk markers

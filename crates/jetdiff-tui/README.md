@@ -1,48 +1,48 @@
 # jetdiff-tui
 
-Terminalvisningen: diffen, filtreet og commit-lista, for SSH og maskiner uten skjerm.
+The terminal view: the diff, the file tree and the commit list, for SSH and machines without a screen.
 
-## Hvorfor
+## Why
 
-Samme diff som GPUI-visningen, der GPU-en ikke finnes. Logikken ligger i `jetdiff-viewmodel` og `jetdiff-app`, så her er bare tegning i celler og input fra terminalen. Viewporten har linjehøyde 1, så scroll og scrolloff regnes i rader.
+The same diff as the GPUI view, where there is no GPU. The logic is in `jetdiff-viewmodel` and `jetdiff-app`, so all that's here is drawing in cells and input from the terminal. The viewport has a line height of 1, so scroll and scrolloff are counted in rows.
 
-I GPUI har sidene hver sin scroll, og trakten mellom dem viser hvilke linjer som hører sammen. Trakten tegnes med kurver, og det går ikke i en terminal. Her står venstre og høyre linje på samme rad i stedet. Er en endring kortere på den ene siden, fylles den ut med skraverte rader, så resten av fila står likt. Linjer med tekst felles settes på samme rad.
+In GPUI, each side has its own scroll, and the diff divider between them shows which lines belong together. The diff divider is drawn with curves, which a terminal can't do. Here the Left and Right lines sit on the same row instead. If a hunk is shorter on one side, it is filled in with hatched rows, so the rest of the file stays aligned. Lines with text in common are put on the same row.
 
-Radene lages av `UnifiedDiff::with_layout` med `RowLayout::Split`, så split og unified bruker samme `UnifiedState` for cursor og scroll.
+The rows are made by `UnifiedDiff::with_layout` with `RowLayout::Split`, so Split and Unified use the same `UnifiedState` for cursor and scroll.
 
-## Bruk
+## Usage
 
 ```rust
 use jetdiff_tui::{Settings, run_changes, run_file};
 
 let settings = Settings { theme, unified: false, side_panel_open: false, icons: true };
-run_file(diff, paths, &title, settings)?;          // to filer
-run_changes(repo, changes, &title, settings)?;     // et repo eller en commit
+run_file(diff, paths, &title, settings)?;          // a file pair
+run_changes(repo, changes, &title, settings)?;     // a repo or a commit
 ```
 
-Forskjeller fra GPUI-visningen:
+Differences from the GPUI view:
 
-- Split er justerte rader, uten trakt og sync scroll
-- Ingen folding, så `o`, `f`, `H` og `L` gjør ingenting, og `collapse_unchanged` brukes ikke
-- Ingen zoom og ingen scroll-animasjon
-- `y` kopierer med OSC 52, som virker over SSH når terminalen støtter det
-- Fargene er truecolor
-- Filikonene er Nerd Font-tegn i `icons.rs`, og `icons` skrur dem av
+- Split is aligned rows, without the diff divider and sync scroll
+- No folding, so `o`, `f`, `H` and `L` do nothing, and `collapse_unchanged` isn't used
+- No zoom and no scroll animation
+- `y` copies with OSC 52, which works over SSH when the terminal supports it
+- The colors are truecolor
+- The file icons are Nerd Font characters in `icons.rs`, and `icons` turns them off
 
 ```mermaid
 graph TD
-    app[app: løkka] --> diff[diff_view: DiffView]
-    app --> panel[panel: tre og commits]
-    app --> widgets[widgets: sti, taster, beskjed, hjelp]
+    app[app: the loop] --> diff[diff_view: DiffView]
+    app --> panel[panel: tree and commits]
+    app --> widgets[widgets: path, keys, message, help]
     app --> changes[jetdiff-app: Changes, Watcher]
-    app --> backend[backend: sender bare fargene som endres]
-    diff --> viewer[code_viewer: split og unified]
-    viewer --> text[text: én linje]
-    viewer --> geometry[geometry: celler]
+    app --> backend[backend: sends only the colors that change]
+    diff --> viewer[code_viewer: Split and Unified]
+    viewer --> text[text: one line]
+    viewer --> geometry[geometry: cells]
     diff --> state[jetdiff-viewmodel: UnifiedState]
 ```
 
-## Tester
+## Tests
 
 ```
 cargo test -p jetdiff-tui
