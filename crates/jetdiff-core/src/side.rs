@@ -1,4 +1,4 @@
-//! Port av `Side.kt`, bare det som trengs.
+//! Port of `Side.kt`, only what is needed.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Side {

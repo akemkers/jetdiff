@@ -1,5 +1,5 @@
-//! Port av to-sidedelen av `ByWordRt.kt`. Offsets er UTF-8 bytes. Tokeniseringen går på
-//! kodepunkter som i Java, og whitespace og tegnsetting er ASCII, så grensene blir de samme.
+//! Port of the two-sided part of `ByWordRt.kt`. Offsets are UTF-8 bytes. Tokenizing works on
+//! code points as in Java, and whitespace and punctuation are ASCII, so the boundaries are the same.
 
 use std::hash::{Hash, Hasher};
 
@@ -16,7 +16,7 @@ use crate::trim::{
     trim_range, trim_start,
 };
 
-/// Ord eller newline. Mellomrom og tegnsetting blir ikke chunks.
+/// A word or a newline. Spaces and punctuation do not become chunks.
 #[derive(Debug, Clone, Copy)]
 pub enum InlineChunk<'t> {
     Word {
@@ -219,7 +219,7 @@ pub fn convert_into_diff_fragments(changes: &Changes) -> Vec<DiffFragment> {
         .collect()
 }
 
-/// Sammenligner `text1` mot `text21 + text22` som én tekst, og deler resultatet i to.
+/// Compares `text1` against `text21 + text22` as one text, and splits the result in two.
 fn compare_punctuation_2_side(
     text1: &str,
     text21: &str,
@@ -257,7 +257,7 @@ fn split_iterable_2_side(changes: &Changes, offset: usize) -> (Vec<Range>, Vec<R
     (ranges1, ranges2)
 }
 
-/// `start` kan være -1 (fra `end - 1` på tom range), da er svaret false.
+/// `start` can be -1 (from `end - 1` on an empty range); then the answer is false.
 fn is_leading_trailing_space(text: &str, start: isize) -> bool {
     is_leading_space(text, start) || is_trailing_space(text, start)
 }
@@ -330,7 +330,7 @@ pub fn get_inline_chunks(text: &str) -> Vec<InlineChunk<'_>> {
             }
 
             if is_alpha {
-                // Kontinuerlig skrift, hvert tegn er et eget ord
+                // Continuous script: each character is its own word
                 chunks.push(word_chunk(text, offset, offset + ch.len_utf8(), ch as i32));
             } else if ch == '\n' {
                 chunks.push(InlineChunk::Newline { offset1: offset });
@@ -354,8 +354,8 @@ fn word_chunk(text: &str, offset1: usize, offset2: usize, hash: i32) -> InlineCh
     }
 }
 
-/// Matcher tegnsetting mellom ordene. Eksempel: "[ X { A ! B } Y ]" mot "( X ... Y )" gir tre
-/// grupper: "[" mot "(", "{" + "}" mot "..." og "]" mot ")".
+/// Matches punctuation between the words. Example: "[ X { A ! B } Y ]" against "( X ... Y )" gives three
+/// groups: "[" against "(", "{" + "}" against "..." and "]" against ")".
 struct AdjustmentPunctuationMatcher<'a, 't> {
     text1: &'a str,
     text2: &'a str,
@@ -364,7 +364,7 @@ struct AdjustmentPunctuationMatcher<'a, 't> {
     start_shift1: usize,
     start_shift2: usize,
     builder: ChangeBuilder,
-    // (start1, start2, end1, end2) fra forrige match_forward
+    // (start1, start2, end1, end2) from the previous match_forward
     last: Option<(usize, usize, usize, usize)>,
 }
 
@@ -463,21 +463,21 @@ impl AdjustmentPunctuationMatcher<'_, '_> {
         end2: usize,
     ) -> Result<(), DiffTooBig> {
         let (last_start1, last_start2, last_end1, last_end2) =
-            self.last.expect("match_forward mangler");
+            self.last.expect("match_forward missing");
 
         if last_start1 == start1 && last_start2 == start2 {
-            // Matchede ord rett etter hverandre, match gapet mellom ("A B" - "A B")
+            // Matched words right after each other: match the gap between them ("A B" - "A B")
             assert!(last_end1 == end1 && last_end2 == end2);
             return self.match_range(start1, start2, end1, end2);
         }
         if last_start1 < start1 && last_start2 < start2 {
-            // Umatchede ord mellom på begge sider ("A X B" - "A Y B")
+            // Unmatched words between them on both sides ("A X B" - "A Y B")
             assert!(last_end1 <= start1 && last_end2 <= start2);
             self.match_range(last_start1, last_start2, last_end1, last_end2)?;
             return self.match_range(start1, start2, end1, end2);
         }
 
-        // Umatchede ord mellom på bare én side ("A B" - "A Y B")
+        // Unmatched words between them on one side only ("A B" - "A Y B")
         self.match_complex_range(
             last_start1,
             last_start2,
@@ -532,7 +532,7 @@ impl AdjustmentPunctuationMatcher<'_, '_> {
         } else if start12 == start22 && end12 == end22 {
             self.match_complex_range_right(start12, end12, start11, end11, start21, end21)
         } else {
-            unreachable!("gapene overlapper ikke på noen side")
+            unreachable!("the gaps do not overlap on either side")
         }
     }
 
@@ -585,7 +585,7 @@ impl AdjustmentPunctuationMatcher<'_, '_> {
             &self.text1[start21..end21],
         )?;
 
-        // Speilet, 2-side-sammenligningen har to høyresider mens vi har to venstresider
+        // Mirrored: the two-sided comparison has two right sides while we have two left sides
         for ch in first.unchanged() {
             self.builder.mark_equal_range(
                 start11 + ch.start2,
@@ -663,7 +663,7 @@ fn default_corrector(iterable: &Changes, text1: &str, text2: &str) -> Changes {
 fn ignore_spaces_corrector(iterable: &Changes, text1: &str, text2: &str) -> Changes {
     let mut changes = Vec::new();
     for &range in &iterable.ranges {
-        // Match mellomrom der vi kan, ignorer dem der vi ikke kan
+        // Match spaces where we can, ignore them where we can't
         let expanded = expand_whitespaces(text1, text2, range);
         let trimmed = trim_range(
             text1,
@@ -752,7 +752,7 @@ mod tests {
     }
 
     #[test]
-    fn tokenisering() {
+    fn tokenizing() {
         assert_eq!(
             chunks("foo_bar, baz\nqux"),
             ["foo_bar", "baz", "\\n", "qux"]
@@ -763,16 +763,16 @@ mod tests {
     }
 
     #[test]
-    fn hash_er_lik_java() {
+    fn hash_equals_java() {
         let InlineChunk::Word { hash, .. } = get_inline_chunks("hello")[0] else {
             panic!()
         };
-        // "hello".hashCode() i Java
+        // "hello".hashCode() in Java
         assert_eq!(hash, 99162322);
     }
 
     #[test]
-    fn ord_og_tegnsetting() {
+    fn words_and_punctuation() {
         let d = ComparisonPolicy::Default;
         assert_eq!(fragments("foo bar baz", "foo qux baz", d), [("bar", "qux")]);
         assert_eq!(fragments("f(a, b)", "f(a)", d), [(", b", "")]);
@@ -783,7 +783,7 @@ mod tests {
     }
 
     #[test]
-    fn whitespace_policyer() {
+    fn whitespace_policies() {
         assert_eq!(
             fragments("a  b", "a b", ComparisonPolicy::Default),
             [(" ", "")]
@@ -797,7 +797,7 @@ mod tests {
     }
 
     #[test]
-    fn deler_i_linjeblokker() {
+    fn splits_into_line_blocks() {
         let blocks =
             compare_and_split("a x\nb\nc y\n", "a z\nb\nc w\n", ComparisonPolicy::Default).unwrap();
         let offsets: Vec<_> = blocks.iter().map(|b| b.offsets).collect();

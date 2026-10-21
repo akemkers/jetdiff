@@ -1,5 +1,5 @@
-//! Sammenligner `compare_lines`, `compare_lines_inner` og `compare_for_viewer` mot fasit fra
-//! IntelliJ i `fixtures/*/expected.json`.
+//! Compares `compare_lines`, `compare_lines_inner` and `compare_for_viewer` against the expected results from
+//! IntelliJ in `fixtures/*/expected.json`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -64,7 +64,7 @@ impl From<&LineFragment> for Fragment {
 }
 
 fn cases() -> Vec<PathBuf> {
-    // JETDIFF_FIXTURES lar oss kjøre mot et annet sett, f.eks. genererte stresstester
+    // JETDIFF_FIXTURES lets us run against another set, e.g. generated stress tests
     let root = std::env::var_os("JETDIFF_FIXTURES")
         .map(PathBuf::from)
         .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures"));
@@ -83,7 +83,7 @@ type Compare = fn(&str, &str, ComparisonPolicy) -> Result<Vec<LineFragment>, Dif
 fn check(kind: &str, compare: Compare, expected_of: fn(&PolicyResult) -> &Vec<Fragment>) {
     let cases = cases();
     if cases.is_empty() {
-        eprintln!("ingen fixtures med expected.json, golden-testen sjekker ingenting");
+        eprintln!("no fixtures with expected.json, the golden test checks nothing");
         return;
     }
 
@@ -109,7 +109,7 @@ fn check(kind: &str, compare: Compare, expected_of: fn(&PolicyResult) -> &Vec<Fr
                 passed += 1;
             } else {
                 failures.push(format!(
-                    "{} {name}:\n  forventet {expected:?}\n  fikk      {actual:?}",
+                    "{} {name}:\n  expected {expected:?}\n  actual   {actual:?}",
                     case.file_name().unwrap().to_string_lossy()
                 ));
             }
@@ -121,16 +121,16 @@ fn check(kind: &str, compare: Compare, expected_of: fn(&PolicyResult) -> &Vec<Fr
 }
 
 #[test]
-fn lines_matcher_intellij() {
+fn lines_match_intellij() {
     check("lines", compare_lines, |p| &p.lines);
 }
 
 #[test]
-fn words_matcher_intellij() {
+fn words_match_intellij() {
     check("words", compare_lines_inner, |p| &p.words);
 }
 
 #[test]
-fn viewer_matcher_intellij() {
+fn viewer_matches_intellij() {
     check("viewer", compare_for_viewer, |p| &p.viewer);
 }

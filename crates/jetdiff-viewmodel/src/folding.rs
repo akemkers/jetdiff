@@ -1,5 +1,5 @@
-//! Folding av uendrede linjer. Port av `FoldingModelSupport`: `FoldingBuilderBase` bygger
-//! nestede nivåer per gap, og `FoldedBlock` holder regionene parret på begge sider.
+//! Folding of unchanged lines. Port of `FoldingModelSupport`: `FoldingBuilderBase` builds
+//! nested levels per gap, and `FoldedBlock` holds the regions paired on both sides.
 
 use std::ops::Range;
 
@@ -8,14 +8,14 @@ use jetdiff_core::side::Side;
 use crate::layout::{LineLayout, VisualFold, visual_folds};
 use crate::model::{FileDiff, idx};
 
-/// Linjer som vises rundt hver endring, som standarden i `TextDiffSettings.contextRange`.
+/// Lines shown around each hunk, like the default in `TextDiffSettings.contextRange`.
 const CONTEXT_RANGE: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FoldBlock {
-    /// `None` når siden har under to linjer å folde.
+    /// `None` when the side has fewer than two lines to fold.
     pub lines: [Option<Range<usize>>; 2],
-    /// Felles for sidene, siden `MyFoldingListener` speiler tilstanden.
+    /// Shared by the sides, since `MyFoldingListener` mirrors the state.
     pub expanded: bool,
 }
 
@@ -28,15 +28,15 @@ impl FoldBlock {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FoldId {
     pub group: usize,
-    /// 0 er ytterst, med minst kontekst.
+    /// 0 is the outermost, with the least context.
     pub block: usize,
 }
 
-/// Kollapset fold som vises, med id for klikk og hover.
+/// A collapsed fold that is shown, with an id for click and hover.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Connector {
     pub id: FoldId,
-    /// Første linje i folden per side.
+    /// The first line of the fold per side.
     pub lines: [usize; 2],
     pub hovered: bool,
 }
@@ -46,7 +46,7 @@ type Regions = [Option<Range<usize>>; 2];
 #[derive(Debug, Clone)]
 pub struct Folding {
     line_counts: [usize; 2],
-    /// `FoldedGroup`: nestede blokker per gap, ytterst først.
+    /// `FoldedGroup`: nested fold blocks per gap, outermost first.
     groups: Vec<Vec<FoldBlock>>,
     visible: [Vec<VisualFold>; 2],
     visible_ids: [Vec<FoldId>; 2],
@@ -72,7 +72,7 @@ impl Folding {
         Self::with_groups(line_counts, groups)
     }
 
-    /// Ingen folds. For tester.
+    /// No folds. For tests.
     pub fn none(diff: &FileDiff) -> Self {
         Self::with_groups(line_counts(diff), Vec::new())
     }
@@ -112,14 +112,14 @@ impl Folding {
         ]
     }
 
-    /// Kollapsede folds som vises på siden, i rekkefølge.
+    /// Collapsed folds shown on the side, in order.
     pub fn visible(&self, side: Side) -> impl Iterator<Item = (FoldId, &VisualFold)> {
         let i = idx(side);
         self.visible_ids[i].iter().copied().zip(&self.visible[i])
     }
 
-    /// `getBlockForLine`: kollapset fold som starter på linja. Andre linjer i en fold er
-    /// skjult, og `yPositionToLogicalLine` gir alltid første linje.
+    /// `getBlockForLine`: the collapsed fold that starts on the line. Other lines in a fold are
+    /// hidden, and `yPositionToLogicalLine` always gives the first line.
     pub fn fold_at_line(&self, side: Side, line: usize) -> Option<FoldId> {
         let i = idx(side);
         let folds = &self.visible[i];
@@ -130,7 +130,7 @@ impl Folding {
             .map(|_| self.visible_ids[i][k])
     }
 
-    /// `FoldedBlock.setExpanded`: begge sider. Klikk på en fold åpner neste nivå.
+    /// `FoldedBlock.setExpanded`: both sides. A click on a fold opens the next level.
     pub fn set_expanded(&mut self, id: FoldId, expanded: bool) -> bool {
         let block = &mut self.groups[id.group][id.block];
         if block.expanded == expanded {
@@ -152,8 +152,8 @@ impl Folding {
         changed
     }
 
-    /// `ExpandRegionAction` på caret: folden som starter på linja, ellers den ytterste
-    /// kollapsede som inneholder den.
+    /// `ExpandRegionAction` at the caret: the fold that starts on the line, otherwise the outermost
+    /// collapsed one that contains it.
     pub fn expand_at(&mut self, side: Side, line: usize) -> bool {
         if let Some(id) = self.unique_start(side, line)
             && !self.block(id).expanded
@@ -166,8 +166,8 @@ impl Folding {
         found.is_some_and(|id| self.set_expanded(id, true))
     }
 
-    /// `FoldingModelImpl.onFoldProcessingEnd`: caret inne i en kollapset fold flyttes til
-    /// starten av den.
+    /// `FoldingModelImpl.onFoldProcessingEnd`: a caret inside a collapsed fold is moved to
+    /// its start.
     pub fn caret_after(&self, side: Side, line: usize) -> usize {
         let folds = &self.visible[idx(side)];
         let k = folds.partition_point(|f| f.lines.start <= line);
@@ -187,13 +187,13 @@ impl Folding {
         changed
     }
 
-    /// `MyPaintable.process`: per gruppe den ytterste blokken som er kollapset på begge
-    /// sider. Har én side ingen fold, blir det ingen kobling.
+    /// `MyPaintable.process`: per group the outermost fold block that is collapsed on both
+    /// sides. If one side has no fold, there is no fold link.
     pub fn connectors(&self) -> impl Iterator<Item = Connector> + '_ {
         self.groups.iter().enumerate().filter_map(|(g, group)| {
             let (b, block) = group.iter().enumerate().find(|(_, b)| !b.expanded)?;
             let [Some(l), Some(r)] = &block.lines else {
-                // Indre blokker er mindre, så de mangler også en side
+                // Inner fold blocks are smaller, so they are also missing a side
                 return None;
             };
             let id = FoldId { group: g, block: b };
@@ -205,7 +205,7 @@ impl Folding {
         })
     }
 
-    /// `FoldingUtil.findFoldRegionStartingAtLine`: bare hvis nøyaktig én region starter der.
+    /// `FoldingUtil.findFoldRegionStartingAtLine`: only if exactly one region starts there.
     fn unique_start(&self, side: Side, line: usize) -> Option<FoldId> {
         let mut found = None;
         for (id, block) in self.ids() {
@@ -219,7 +219,7 @@ impl Folding {
         found
     }
 
-    /// Blokker med region som inneholder linja, ytterst først.
+    /// Fold blocks with a region that contains the line, outermost first.
     fn containing(&self, side: Side, line: usize) -> impl Iterator<Item = FoldId> + '_ {
         self.ids()
             .filter(move |(_, b)| b.lines(side).is_some_and(|r| r.contains(&line)))
@@ -235,8 +235,8 @@ impl Folding {
         })
     }
 
-    /// Ytterste kollapsede region per gruppe og side. Det er den `FoldingModel` viser, og
-    /// den eneste med separator (`getHighlighterCondition`).
+    /// The outermost collapsed region per group and side. That is the one `FoldingModel` shows, and
+    /// the only one with a separator (`getHighlighterCondition`).
     fn update(&mut self) {
         for side in [Side::Left, Side::Right] {
             let i = idx(side);
@@ -267,8 +267,8 @@ fn line_counts(diff: &FileDiff) -> [usize; 2] {
     [diff.line_count(Side::Left), diff.line_count(Side::Right)]
 }
 
-/// `FoldingBuilderBase.build` og `addGroup`: ett gap mellom hver blokk, pluss før første
-/// og etter siste. Nivåene har 1, 2 og 4 ganger `CONTEXT_RANGE` linjer kontekst.
+/// `FoldingBuilderBase.build` and `addGroup`: one gap between each hunk, plus before the first
+/// and after the last. The levels have 1, 2 and 4 times `CONTEXT_RANGE` lines of context.
 fn build_groups(
     changes: impl IntoIterator<Item = [Range<usize>; 2]>,
     line_counts: [usize; 2],
@@ -292,7 +292,7 @@ fn build_groups(
             groups.push(group);
         }
     };
-    // `Integer.MIN_VALUE` og `MAX_VALUE`: første og siste gap foldes helt ut til kanten
+    // `Integer.MIN_VALUE` and `MAX_VALUE`: the first and last gap fold all the way to the edge
     let mut last = [i64::MIN; 2];
     for c in changes {
         let starts = last;
@@ -319,7 +319,7 @@ mod tests {
         (0..n).map(|i| format!("{prefix}{i}\n")).collect()
     }
 
-    /// Endringer på linjene 10, 40 og 90 av 100.
+    /// Hunks on lines 10, 40 and 90 of 100.
     fn three_changes() -> FileDiff {
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
@@ -334,8 +334,8 @@ mod tests {
     }
 
     #[test]
-    fn grupper_med_tre_nivaer() {
-        // 101 linjer med den tomme etter siste '\n'
+    fn groups_with_three_levels() {
+        // 101 lines with the empty one after the last '\n'
         let groups = build_groups(
             [[10..11, 10..11], [40..41, 40..41], [90..91, 90..91]],
             [101, 101],
@@ -343,9 +343,9 @@ mod tests {
         assert_eq!(
             groups,
             vec![
-                // Første gap går helt til toppen, så alle nivåene starter på 0
+                // The first gap goes all the way to the top, so all the levels start at 0
                 vec![both(0..6), both(0..2)],
-                // 16 linjer kontekst gir 27..24, altså ingen region
+                // 16 lines of context gives 27..24, so no region
                 vec![both(15..36), both(19..32)],
                 vec![both(45..86), both(49..82), both(57..74)],
                 vec![both(95..101), both(99..101)],
@@ -354,18 +354,18 @@ mod tests {
     }
 
     #[test]
-    fn minst_to_linjer_per_side() {
-        // Gap på 9 linjer: 4 kontekst på hver side gir én linje, altså ingen fold
+    fn at_least_two_lines_per_side() {
+        // Gap of 9 lines: 4 context on each side leaves one line, so no fold
         let groups = build_groups([[0..1, 0..1], [10..11, 10..11]], [11, 11]);
         assert!(groups.iter().flatten().all(|r| r != &both(5..6)));
         assert_eq!(groups.len(), 0);
-        // Ulik lengde: bare den lange siden får fold
+        // Different length: only the long side gets a fold
         let groups = build_groups([[0..1, 0..1], [10..11, 20..21]], [11, 21]);
         assert_eq!(groups[0][0], [None, Some(5..16)]);
     }
 
     #[test]
-    fn like_filer_foldes_helt() {
+    fn equal_files_fold_completely() {
         let d = diff(&lines("a", 30), &lines("a", 30));
         let f = Folding::new(&d);
         assert_eq!(f.groups.len(), 1);
@@ -374,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn kontekst_av_gir_ingen_folds() {
+    fn context_off_gives_no_folds() {
         let d = three_changes();
         let f = Folding::none(&d);
         assert!(f.groups.is_empty());
@@ -383,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn klikk_apner_ett_niva_om_gangen() {
+    fn click_opens_one_level_at_a_time() {
         let d = three_changes();
         let mut f = Folding::new(&d);
         let visible = |f: &Folding| -> Vec<Range<usize>> {
@@ -403,7 +403,7 @@ mod tests {
         let id = f.fold_at_line(L, 57).unwrap();
         f.set_expanded(id, true);
         assert_eq!(visible(&f), [0..6, 15..36, 95..101]);
-        // Begge sider følger
+        // Both sides follow
         assert_eq!(
             visible(&f),
             f.visible(R)
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn expand_og_collapse_alle() {
+    fn expand_and_collapse_all() {
         let d = three_changes();
         let mut f = Folding::new(&d);
         assert!(f.expand_all(true));
@@ -425,24 +425,24 @@ mod tests {
     }
 
     #[test]
-    fn expand_pa_caret() {
+    fn expand_at_caret() {
         let d = three_changes();
         let mut f = Folding::new(&d);
-        // Caret på foldens linje: ytterste kollapsede
+        // Caret on the fold's line: outermost collapsed
         assert!(f.expand_at(L, 45));
         assert_eq!(f.fold_at_line(L, 49), Some(FoldId { group: 2, block: 1 }));
-        // Linje 60 ligger i alle tre nivåene, ytterste kollapsede er nivå 1
+        // Line 60 is in all three levels; the outermost collapsed is level 1
         assert!(f.expand_at(L, 60));
         assert_eq!(f.fold_at_line(L, 57), Some(FoldId { group: 2, block: 2 }));
-        // Linje 0: alle nivåene starter der, så den faller tilbake til inneholdende
+        // Line 0: all the levels start there, so it falls back to the containing one
         assert!(f.expand_at(L, 0));
         assert_eq!(f.fold_at_line(L, 0), Some(FoldId { group: 0, block: 1 }));
-        // Inne i en endring er det ingenting
+        // Inside a hunk there is nothing
         assert!(!f.expand_at(L, 10));
     }
 
     #[test]
-    fn caret_i_kollapset_fold_flyttes_til_starten() {
+    fn caret_in_collapsed_fold_moves_to_start() {
         let d = three_changes();
         let f = Folding::new(&d);
         assert_eq!(f.caret_after(L, 50), 45);
@@ -452,9 +452,9 @@ mod tests {
     }
 
     #[test]
-    fn koblinger_krever_fold_pa_begge_sider() {
-        // Høyre har 20 ekstra linjer etter linje 10: venstre gap 10..20 blir for lite
-        // på innerste nivå, men ikke høyre
+    fn fold_links_need_fold_on_both_sides() {
+        // Right has 20 extra lines after line 10: the Left gap 10..20 becomes too small
+        // on the innermost level, but Right's does not
         let a = lines("a", 30);
         let b = format!(
             "{}{}{}",
@@ -472,7 +472,7 @@ mod tests {
         f.set_hovered(Some(c[1].id));
         assert!(f.connectors().nth(1).unwrap().hovered);
 
-        // Kun én side har fold: ingen kobling
+        // Only one side has a fold: no fold link
         let groups = build_groups([[0..1, 0..1], [10..11, 20..21]], [11, 21]);
         assert_eq!(groups[0][0].clone(), [None, Some(5..16)]);
         let d = diff(
@@ -484,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn hover_nullstilles_nar_folden_forsvinner() {
+    fn hover_resets_when_fold_disappears() {
         let d = three_changes();
         let mut f = Folding::new(&d);
         let id = f.fold_at_line(L, 45).unwrap();

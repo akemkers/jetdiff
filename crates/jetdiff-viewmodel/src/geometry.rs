@@ -1,7 +1,7 @@
-//! Horisontal layout for én side. Venstre side er speilet om divideren, som i IntelliJ:
-//! `[tekst | gutter] [divider] [gutter | tekst]`, med scrollbaren over tekstens ytterkant.
-//! Gutter-koordinater er lokale for høyre (uspeilede) side: 0 er kanten mot divideren,
-//! `width` er kanten mot teksten.
+//! Horizontal layout for one side. Left is mirrored around the divider, as in IntelliJ:
+//! `[text | gutter] [divider] [gutter | text]`, with the scrollbar over the outer edge of the text.
+//! Gutter coordinates are local to the Right (unmirrored) side: 0 is the edge toward the divider,
+//! `width` is the edge toward the text.
 
 use std::ops::Range;
 
@@ -13,19 +13,19 @@ use crate::model::FileDiff;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GutterLayout {
     pub width: f32,
-    /// Linjenummer-området, lokalt.
+    /// The line number area, local.
     pub numbers: (f32, f32),
-    /// `getWhitespaceSeparatorOffset`: herfra og ut mot teksten får ignored-farge.
+    /// `getWhitespaceSeparatorOffset`: from here out to the text gets the ignored color.
     pub separator: f32,
 }
 
-/// Minste bredde på linjenummer-området: breakpoint-ikonet i New UI er 14px
+/// Smallest width of the line number area: the breakpoint icon in New UI is 14px
 /// (`getInitialLineNumberWidth`).
 pub const MIN_NUMBERS_WIDTH: f32 = 14.;
 
-/// `EditorGutterLayout.createNewUILayout` for en read-only diff-editor, fra divideren og ut:
-/// tomt annotasjonsområde 4, gap 4, linjenumre, gap 4, ingen ikoner, folding 9 + 2,
-/// ekstra free painters 8 og gap 1. `numbers_width` er `stringWidth` av største linjenummer.
+/// `EditorGutterLayout.createNewUILayout` for a read-only diff editor, from the divider outwards:
+/// empty annotation area 4, gap 4, line numbers, gap 4, no icons, folding 9 + 2,
+/// extra free painters 8 and gap 1. `numbers_width` is the `stringWidth` of the largest line number.
 pub fn gutter_layout(numbers_width: f32) -> GutterLayout {
     let numbers = numbers_width.round().max(MIN_NUMBERS_WIDTH);
     let start = 4. + 4.;
@@ -33,27 +33,27 @@ pub fn gutter_layout(numbers_width: f32) -> GutterLayout {
     GutterLayout {
         width,
         numbers: (start, start + numbers),
-        // `getWhitespaceSeparatorOffset` i New UI
+        // `getWhitespaceSeparatorOffset` in New UI
         separator: width - 3.,
     }
 }
 
-/// Scrollbaren i `EditorMarkupModelImpl`: 14 + tynt gap 2 + `minMarkHeight` 2. Den er
-/// gjennomsiktig og ligger over teksten (`editor.transparent.scrollbar`).
+/// The scrollbar in `EditorMarkupModelImpl`: 14 + thin gap 2 + `minMarkHeight` 2. It is
+/// transparent and lies over the text (`editor.transparent.scrollbar`).
 pub const SCROLLBAR_THICKNESS: f32 = 18.;
-/// Brede markører starter ved `minMarkHeight + 2` og er 14px.
+/// Wide hunk minimap marks start at `minMarkHeight + 2` and are 14px.
 const MARKER_X: (f32, f32) = (4., 18.);
-/// Mac-tommelen er maks 10px, sentrert i de 14px: `2 + minMark + 14/2 - w/2`.
+/// The Mac thumb is at most 10px, centered in the 14px: `2 + minMark + 14/2 - w/2`.
 const THUMB_X: (f32, f32) = (6., 16.);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SideGeometry {
     pub side: Side,
-    /// Venstre side i et par. En side alene er aldri speilet.
+    /// Left in a pair. A side alone is never mirrored.
     pub mirrored: bool,
-    /// Hele tekstområdet. Scrollbaren ligger over den ytterste delen.
+    /// The whole text area. The scrollbar lies over the outermost part.
     pub text: Range<f32>,
-    /// Der teksten starter. Venstre side har scrollbaren på innsiden, så teksten flyttes forbi den.
+    /// Where the text starts. Left has the scrollbar on the inside, so the text is moved past it.
     pub text_x: f32,
     pub gutter: Range<f32>,
     pub scrollbar: Range<f32>,
@@ -61,7 +61,7 @@ pub struct SideGeometry {
 }
 
 impl SideGeometry {
-    /// `x` er venstre kant av siden og `width` hele bredden den får.
+    /// `x` is the left edge of the side and `width` the whole width it gets.
     pub fn new(
         side: Side,
         mirrored: bool,
@@ -106,7 +106,7 @@ impl SideGeometry {
         }
     }
 
-    /// Lokalt gutter-intervall til vindus-x. Speilet på venstre side.
+    /// Local gutter interval to window x. Mirrored on Left.
     pub fn gutter_x(&self, local: Range<f32>) -> Range<f32> {
         if self.mirrored {
             self.gutter.end - local.end..self.gutter.end - local.start
@@ -115,7 +115,7 @@ impl SideGeometry {
         }
     }
 
-    /// Lokalt scrollbar-intervall, 0 mot teksten, til vindus-x. Speilet på venstre side.
+    /// Local scrollbar interval, 0 toward the text, to window x. Mirrored on Left.
     fn scrollbar_x(&self, (start, end): (f32, f32)) -> Range<f32> {
         let clip = |r: Range<f32>| r.start.max(self.scrollbar.start)..r.end.min(self.scrollbar.end);
         if self.mirrored {
@@ -135,8 +135,8 @@ impl SideGeometry {
         self.scrollbar_x(THUMB_X)
     }
 
-    /// X for linjenummeret. Høyre side høyrejusteres i området. Venstre er speilet to ganger
-    /// i IntelliJ, så glyfene står normalt, men venstrejustert 1px før området
+    /// X for the line number. Right is right-aligned in the area. Left is mirrored twice
+    /// in IntelliJ, so the glyphs read normally, but left-aligned 1px before the area
     /// (`textOffset = offset - areaWidth - 1`).
     pub fn number_x(&self, text_width: f32) -> f32 {
         let (start, end) = self.gutter_layout.numbers;
@@ -148,7 +148,7 @@ impl SideGeometry {
     }
 }
 
-/// Begge sidene for et vindu som starter på `x` og er `width` bredt.
+/// Both sides for a window that starts at `x` and is `width` wide.
 pub fn side_geometry(
     diff: &FileDiff,
     number_char_width: f32,
@@ -156,7 +156,7 @@ pub fn side_geometry(
     width: f32,
 ) -> [SideGeometry; 2] {
     let geom = |side: Side, mirrored, x, width| {
-        // Siste linjenummer bestemmer bredden, som `getMaxLineNumberString`
+        // The last line number decides the width, like `getMaxLineNumberString`
         let digits = diff.line_count(side).to_string().len();
         let gutter = gutter_layout(digits as f32 * number_char_width);
         SideGeometry::new(side, mirrored, x, width, gutter)
@@ -173,21 +173,21 @@ pub fn side_geometry(
     ]
 }
 
-/// `GAP_BETWEEN_AREAS` mellom gammel og ny nummerkolonne i unified.
+/// `GAP_BETWEEN_AREAS` between the old and new number column in Unified.
 const UNIFIED_NUMBER_GAP: f32 = 5.;
 
-/// Unified: én kodevisning uten speiling, med gammel og ny nummerkolonne. Begge høyrejusteres i
-/// sin kolonne (`EditorGutterComponentImpl.paintLineNumbers`).
+/// Unified: one code view without mirroring, with old and new number columns. Both are right-aligned in
+/// their column (`EditorGutterComponentImpl.paintLineNumbers`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnifiedGeometry {
     pub code: SideGeometry,
-    /// Høyre kant av gammel kolonne, lokal i gutteren.
+    /// Right edge of the old column, local in the gutter.
     old_numbers_end: f32,
 }
 
 impl UnifiedGeometry {
-    /// `calcLineNumberAreaWidth`: gammel kolonne har minstebredden, ny bare sitt største
-    /// nummer.
+    /// `calcLineNumberAreaWidth`: the old column has the minimum width, the new one only its largest
+    /// number.
     pub fn new(diff: &FileDiff, number_char_width: f32, x: f32, width: f32) -> Self {
         let numbers_width = |side: Side| {
             let digits = diff.line_count(side).to_string().len();
@@ -215,13 +215,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gutter_for_tre_sifre() {
-        // "999" i JetBrains Mono 12 er 21.6px
+    fn gutter_for_three_digits() {
+        // "999" in JetBrains Mono 12 is 21.6px
         let g = gutter_layout(21.6);
         assert_eq!(g.numbers, (8., 30.));
         assert_eq!(g.width, 54.);
         assert_eq!(g.separator, 51.);
-        // Én linje: breakpoint-plassen er minimum
+        // One line: the breakpoint space is the minimum
         assert_eq!(gutter_layout(7.2).width, 46.);
     }
 
@@ -232,12 +232,12 @@ mod tests {
     };
 
     #[test]
-    fn venstre_er_speilet() {
+    fn left_is_mirrored() {
         let g = SideGeometry::new(Side::Left, true, 0., 500., G);
         assert_eq!(g.text, 0. ..460.);
         assert_eq!(g.gutter, 460. ..500.);
         assert_eq!(g.bounds(), 0. ..500.);
-        // Ytterste 3px mot teksten
+        // Outermost 3px toward the text
         assert_eq!(g.gutter_x(G.separator..G.width), 460. ..463.);
         assert_eq!(g.number_x(99.), 469.);
         assert_eq!(g.scrollbar, 0. ..18.);
@@ -246,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn hoyre_er_uspeilet() {
+    fn right_is_unmirrored() {
         let g = SideGeometry::new(Side::Right, false, 524., 500., G);
         assert_eq!(g.gutter, 524. ..564.);
         assert_eq!(g.text, 564. ..1024.);
@@ -258,23 +258,23 @@ mod tests {
     }
 
     #[test]
-    fn unified_har_to_nummerkolonner() {
+    fn unified_has_two_number_columns() {
         use crate::ComparisonPolicy;
         let old: String = (0..9).map(|i| format!("{i}\n")).collect();
         let new: String = (0..120).map(|i| format!("{i}\n")).collect();
         let diff = FileDiff::new(&old, &new, ComparisonPolicy::Default).unwrap();
-        // 10 linjer gir to sifre, 121 gir tre. 7px per siffer.
+        // 10 lines gives two digits, 121 gives three. 7px per digit.
         let g = UnifiedGeometry::new(&diff, 7., 100., 800.);
         assert!(!g.code.mirrored);
         assert_eq!(g.code.bounds(), 100. ..900.);
-        // Gammel kolonne: 8..22, gap 5, ny kolonne: 27..48
+        // Old column: 8..22, gap 5, new column: 27..48
         assert_eq!(g.code.gutter_layout.numbers, (8., 48.));
         assert_eq!(g.old_number_x(7.), 115.);
         assert_eq!(g.new_number_x(7.), 141.);
     }
 
     #[test]
-    fn smalt_vindu_gir_ikke_negative_bredder() {
+    fn narrow_window_gives_no_negative_widths() {
         let g = SideGeometry::new(Side::Right, false, 0., 30., G);
         assert_eq!(g.gutter, 0. ..30.);
         assert!(g.text.is_empty());

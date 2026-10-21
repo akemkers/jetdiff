@@ -1,4 +1,4 @@
-//! Port av `PatienceIntLCS.kt`. Brukes bare når Myers gir opp.
+//! Port of `PatienceIntLCS.kt`. Only used when Myers gives up.
 
 use super::DiffTooBig;
 use super::bitset::BitSet;

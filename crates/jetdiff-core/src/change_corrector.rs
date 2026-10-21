@@ -1,5 +1,5 @@
-//! Port av `SmartLineChangeCorrector` fra `ChangeCorrector.kt`. To-stegs diff: gitt en
-//! matching mellom "store" linjer, bygg matchingen for alle linjer ved å diffe gapene.
+//! Port of `SmartLineChangeCorrector` from `ChangeCorrector.kt`. Two-step diff: given a
+//! matching between "big" lines, build the matching for all lines by diffing the gaps.
 
 use crate::by_line::Line;
 use crate::iterable::ChangeBuilder;
@@ -7,7 +7,7 @@ use crate::lcs::{self, Changes, DiffTooBig};
 use crate::trim::expand;
 
 pub(crate) struct SmartLineChangeCorrector<'a, 't> {
-    /// Indeksen i `lines` for hver linje i delsekvensen.
+    /// The index in `lines` for each line in the subsequence.
     pub(crate) indexes1: &'a [usize],
     pub(crate) indexes2: &'a [usize],
     pub(crate) lines1: &'a [Line<'t>],
@@ -36,7 +36,7 @@ impl SmartLineChangeCorrector<'_, '_> {
         Ok(builder.finish())
     }
 
-    /// Matcher linjene i `[start1, end1)` mot `[start2, end2)`.
+    /// Matches the lines in `[start1, end1)` against `[start2, end2)`.
     fn match_gap(
         &self,
         builder: &mut ChangeBuilder,

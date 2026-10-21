@@ -1,4 +1,4 @@
-//! Port av `MyersLCS.kt`. Lineært minne med middle snake. Heltall er `isize` som i originalen.
+//! Port of `MyersLCS.kt`. Linear memory with middle snake. Integers are `isize` as in the original.
 
 use super::DiffTooBig;
 use super::bitset::BitSet;
@@ -51,7 +51,7 @@ impl<'a> MyersLcs<'a> {
         20000 + 10 * ((self.count1 + self.count2) as f64).sqrt() as isize
     }
 
-    /// D begrenset av `20000 + 10 * sqrt(N)`. Gir aldri feil, resten blir bare markert som endret.
+    /// D bounded by `20000 + 10 * sqrt(N)`. Never fails; the rest is just marked as changed.
     pub(crate) fn execute_linear(&mut self) {
         let threshold = self.default_threshold();
         let _ = self.run(threshold, false);
