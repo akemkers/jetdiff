@@ -6,7 +6,9 @@ Terminalvisningen: diffen, filtreet og commit-lista, for SSH og maskiner uten sk
 
 Samme diff som GPUI-visningen, der GPU-en ikke finnes. Logikken ligger i `jetdiff-viewmodel` og `jetdiff-app`, så her er bare tegning i celler og input fra terminalen. Viewporten har linjehøyde 1, så scroll og scrolloff regnes i rader.
 
-Trakten trenger piksler, så split er justerte rader i stedet: `UnifiedDiff::aligned` setter linjer med felles tekst på samme rad, og den korteste siden får skraverte rader. Begge visningene er da `UnifiedState`.
+I GPUI har sidene hver sin scroll, og trakten mellom dem viser hvilke linjer som hører sammen. Trakten tegnes med kurver, og det går ikke i en terminal. Her står venstre og høyre linje på samme rad i stedet. Er en endring kortere på den ene siden, fylles den ut med skraverte rader, så resten av fila står likt. Linjer med tekst felles settes på samme rad.
+
+Radene lages av `UnifiedDiff::aligned`, så split og unified bruker samme `UnifiedState` for cursor og scroll.
 
 ## Bruk
 
