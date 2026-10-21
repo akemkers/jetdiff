@@ -1,4 +1,4 @@
-; Legges etter javascript.scm.
+; Appended after javascript.scm.
 
 [
   "abstract" "declare" "enum" "export" "implements" "interface" "keyof" "namespace" "private"

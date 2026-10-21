@@ -3,5 +3,5 @@
 (boolean) @keyword
 (comment) @comment
 
-; `TOML_KEY` arver `DEFAULT_KEYWORD`
+; `TOML_KEY` inherits `DEFAULT_KEYWORD`
 [(bare_key) (quoted_key)] @keyword

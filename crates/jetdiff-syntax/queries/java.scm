@@ -1,4 +1,4 @@
-; Først, så alt mer spesifikt vinner
+; First, so anything more specific wins
 ["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
 [
   "=" "==" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "&" "|" "^" "~" "<<" ">>" ">>>" "+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>=" ">>>=" "++" "--" "->" "::" "?"
@@ -11,7 +11,7 @@
 (enum_constant name: (identifier) @constant)
 (ternary_expression ":" @operator)
 
-; Etter konstantene, så `class URL` blir en type
+; After the constants, so `class URL` becomes a type
 (type_identifier) @type
 (class_declaration name: (identifier) @type)
 (interface_declaration name: (identifier) @type)

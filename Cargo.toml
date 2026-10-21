@@ -9,9 +9,9 @@ license = "Apache-2.0"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Metal Toolchain mangler lokalt, så shaderne kompileres ved oppstart
+# The Metal Toolchain is missing locally, so the shaders are compiled at startup
 gpui = { version = "0.2.2", features = ["runtime_shaders"] }
 
-# Golden-fixturen for DiffTooBig kjører Myers til terskelen, det tar over 30 s uoptimert
+# The golden fixture for DiffTooBig runs Myers up to the threshold, which takes over 30 s unoptimized
 [profile.test]
 opt-level = 1
