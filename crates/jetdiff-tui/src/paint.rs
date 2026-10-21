@@ -33,10 +33,12 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
                 continue;
             };
             let row = unified.row(index);
-            let block = row.block.map(|b| (b, diff.blocks()[b].diff_type));
+            let block = row
+                .block
+                .map(|block| (block, diff.blocks()[block].diff_type));
             for (columns, side) in cells.sides.iter().zip([Side::Left, Side::Right]) {
                 let line = row.lines[side.select(0, 1)];
-                let painted = Painted {
+                let painter = RowPainter {
                     diff,
                     columns,
                     y,
@@ -44,9 +46,9 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
                 };
                 match line {
                     Some(line) => {
-                        painted.line(side, line, None, scroll_x, theme, buf);
+                        painter.line(side, line, None, scroll_x, theme, buf);
                         let (x, number) = geometry::number(line, columns.number_end());
-                        painted.number(x, number, index == state.row, theme, buf);
+                        painter.number(x, number, index == state.row, theme, buf);
                     }
                     None => filler(columns.row(y), theme, buf),
                 }
@@ -65,19 +67,19 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
                 continue;
             };
             let row = unified.row(index);
-            let painted = Painted {
+            let painter = RowPainter {
                 diff,
                 columns,
                 y,
-                block: row.block.map(|b| (b, row.diff_type())),
+                block: row.block.map(|block| (block, row.diff_type())),
             };
             let inline_type = Some(row.diff_type());
-            painted.line(row.side(), row.line(), inline_type, scroll_x, theme, buf);
+            painter.line(row.side(), row.line(), inline_type, scroll_x, theme, buf);
             let ends = [cells.old_end, columns.number_end()];
             for (line, end) in row.lines.into_iter().zip(ends) {
                 if let Some(line) = line {
                     let (x, number) = geometry::number(line, end);
-                    painted.number(x, number, index == state.row, theme, buf);
+                    painter.number(x, number, index == state.row, theme, buf);
                 }
             }
             if index == state.row {
@@ -90,8 +92,8 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
     paint_scrollbar(scrollbar, &markers, &layout, scroll_y, area, theme, buf);
 }
 
-/// Én side av én rad.
-struct Painted<'a> {
+/// Tegner i kolonnene til én rad: én side i split, hele raden i unified.
+struct RowPainter<'a> {
     diff: &'a FileDiff,
     columns: &'a Columns,
     y: u16,
@@ -99,7 +101,7 @@ struct Painted<'a> {
     block: Option<(usize, DiffType)>,
 }
 
-impl Painted<'_> {
+impl RowPainter<'_> {
     fn line(
         &self,
         side: Side,
