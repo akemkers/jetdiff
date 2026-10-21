@@ -63,7 +63,7 @@ Da kan tilstanden endres ett sted. Prisen er noen metoder som stort sett sender 
 
 ## Navn
 
-- Bruk domeneordene som allerede finnes: split og unified, ikke nye ord for det samme
+- Bruk begrepene i `GLOSSARY.md` i nye navn, kommentarer og UI-tekst. Ord under _Avoid_ skal ikke inn i ny kode
 - Ingen forkortelser. Bruk beskrivende navn: `viewport`, ikke `vp`, og `anchor_left`, ikke `al`. Det gjelder også parametre i closures: `|commits|`, ikke `|c|`. Unntakene er `e` for feil og `i` som løkketeller, som er vanlige i Rust
 - Navnet sier hva noe er eller gjør. `Painter` tegner, mens `Painted` høres ut som noe som allerede er tegnet
 
