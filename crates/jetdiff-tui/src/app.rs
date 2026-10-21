@@ -438,7 +438,7 @@ impl App {
         };
         let focus = self.focus;
         if let Some(repo) = self.repository.as_mut().filter(|r| r.panel_open) {
-            let width = repo.panel.width(area.width * 2 / 5);
+            let width = repo.panel.width(area.width);
             self.panel_area = Rect {
                 width: width.min(area.width),
                 ..main

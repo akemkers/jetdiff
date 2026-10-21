@@ -12,6 +12,9 @@ use crate::color::{color, faded, over};
 use crate::geometry::{self, Columns};
 use crate::text::{LineText, fill, paint_line, tint};
 
+/// Markert rad når diffen ikke har fokus, som i GPUI.
+const UNFOCUSED_CARET: f32 = 0.4;
+
 pub(super) struct Painter<'a> {
     state: &'a UnifiedState,
     theme: &'a Theme,
@@ -146,7 +149,7 @@ impl<'a> Painter<'a> {
         let highlight = if self.focused {
             self.theme.row_highlight
         } else {
-            faded(self.theme.row_highlight, 0.4)
+            faded(self.theme.row_highlight, UNFOCUSED_CARET)
         };
         tint(columns.text(y), highlight, self.buf);
         if self.focused {

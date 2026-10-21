@@ -15,6 +15,21 @@ use crate::WHEEL_ROWS;
 use crate::color::color;
 use crate::icons::{Icon, file_icon, folder_icon};
 
+/// Bredde i kolonner.
+const MIN_WIDTH: u16 = 24;
+/// Den automatiske bredden tar aldri mer enn dette av vinduet, som i GPUI.
+const MAX_AUTO_FRACTION: f32 = 0.4;
+/// Commit-lista sin del av høyden når begge seksjonene er åpne.
+const COMMITS_FRACTION: f32 = 0.4;
+const MIN_COMMITS_HEIGHT: u16 = 3;
+
+/// Kolonnene i en rad i treet: marg, innrykk per nivå, pila foran en mappe (eller like mye
+/// luft foran en fil), og kanten til høyre for panelet.
+const LEFT_MARGIN: usize = 1;
+const INDENT: usize = 2;
+const MARKER: usize = 2;
+const BORDER: usize = 1;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
     Files,
@@ -127,7 +142,8 @@ impl Panel {
         }
     }
 
-    pub fn width(&self, max: u16) -> u16 {
+    /// Bredden innholdet trenger, innenfor grensene.
+    pub fn width(&self, window_width: u16) -> u16 {
         let changes = self.tree.changes();
         let icon_width = if self.icons { 2 } else { 0 };
         let widest = self
@@ -135,23 +151,24 @@ impl Panel {
             .rows()
             .iter()
             .map(|row| {
-                2 * row.depth
-                    + 2
-                    + icon_width
-                    + match &row.kind {
-                        RowKind::Dir { name, count, .. } => {
-                            display_width(name) + 1 + count_label(*count).len()
-                        }
-                        &RowKind::File(f) => {
-                            let change = &changes[f];
-                            let from = change.renamed_from().map_or(0, |t| 1 + display_width(&t));
-                            display_width(file_name(&change.path)) + from
-                        }
+                let text = match &row.kind {
+                    RowKind::Dir { name, count, .. } => {
+                        display_width(name) + 1 + count_label(*count).len()
                     }
+                    &RowKind::File(file) => {
+                        let change = &changes[file];
+                        let renamed = change
+                            .renamed_from()
+                            .map_or(0, |renamed_from| 1 + display_width(&renamed_from));
+                        display_width(file_name(&change.path)) + renamed
+                    }
+                };
+                LEFT_MARGIN + INDENT * row.depth + MARKER + icon_width + text + BORDER
             })
             .max()
             .unwrap_or(0);
-        (widest as u16 + 2).clamp(24, max.max(24))
+        let max = (window_width as f32 * MAX_AUTO_FRACTION) as u16;
+        (widest as u16).clamp(MIN_WIDTH, max.max(MIN_WIDTH))
     }
 
     pub fn click(&self, y: u16) -> Option<Click> {
@@ -224,7 +241,10 @@ impl Panel {
         let commits_top = match (self.files_open, has_commits && self.commits_open) {
             (_, false) if has_commits => area.bottom() - 1,
             (_, false) => area.bottom(),
-            (true, true) => area.bottom() - (area.height * 2 / 5).max(3),
+            (true, true) => {
+                let commits = (area.height as f32 * COMMITS_FRACTION) as u16;
+                area.bottom() - commits.max(MIN_COMMITS_HEIGHT)
+            }
             (false, true) => y,
         };
         if self.files_open {
@@ -296,7 +316,7 @@ impl Panel {
             .take(list.area.height as usize)
         {
             let y = list.area.y + (i - list.scroll) as u16;
-            let indent = " ".repeat(1 + 2 * row.depth);
+            let indent = " ".repeat(LEFT_MARGIN + INDENT * row.depth);
             let mut spans = vec![Span::raw(indent)];
             match &row.kind {
                 RowKind::Dir {
