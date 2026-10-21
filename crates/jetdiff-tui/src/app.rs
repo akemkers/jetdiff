@@ -99,7 +99,8 @@ impl App {
                 Err(e) => message.show(format!("Følger ikke endringer: {e}"), Level::Warning),
             }
         }
-        let panel = Panel::new(FileTree::new(changes.changes().clone()), commits);
+        let tree = FileTree::new(changes.changes().clone());
+        let panel = Panel::new(tree, commits, settings.icons);
         let selected = changes.first();
         let mut app = Self {
             message,

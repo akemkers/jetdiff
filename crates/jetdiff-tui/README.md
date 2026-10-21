@@ -13,7 +13,7 @@ Trakten trenger piksler, så split er justerte rader i stedet: `UnifiedDiff::ali
 ```rust
 use jetdiff_tui::{Settings, run_changes, run_file};
 
-let settings = Settings { theme, unified: false, side_panel_open: false };
+let settings = Settings { theme, unified: false, side_panel_open: false, icons: true };
 run_file(diff, paths, &title, settings)?;          // to filer
 run_changes(repo, changes, &title, settings)?;     // et repo eller en commit
 ```
@@ -25,6 +25,7 @@ Forskjeller fra GPUI-visningen:
 - Ingen zoom og ingen scroll-animasjon
 - `y` kopierer med OSC 52, som virker over SSH når terminalen støtter det
 - Fargene er truecolor
+- Filikonene er Nerd Font-tegn i `icons.rs`, og `icons` skrur dem av
 
 ```mermaid
 graph TD

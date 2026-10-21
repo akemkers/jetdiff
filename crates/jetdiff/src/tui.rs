@@ -10,6 +10,7 @@ pub fn run(content: Content, title: &str, config: Config) -> Result<(), String> 
         theme: config.theme,
         unified: config.unified,
         side_panel_open: config.side_panel.open,
+        icons: config.terminal.icons,
     };
     match content {
         Content::File(diff, paths) => jetdiff_tui::run_file(*diff, paths, title, settings),

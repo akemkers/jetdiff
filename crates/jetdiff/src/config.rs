@@ -32,12 +32,19 @@ pub struct Config {
     #[serde(rename = "view", deserialize_with = "view")]
     pub unified: bool,
     pub side_panel: SidePanel,
+    pub terminal: Terminal,
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SidePanel {
     pub open: bool,
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Terminal {
+    pub icons: bool,
 }
 
 pub fn load() -> Result<Config, String> {
@@ -126,7 +133,7 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\ncollapse_unchanged = false\nview = \"unified\"\n[side_panel]\nopen = true\n";
+    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\ncollapse_unchanged = false\nview = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\n";
 
     #[test]
     fn malen_er_gyldig() {
@@ -136,6 +143,7 @@ mod tests {
         assert!(config.collapse_unchanged);
         assert!(!config.unified);
         assert!(!config.side_panel.open);
+        assert!(config.terminal.icons);
     }
 
     #[test]
@@ -153,6 +161,7 @@ mod tests {
         assert!(!config.collapse_unchanged);
         assert!(config.unified);
         assert!(config.side_panel.open);
+        assert!(!config.terminal.icons);
     }
 
     #[test]

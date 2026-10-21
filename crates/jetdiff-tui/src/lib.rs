@@ -6,6 +6,7 @@ mod clipboard;
 mod color;
 mod diff_view;
 mod geometry;
+mod icons;
 mod input;
 mod message;
 mod paint;
@@ -30,6 +31,8 @@ pub struct Settings {
     pub theme: Theme,
     pub unified: bool,
     pub side_panel_open: bool,
+    /// Nerd Font-tegn foran filene i treet.
+    pub icons: bool,
 }
 
 pub fn run_file(

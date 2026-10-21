@@ -12,6 +12,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use crate::color::color;
+use crate::icons::{Icon, file_icon, folder_icon};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
@@ -64,6 +65,7 @@ pub struct Panel {
     pub commits: Option<Commits>,
     pub files_open: bool,
     pub commits_open: bool,
+    icons: bool,
     files: ListArea,
     commit_rows: ListArea,
     headings: [Option<u16>; 2],
@@ -76,12 +78,13 @@ pub enum Click {
 }
 
 impl Panel {
-    pub fn new(tree: FileTree, commits: Option<Commits>) -> Self {
+    pub fn new(tree: FileTree, commits: Option<Commits>, icons: bool) -> Self {
         Self {
             tree,
             commits,
             files_open: true,
             commits_open: true,
+            icons,
             files: ListArea::default(),
             commit_rows: ListArea::default(),
             headings: [None; 2],
@@ -125,6 +128,7 @@ impl Panel {
 
     pub fn width(&self, max: u16) -> u16 {
         let changes = self.tree.changes();
+        let icon_width = if self.icons { 2 } else { 0 };
         let widest = self
             .tree
             .rows()
@@ -132,6 +136,7 @@ impl Panel {
             .map(|row| {
                 2 * row.depth
                     + 2
+                    + icon_width
                     + match &row.kind {
                         RowKind::Dir { name, count, .. } => {
                             display_width(name) + 1 + count_label(*count).len()
@@ -300,6 +305,9 @@ impl Panel {
                     ..
                 } => {
                     spans.push(Span::styled(if *expanded { "▾ " } else { "▸ " }, dim));
+                    if self.icons {
+                        spans.push(icon(folder_icon(theme.dark)));
+                    }
                     spans.push(Span::raw(name.clone()));
                     spans.push(Span::styled(format!(" {}", count_label(*count)), dim));
                 }
@@ -310,11 +318,12 @@ impl Panel {
                         Status::Deleted => theme.file_deleted,
                         Status::Modified | Status::Renamed => theme.file_modified,
                     };
+                    let style = Style::default().fg(color(status));
                     spans.push(Span::raw("  "));
-                    spans.push(Span::styled(
-                        file_name(&change.path).to_owned(),
-                        Style::default().fg(color(status)),
-                    ));
+                    if self.icons {
+                        spans.push(icon(file_icon(&change.path, theme.dark)));
+                    }
+                    spans.push(Span::styled(file_name(&change.path).to_owned(), style));
                     if let Some(from) = change.renamed_from() {
                         spans.push(Span::styled(format!(" {from}"), dim));
                     }
@@ -366,4 +375,8 @@ impl Panel {
             buf.set_line(line_area.x, y, &Line::from(spans), line_area.width);
         }
     }
+}
+
+fn icon(icon: Icon) -> Span<'static> {
+    Span::styled(format!("{} ", icon.glyph), Style::default().fg(icon.color))
 }

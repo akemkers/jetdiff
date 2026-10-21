@@ -22,6 +22,12 @@ Featurene `gui` og `tui` er begge på som standard. På en server uten skjerm ho
 cargo install --path crates/jetdiff --no-default-features --features tui
 ```
 
+## Oppsett
+
+Terminalvisningen viser filikoner med tegn fra [Nerd Fonts](https://www.nerdfonts.com), så terminalen må bruke en Nerd Font med filikoner, for eksempel Hack Nerd Font Mono. Velg Mono-varianten, ellers blir ikonene for brede. Over SSH er det fonten i terminalen på din egen maskin som gjelder.
+
+Uten en slik font blir ikonene tomme firkanter. Skru dem av med `icons = false` under `[terminal]` i [innstillingene](#innstillinger).
+
 ## Bruk
 
 ```
@@ -59,6 +65,9 @@ view = "split"             # eller "unified", v bytter mens appen kjører
 
 [side_panel]
 open = false               # true viser filtreet og commitene ved oppstart
+
+[terminal]
+icons = true               # filikoner i terminalvisningen, krever en Nerd Font
 ```
 
 `theme` er `catppuccin-mocha`, `jetbrains-dark` eller `jetbrains-light`. De to siste er IntelliJ sine Islands-temaer.
@@ -148,4 +157,4 @@ graph TD
 
 Commit-meldinger er på norsk i imperativ, f.eks. «Legg til b for å skjule venstre panel».
 
-Fonten er JetBrains Mono (SIL Open Font License). Ikonene er fra intellij-community (Apache 2.0) og intellij-rust (MIT).
+Fonten er JetBrains Mono (SIL Open Font License). Ikonene er fra intellij-community (Apache 2.0), intellij-rust (MIT) og Seti UI (MIT).
