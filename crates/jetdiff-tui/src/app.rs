@@ -33,7 +33,13 @@ enum Focus {
     Panel(Section),
 }
 
-type ReloadResult = (u64, Result<Loaded, String>, Vec<String>);
+/// Svaret fra en reload i bakgrunnen.
+struct Reload {
+    generation: u64,
+    loaded: Result<Loaded, String>,
+    /// Filene watcheren så endret, tom når reloaden kom av noe annet.
+    paths: Vec<String>,
+}
 
 struct Repository {
     changes: Changes,
@@ -41,7 +47,8 @@ struct Repository {
     selected: Option<usize>,
     panel_open: bool,
     watcher: Option<Watcher>,
-    reloads: (Sender<ReloadResult>, Receiver<ReloadResult>),
+    reload_sender: Sender<Reload>,
+    reload_receiver: Receiver<Reload>,
     /// Bare svaret på siste reload brukes.
     generation: u64,
 }
@@ -49,14 +56,28 @@ struct Repository {
 impl Repository {
     fn reload(&mut self, paths: Vec<String>) {
         self.generation += 1;
-        let (generation, job, tx) = (
-            self.generation,
-            self.changes.reload(),
-            self.reloads.0.clone(),
-        );
+        let generation = self.generation;
+        let job = self.changes.reload();
+        let sender = self.reload_sender.clone();
         thread::spawn(move || {
-            let _ = tx.send((generation, job.run(), paths));
+            let loaded = job.run();
+            let _ = sender.send(Reload {
+                generation,
+                loaded,
+                paths,
+            });
         });
+    }
+
+    /// Svaret på siste reload, hvis det har kommet. Svar på eldre reloads kastes.
+    fn latest_reload(&mut self) -> Option<Reload> {
+        let mut latest = None;
+        while let Ok(reload) = self.reload_receiver.try_recv() {
+            if reload.generation == self.generation {
+                latest = Some(reload);
+            }
+        }
+        latest
     }
 }
 
@@ -102,6 +123,7 @@ impl App {
         let tree = FileTree::new(changes.changes().clone());
         let panel = Panel::new(tree, commits, settings.icons);
         let selected = changes.first();
+        let (reload_sender, reload_receiver) = channel();
         let mut app = Self {
             message,
             repository: Some(Repository {
@@ -110,7 +132,8 @@ impl App {
                 selected,
                 panel_open: settings.side_panel_open,
                 watcher,
-                reloads: channel(),
+                reload_sender,
+                reload_receiver,
                 generation: 0,
             }),
             ..Self::file(empty_diff(), Default::default(), settings)
@@ -141,14 +164,8 @@ impl App {
         if let Some(paths) = repo.watcher.as_ref().and_then(|watcher| watcher.take()) {
             repo.reload(paths);
         }
-        let mut latest = None;
-        while let Ok(result) = repo.reloads.1.try_recv() {
-            if result.0 == repo.generation {
-                latest = Some(result);
-            }
-        }
-        if let Some((_, loaded, paths)) = latest {
-            let reloaded = repo.changes.reloaded(loaded, &paths);
+        if let Some(reload) = repo.latest_reload() {
+            let reloaded = repo.changes.reloaded(reload.loaded, &reload.paths);
             self.reloaded(reloaded);
         }
     }
