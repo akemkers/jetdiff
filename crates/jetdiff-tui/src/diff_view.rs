@@ -71,16 +71,16 @@ impl DiffView {
 
     /// Cursor og scroll beholdes.
     pub fn update_diff(&mut self, diff: FileDiff, paths: [String; 2]) {
-        let Some(vp) = self.viewport().filter(|_| self.initialized) else {
+        let Some(viewport) = self.viewport().filter(|_| self.initialized) else {
             return self.set_diff(diff, paths);
         };
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         let aligned = aligned(&diff, self.unified);
         if aligned != self.state.diff.is_aligned() {
-            self.state = self.state.realign(aligned, vp);
+            self.state = self.state.realign(aligned, viewport);
         }
-        self.state.replace_diff(Rc::new(diff), vp);
+        self.state.replace_diff(Rc::new(diff), viewport);
         self.clamp_scroll_x();
     }
 
@@ -121,14 +121,14 @@ impl DiffView {
     pub fn layout(&mut self, area: Rect) {
         let resized = area.height != self.area.height;
         self.area = area;
-        let Some(vp) = self.viewport() else {
+        let Some(viewport) = self.viewport() else {
             return;
         };
         if !self.initialized {
             self.initialized = true;
-            self.state.init(vp);
+            self.state.init(viewport);
         } else if resized {
-            self.state.resize(vp);
+            self.state.resize(viewport);
         }
         self.clamp_scroll_x();
     }
@@ -139,7 +139,7 @@ impl DiffView {
         }
         self.unified = !self.unified;
         match self.viewport().filter(|_| self.initialized) {
-            Some(vp) => self.state = self.state.realign(!self.unified, vp),
+            Some(viewport) => self.state = self.state.realign(!self.unified, viewport),
             None => self.state = state(self.state.diff.diff.clone(), self.unified),
         }
         self.clamp_scroll_x();
@@ -189,8 +189,8 @@ impl DiffView {
             }
             Command::CopyLocation => location(self.state.location(), &self.paths).map(Effect::Copy),
             _ => {
-                let vp = self.viewport()?;
-                self.state.execute(cmd, vp, self.horizontal());
+                let viewport = self.viewport()?;
+                self.state.execute(cmd, viewport, self.horizontal());
                 None
             }
         }
@@ -210,9 +210,9 @@ impl DiffView {
     }
 
     pub fn wheel(&mut self, down: bool) {
-        if let Some(vp) = self.viewport() {
+        if let Some(viewport) = self.viewport() {
             self.state
-                .wheel(if down { WHEEL_ROWS } else { -WHEEL_ROWS }, vp);
+                .wheel(if down { WHEEL_ROWS } else { -WHEEL_ROWS }, viewport);
         }
     }
 
