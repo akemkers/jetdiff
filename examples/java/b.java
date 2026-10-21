@@ -1,34 +1,34 @@
-package no.jetdiff.eksempel;
+package dev.jetdiff.example;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Holder styr på ordre i minnet. Trådsikker.
+ * Keeps track of orders in memory. Thread-safe.
  */
-public class OrdreBok {
-    private static final int MAKS_ORDRE = 1_000;
+public class OrderBook {
+    private static final int MAX_ORDERS = 1_000;
 
-    private final List<Ordre> ordre = new ArrayList<>();
+    private final List<Order> orders = new ArrayList<>();
 
-    public record Ordre(String ticker, int antall, BigDecimal kurs) {}
+    public record Order(String ticker, int quantity, BigDecimal price) {}
 
-    public synchronized void leggTil(Ordre o) {
-        if (ordre.size() >= MAKS_ORDRE) {
-            throw new IllegalStateException("Ordreboka er full\n");
+    public synchronized void add(Order o) {
+        if (orders.size() >= MAX_ORDERS) {
+            throw new IllegalStateException("The order book is full\n");
         }
-        ordre.add(o);
+        orders.add(o);
     }
 
     public synchronized BigDecimal sum() {
-        return ordre.stream()
-            .map(o -> o.kurs().multiply(BigDecimal.valueOf(o.antall())))
+        return orders.stream()
+            .map(o -> o.price().multiply(BigDecimal.valueOf(o.quantity())))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     @Override
     public String toString() {
-        return "OrdreBok med %d ordre".formatted(ordre.size());
+        return "OrderBook with %d orders".formatted(orders.size());
     }
 }

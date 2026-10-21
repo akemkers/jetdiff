@@ -1,41 +1,41 @@
-package no.jetdiff.eksempel
+package dev.jetdiff.example
 
 import java.time.LocalDate
 
-/** En enkel ordre. */
-data class Ordre(
+/** A simple order. */
+data class Order(
     val id: String,
-    val antall: Int,
-    val kurs: Double,
+    val quantity: Int,
+    val price: Double,
 )
 
-enum class Status { NY, SENDT, AVVIST }
+enum class Status { NEW, SENT, REJECTED }
 
-class OrdreService(private val repo: OrdreRepo) {
-    private val cache = mutableMapOf<String, Ordre>()
+class OrderService(private val repo: OrderRepo) {
+    private val cache = mutableMapOf<String, Order>()
 
-    fun hent(id: String): Ordre? = cache[id] ?: repo.finn(id)
+    fun get(id: String): Order? = cache[id] ?: repo.find(id)
 
-    fun sum(ordre: List<Ordre>): Double {
+    fun sum(orders: List<Order>): Double {
         var total = 0.0
-        for (o in ordre) {
-            total += o.antall * o.kurs
+        for (o in orders) {
+            total += o.quantity * o.price
         }
         return total
     }
 
-    fun beskriv(o: Ordre): String = "Ordre ${o.id}: ${o.antall} stk"
+    fun describe(o: Order): String = "Order ${o.id}: ${o.quantity} pcs"
 
-    // Brukes bare i test
-    fun tøm() {
+    // Only used in tests
+    fun clear() {
         cache.clear()
     }
 
     companion object {
-        const val MAKS_ANTALL = 10_000
+        const val MAX_QUANTITY = 10_000
     }
 }
 
-interface OrdreRepo {
-    fun finn(id: String): Ordre?
+interface OrderRepo {
+    fun find(id: String): Order?
 }

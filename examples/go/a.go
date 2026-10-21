@@ -1,34 +1,34 @@
-package kurs
+package quote
 
 import (
 	"errors"
 	"fmt"
 )
 
-// Kurs er siste pris for et papir.
-type Kurs struct {
+// Quote is the last price for a security.
+type Quote struct {
 	Ticker string
-	Pris   float64
+	Price  float64
 }
 
-var ErrUkjent = errors.New("ukjent ticker")
+var ErrUnknown = errors.New("unknown ticker")
 
-func Hent(kilde map[string]float64, ticker string) (Kurs, error) {
-	pris, ok := kilde[ticker]
+func Fetch(source map[string]float64, ticker string) (Quote, error) {
+	price, ok := source[ticker]
 	if !ok {
-		return Kurs{}, ErrUkjent
+		return Quote{}, ErrUnknown
 	}
-	return Kurs{Ticker: ticker, Pris: pris}, nil
+	return Quote{Ticker: ticker, Price: price}, nil
 }
 
-func (k Kurs) String() string {
-	return fmt.Sprintf("%s: %.2f", k.Ticker, k.Pris)
+func (q Quote) String() string {
+	return fmt.Sprintf("%s: %.2f", q.Ticker, q.Price)
 }
 
-func Snitt(kurser []Kurs) float64 {
+func Average(quotes []Quote) float64 {
 	sum := 0.0
-	for _, k := range kurser {
-		sum += k.Pris
+	for _, q := range quotes {
+		sum += q.Price
 	}
-	return sum / float64(len(kurser))
+	return sum / float64(len(quotes))
 }

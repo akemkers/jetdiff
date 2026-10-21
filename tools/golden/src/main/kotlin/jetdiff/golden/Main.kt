@@ -44,7 +44,7 @@ private fun readText(file: File): String {
     .onMalformedInput(CodingErrorAction.REPORT)
     .onUnmappableCharacter(CodingErrorAction.REPORT)
   val text = decoder.decode(ByteBuffer.wrap(file.readBytes())).toString()
-  // IntelliJ Document har alltid '\n', CRLF normaliseres foer diff. Vi krever at fixtures er normalisert.
+  // IntelliJ Document always has '\n'; CRLF is normalized before diff. We require fixtures to be normalized.
   require('\r' !in text) { "${file.path} contains '\\r', IntelliJ normalizes line separators before diffing" }
   return text
 }
@@ -62,7 +62,7 @@ fun generate(text1: String, text2: String): String {
   POLICIES.forEachIndexed { pi, policy ->
     val lines = ComparisonManagerImpl.compareLines(text1, text2, lo1, lo2, policy)
     val words = ComparisonManagerImpl.compareLinesInner(text1, text2, lo1, lo2, policy, InnerFragmentsPolicy.WORDS)
-    // Side-by-side viewer, BY_WORD: squash = true, trim = false (se README)
+    // Side-by-side viewer, BY_WORD: squash = true, trim = false (see README)
     val viewer = ComparisonManagerImpl.processBlocks(words, text1, text2, policy, true, false)
 
     out.append("    \"").append(policy.name).append("\": {\n")
@@ -110,7 +110,7 @@ private fun fragmentJson(f: LineFragment, u1: Utf8Offsets, u2: Utf8Offsets): Str
     sb.append("[")
     inner.forEachIndexed { i, d ->
       if (i > 0) sb.append(", ")
-      // Inner-offsets er relative til fragmentstart, konverter via absolutt posisjon
+      // Inner offsets are relative to the fragment start; convert via the absolute position
       sb.append("{ \"o1\": [")
         .append(u1.at(f.startOffset1 + d.startOffset1) - s1).append(", ")
         .append(u1.at(f.startOffset1 + d.endOffset1) - s1).append("], ")
@@ -124,7 +124,7 @@ private fun fragmentJson(f: LineFragment, u1: Utf8Offsets, u2: Utf8Offsets): Str
   return sb.toString()
 }
 
-/** UTF-16-indeks til UTF-8-byteoffset. */
+/** UTF-16 index to UTF-8 byte offset. */
 class Utf8Offsets(private val text: String) {
   private val map = IntArray(text.length + 1)
 
@@ -135,7 +135,7 @@ class Utf8Offsets(private val text: String) {
       val cp = text.codePointAt(i)
       val units = Character.charCount(cp)
       map[i] = bytes
-      if (units == 2) map[i + 1] = -1 // midt i et surrogatpar
+      if (units == 2) map[i + 1] = -1 // in the middle of a surrogate pair
       bytes += when {
         cp < 0x80 -> 1
         cp < 0x800 -> 2
