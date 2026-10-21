@@ -1,4 +1,4 @@
-//! Filtreet. Valgt fil eies av den som bruker treet.
+//! The file tree. The selected file is owned by whoever uses the tree.
 
 use std::rc::Rc;
 
@@ -52,7 +52,7 @@ impl FileTree {
         (next != file).then_some(next)
     }
 
-    /// Valgt fil blir synlig, også når den er valgt med tastaturet i en lukket mappe.
+    /// The selected file becomes visible, also when it was selected with the keyboard in a closed folder.
     pub fn reveal(&mut self, file: usize) -> Option<usize> {
         self.tree.reveal(file, &self.changes);
         self.rows = self.tree.rows().into();
@@ -90,7 +90,7 @@ impl FileTree {
 }
 
 pub fn count_label(count: usize) -> String {
-    let files = if count == 1 { "fil" } else { "filer" };
+    let files = if count == 1 { "file" } else { "files" };
     format!("{count} {files}")
 }
 
@@ -117,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn mappe_klappes_og_fil_velges() {
+    fn folder_collapses_and_file_is_selected() {
         // src/, src/a.rs, b.rs
         let mut t = tree(&["src/a.rs", "b.rs"]);
         assert_eq!(t.rows().len(), 3);
@@ -130,7 +130,7 @@ mod tests {
     }
 
     #[test]
-    fn neste_fil_stopper_ved_endene() {
+    fn next_file_stops_at_the_ends() {
         let t = tree(&["a.rs", "b.rs"]);
         assert_eq!(t.next_file(0, true), Some(1));
         assert_eq!(t.next_file(1, true), None);
@@ -138,7 +138,7 @@ mod tests {
     }
 
     #[test]
-    fn markøren_holdes_innenfor_nye_rader() {
+    fn cursor_stays_within_new_rows() {
         let mut t = tree(&["a.rs", "b.rs", "c.rs"]);
         t.move_cursor(true);
         t.move_cursor(true);
@@ -150,9 +150,9 @@ mod tests {
     }
 
     #[test]
-    fn etiketter() {
-        assert_eq!(count_label(1), "1 fil");
-        assert_eq!(count_label(3), "3 filer");
+    fn labels() {
+        assert_eq!(count_label(1), "1 file");
+        assert_eq!(count_label(3), "3 files");
         assert_eq!(file_name("src/a.rs"), "a.rs");
         assert_eq!(file_name("a.rs"), "a.rs");
     }

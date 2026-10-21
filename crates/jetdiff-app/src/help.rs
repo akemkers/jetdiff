@@ -1,47 +1,47 @@
-//! Tastene i tastelinja og hjelpen.
+//! The keys in the keymap bar and the help.
 
 pub type Keys = (&'static str, &'static str);
 
 pub const BAR: [Keys; 5] = [
-    ("Tab Shift-Tab", "fil"),
-    ("j k", "opp/ned"),
-    ("n p", "endring"),
-    ("?", "alle taster"),
-    ("q", "avslutt"),
+    ("Tab Shift-Tab", "file"),
+    ("j k", "up/down"),
+    ("n p", "hunk"),
+    ("?", "all keys"),
+    ("q", "quit"),
 ];
 
-/// Ctrl-variantene fra vim er ikke med.
+/// The Ctrl variants from vim are not included.
 pub const ALL: [(&str, &[Keys]); 4] = [
     (
-        "Flytt",
+        "Move",
         &[
-            ("j k", "opp/ned"),
-            ("h l", "sideveis"),
-            ("0 $", "linjestart/-slutt"),
-            ("d u", "halv side"),
-            ("gg G", "topp og bunn"),
-            ("n p", "neste/forrige endring"),
-            ("H L", "venstre/høyre side"),
+            ("j k", "up/down"),
+            ("h l", "sideways"),
+            ("0 $", "line start/end"),
+            ("d u", "half page"),
+            ("gg G", "top and bottom"),
+            ("n p", "next/previous hunk"),
+            ("H L", "Left/Right side"),
         ],
     ),
     (
-        "Filer",
+        "Files",
         &[
-            ("Tab Shift-Tab", "neste/forrige fil"),
-            ("J K", "neste/forrige fil"),
-            ("C-hjkl", "bytt panel"),
-            ("b", "skjul panel"),
+            ("Tab Shift-Tab", "next/previous file"),
+            ("J K", "next/previous file"),
+            ("C-hjkl", "switch panel"),
+            ("b", "hide panel"),
         ],
     ),
-    ("Folds", &[("o", "åpne fold"), ("f", "toggle folds")]),
+    ("Folds", &[("o", "open fold"), ("f", "toggle folds")]),
     (
-        "Annet",
+        "Other",
         &[
             ("v", "split/unified"),
-            ("y", "kopier fil:linje"),
-            ("r", "rull tilbake endring"),
+            ("y", "copy file:line"),
+            ("r", "roll back hunk"),
             ("Cmd +/-/0", "zoom"),
-            ("q", "avslutt"),
+            ("q", "quit"),
         ],
     ),
 ];

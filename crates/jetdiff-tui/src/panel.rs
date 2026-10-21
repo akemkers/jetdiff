@@ -1,4 +1,4 @@
-//! Filtreet og commit-lista til venstre.
+//! The file tree and the commit list on the left.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -15,16 +15,16 @@ use crate::WHEEL_ROWS;
 use crate::color::color;
 use crate::icons::{Icon, file_icon, folder_icon};
 
-/// Bredde i kolonner.
+/// Width in columns.
 const MIN_WIDTH: u16 = 24;
-/// Den automatiske bredden tar aldri mer enn dette av vinduet, som i GPUI.
+/// The automatic width never takes more than this of the window, as in GPUI.
 const MAX_AUTO_FRACTION: f32 = 0.4;
-/// Commit-lista sin del av høyden når begge seksjonene er åpne.
+/// The commit list's share of the height when both sections are open.
 const COMMITS_FRACTION: f32 = 0.4;
 const MIN_COMMITS_HEIGHT: u16 = 3;
 
-/// Kolonnene i en rad i treet: marg, innrykk per nivå, pila foran en mappe (eller like mye
-/// luft foran en fil), og kanten til høyre for panelet.
+/// The columns in a row in the tree: margin, indent per level, the arrow in front of a folder (or the same
+/// space in front of a file), and the edge to the right of the panel.
 const LEFT_MARGIN: usize = 1;
 const INDENT: usize = 2;
 const MARKER: usize = 2;
@@ -142,7 +142,7 @@ impl Panel {
         }
     }
 
-    /// Bredden innholdet trenger, innenfor grensene.
+    /// The width the content needs, within the limits.
     pub fn width(&self, window_width: u16) -> u16 {
         let changes = self.tree.changes();
         let icon_width = if self.icons { 2 } else { 0 };
@@ -274,7 +274,7 @@ impl Panel {
             return;
         }
         let (title, open) = match section {
-            Section::Files => ("Filer", self.files_open),
+            Section::Files => ("Files", self.files_open),
             Section::Commits => ("Commits", self.commits_open),
         };
         let text = format!(" {title} {}", if open { "−" } else { "+" });

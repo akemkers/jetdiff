@@ -1,4 +1,4 @@
-//! Endrede filer og treet de vises i. Vet ingenting om git eller GUI.
+//! Changed files and the tree they are shown in. Knows nothing about git or the GUI.
 
 use std::collections::BTreeSet;
 
@@ -14,11 +14,11 @@ pub enum Status {
     Renamed,
 }
 
-/// Stier er relative med `/` som skille, som git skriver dem.
+/// Paths are relative with `/` as separator, as git writes them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileChange {
     pub path: String,
-    /// Stien på venstre side ved rename.
+    /// The path on Left for a rename.
     pub old_path: Option<String>,
     pub status: Status,
 }
@@ -28,12 +28,12 @@ impl FileChange {
         self.old_path.as_deref().unwrap_or(&self.path)
     }
 
-    /// Hvor fila kom fra, relativt til mappa den ligger i nå. Som i IntelliJ.
+    /// Where the file came from, relative to the folder it is in now. As in IntelliJ.
     pub fn renamed_from(&self) -> Option<String> {
         let (old_dir, old_name) = split(self.old_path.as_deref()?);
         let (dir, name) = split(&self.path);
         if old_dir == dir {
-            return Some(format!("omdøpt fra {old_name}"));
+            return Some(format!("renamed from {old_name}"));
         }
         let (from, to) = (parts(dir), parts(old_dir));
         let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
@@ -42,11 +42,11 @@ impl FileChange {
         if old_name != name {
             rel.push(old_name);
         }
-        Some(format!("flyttet fra {}", rel.join("/")))
+        Some(format!("moved from {}", rel.join("/")))
     }
 }
 
-/// Mappe og filnavn. Mappa er tom for filer på toppnivå.
+/// Folder and file name. The folder is empty for top-level files.
 fn split(path: &str) -> (&str, &str) {
     path.rsplit_once('/').unwrap_or(("", path))
 }
@@ -55,8 +55,8 @@ fn parts(dir: &str) -> Vec<&str> {
     dir.split('/').filter(|p| !p.is_empty()).collect()
 }
 
-/// Antall filer i lista, før eller etter, som er endret på disk eller har kommet til,
-/// forsvunnet eller fått ny status. `paths` er de endrede stiene.
+/// The number of files in the list, before or after, that changed on disk or were added,
+/// disappeared or got a new file status. `paths` are the changed paths.
 pub fn touched(old: &[FileChange], new: &[FileChange], paths: &[String]) -> usize {
     let listed = |p: &str| {
         old.iter()
@@ -94,7 +94,7 @@ mod tests {
     }
 
     #[test]
-    fn teller_filer_som_er_endret() {
+    fn counts_changed_files() {
         let old = [
             change("a.rs", Status::Modified),
             change("b.rs", Status::Added),
@@ -110,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn teller_rename_via_gammel_sti() {
+    fn counts_rename_via_old_path() {
         let renamed = [FileChange {
             old_path: Some("a.rs".into()),
             ..change("b.rs", Status::Renamed)
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn hvor_fila_kom_fra() {
+    fn where_the_file_came_from() {
         let from = |old: &str, new: &str| {
             FileChange {
                 old_path: Some(old.into()),
@@ -128,12 +128,12 @@ mod tests {
             .renamed_from()
             .unwrap()
         };
-        assert_eq!(from("src/a.rs", "src/b.rs"), "omdøpt fra a.rs");
-        assert_eq!(from("a.rs", "b.rs"), "omdøpt fra a.rs");
-        assert_eq!(from("src/a.rs", "src/ny/a.rs"), "flyttet fra ..");
-        assert_eq!(from("src/ny/a.rs", "src/a.rs"), "flyttet fra ny");
-        assert_eq!(from("a.rs", "src/b.rs"), "flyttet fra ../a.rs");
-        assert_eq!(from("lib/x/a.rs", "src/a.rs"), "flyttet fra ../lib/x");
+        assert_eq!(from("src/a.rs", "src/b.rs"), "renamed from a.rs");
+        assert_eq!(from("a.rs", "b.rs"), "renamed from a.rs");
+        assert_eq!(from("src/a.rs", "src/new/a.rs"), "moved from ..");
+        assert_eq!(from("src/new/a.rs", "src/a.rs"), "moved from new");
+        assert_eq!(from("a.rs", "src/b.rs"), "moved from ../a.rs");
+        assert_eq!(from("lib/x/a.rs", "src/a.rs"), "moved from ../lib/x");
         assert_eq!(change("a.rs", Status::Modified).renamed_from(), None);
     }
 }

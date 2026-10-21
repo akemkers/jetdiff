@@ -1,4 +1,4 @@
-//! Venstre og høyre linje side om side, med skillelinje mellom. Siden uten linje fylles ut.
+//! Left and Right line next to each other, with a separator line between. The side without a line is filled in.
 
 use jetdiff_viewmodel::Side;
 use ratatui::layout::Rect;
@@ -7,7 +7,7 @@ use super::change::Change;
 use super::painter::Painter;
 use crate::geometry;
 
-/// Gir kolonnen scrollbaren står i.
+/// Gives the column the scrollbar is in.
 pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
     let cells = geometry::aligned(painter.diff(), area);
     painter.divider(cells.divider, area);

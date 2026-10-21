@@ -1,4 +1,4 @@
-//! Commitene under filtreet. Første rad er working tree, klikk på en rad viser den.
+//! The commit list under the file tree. The first row is Local changes; a click on a row shows it.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -15,14 +15,14 @@ use crate::settings::Settings;
 use crate::text::FAMILY;
 use crate::theme::UiTheme;
 
-/// Plass til meldingen med alderen under.
+/// Room for the message with the age under it.
 const COMMIT_ROW_HEIGHT: f32 = 40.;
 const AGE_SIZE: f32 = 11.;
 const LANE_WIDTH: f32 = 16.;
 const LINE_WIDTH: f32 = 2.;
 const DOT_SIZE: f32 = 8.;
 
-/// Hashen til valgt commit. `None` er working tree.
+/// The hash of the selected commit. `None` is Local changes.
 pub struct SelectCommit(pub Option<String>);
 
 pub struct CommitList {
@@ -54,7 +54,7 @@ impl CommitList {
         cx.notify();
     }
 
-    /// Uten `SelectCommit`, for når visningen ikke fikk byttet.
+    /// Without `SelectCommit`, for when the view could not switch.
     pub fn set_selected(&mut self, hash: Option<String>, cx: &mut Context<Self>) {
         self.commits.set_selected(hash);
         cx.notify();
@@ -140,8 +140,8 @@ impl CommitList {
             }))
     }
 
-    /// Én linje gjennom alle radene, med en prikk per commit. Working tree er en ring.
-    /// `bg` er bakgrunnen til raden, så ringen dekker linja uten å skille seg ut.
+    /// One line through all the rows, with a dot per commit. Local changes is a ring.
+    /// `bg` is the row's background, so the ring covers the line without standing out.
     fn graph(&self, i: usize, bg: Option<Hsla>, theme: &UiTheme) -> Div {
         let s = |v: f32| px(v * self.scale);
         let color = theme.commit_graph;
@@ -163,7 +163,7 @@ impl CommitList {
                 0 => d
                     .border(s(LINE_WIDTH))
                     .border_color(color)
-                    // Dekker linja under, i samme farge som raden
+                    // Covers the line below, in the same color as the row
                     .bg(bg.unwrap_or(theme.editor_bg)),
                 _ => d.bg(color),
             });

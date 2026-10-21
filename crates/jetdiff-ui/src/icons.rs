@@ -1,6 +1,6 @@
-//! Filtype-ikoner fra New UI i IntelliJ (`expui/fileTypes`), Apache 2.0. Rust-ikonet er fra
-//! intellij-rust (MIT, se `icons/LICENSE-intellij-rust.txt`). Go har ikon bare i GoLand, så
-//! Go-ikonet er fra Seti UI (MIT, se `icons/LICENSE-seti-ui.txt`).
+//! File type icons from New UI in IntelliJ (`expui/fileTypes`), Apache 2.0. The Rust icon is from
+//! intellij-rust (MIT, see `icons/LICENSE-intellij-rust.txt`). Go has an icon only in GoLand, so
+//! the Go icon is from Seti UI (MIT, see `icons/LICENSE-seti-ui.txt`).
 
 use std::borrow::Cow;
 
@@ -93,7 +93,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ikon_per_filtype() {
+    fn icon_per_file_type() {
         assert_eq!(file_icon("src/A.kt", true), "kotlin_dark.svg");
         assert_eq!(file_icon("App.tsx", false), "typeScript.svg");
         assert_eq!(file_icon("main.rs", false), "rust.svg");
@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn alle_ikoner_finnes() {
+    fn all_icons_exist() {
         for path in [
             "a.go", "a.java", "a.js", "a.json", "a.kt", "a.md", "a.rs", "a.toml", "a.ts", "a.xml",
             "a.yml", "a",

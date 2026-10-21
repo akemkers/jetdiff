@@ -1,5 +1,5 @@
-//! Temaets RGBA til terminalfarger. Terminalen har ikke alfa, så gjennomsiktige farger
-//! blandes over bakgrunnen de ligger på.
+//! The theme's RGBA to terminal colors. The terminal has no alpha, so transparent colors
+//! are blended over the background they lie on.
 
 use jetdiff_viewmodel::Rgba;
 use ratatui::style::Color;
@@ -28,7 +28,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blander_over_bakgrunnen() {
+    fn blends_over_the_background() {
         let black = Color::Rgb(0, 0, 0);
         assert_eq!(over([255, 255, 255, 255], black), Color::Rgb(255, 255, 255));
         assert_eq!(over([255, 255, 255, 0], black), black);

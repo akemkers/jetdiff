@@ -1,4 +1,4 @@
-//! Beskjed over tastelinja. Den som vil vise noe, får entiteten.
+//! Message above the keymap bar. Whoever wants to show something gets the entity.
 
 use std::time::Duration;
 
@@ -17,15 +17,15 @@ type Text = (SharedString, Level);
 
 #[derive(Default)]
 pub struct Message {
-    /// Står til den fjernes. En kort beskjed legger seg over den en stund.
+    /// Stays until removed. A brief message lies over it for a while.
     pinned: Option<Text>,
     brief: Option<Text>,
-    /// En ny kort beskjed erstatter den, og den gamle timeren droppes.
+    /// A new brief message replaces it, and the old timer is dropped.
     timer: Option<Task<()>>,
 }
 
 impl Message {
-    /// Forsvinner av seg selv.
+    /// Disappears by itself.
     pub fn show(&mut self, text: impl Into<SharedString>, level: Level, cx: &mut Context<Self>) {
         self.brief = Some((text.into(), level));
         self.timer = Some(cx.spawn(async move |this, cx| {
@@ -58,7 +58,7 @@ impl Message {
 }
 
 impl Render for Message {
-    /// Ligger over forelderen uten å ta plass, så innholdet under ikke hopper.
+    /// Lies over the parent without taking space, so the content below doesn't jump.
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Settings>().theme;
         div().absolute().bottom_full().left_0().right_0().children(

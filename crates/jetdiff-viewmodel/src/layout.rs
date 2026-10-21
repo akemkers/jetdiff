@@ -260,11 +260,7 @@ mod tests {
         let folds = visual_folds([0..4, 5..7, 9..12, 18..20]);
         let l = LineLayout::with_folds(20, 10., &folds);
         for v in 0..l.visual_line_count() + 10 {
-            assert_eq!(
-                l.logical_to_visual(l.visual_to_logical(v)),
-                v,
-                "visual {v}"
-            );
+            assert_eq!(l.logical_to_visual(l.visual_to_logical(v)), v, "visual {v}");
         }
         for line in 0..30 {
             let v = l.logical_to_visual(line);

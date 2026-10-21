@@ -1,4 +1,4 @@
-//! Endringene i et repo og fila som vises.
+//! The changes in a repo and the file being shown.
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -23,7 +23,7 @@ pub struct ReloadJob {
 }
 
 impl ReloadJob {
-    /// Commit-lista hentes på nytt hver gang, siden working tree bestemmer hvilke commits den har.
+    /// The commit list is fetched again every time, since Local changes decide which commits it has.
     pub fn run(self) -> Result<Loaded, String> {
         let home = Repo::work_tree(&self.root)?;
         let commits = home.commits()?;
@@ -48,7 +48,7 @@ pub enum Reloaded {
     },
     Done {
         commits: Vec<Commit>,
-        /// Bare når lista er endret.
+        /// Only when the list has changed.
         changes: Option<Rc<[FileChange]>>,
         file: Option<usize>,
         notice: Option<Notice>,
@@ -65,7 +65,7 @@ pub struct Shown {
     pub diff: FileDiff,
     pub notice: Option<Notice>,
     pub paths: [String; 2],
-    /// Bare working tree kan skrives til, ikke en commit.
+    /// Only Local changes can be written to, not a commit.
     pub can_rollback: bool,
     pub same_file: bool,
 }
@@ -73,10 +73,10 @@ pub struct Shown {
 pub struct Changes {
     repo: Repo,
     commit: Option<String>,
-    /// Commiten `changes` er fra. Blir lik `commit` når lastingen er ferdig.
+    /// The commit `changes` is from. Becomes equal to `commit` when loading is done.
     loaded_commit: Option<String>,
     changes: Rc<[FileChange]>,
-    /// Det diffen viser nå. Samme innhold etter en reload lar posisjonen stå.
+    /// What the diff shows now. The same content after a reload leaves the position alone.
     shown: Option<(FileChange, Result<[String; 2], String>)>,
 }
 
@@ -107,7 +107,7 @@ impl Changes {
         ChangeTree::new(&self.changes).first()
     }
 
-    /// Vises etter neste `reload`.
+    /// Shown after the next `reload`.
     pub fn select_commit(&mut self, hash: Option<String>) {
         self.commit = hash;
     }
@@ -119,7 +119,7 @@ impl Changes {
         }
     }
 
-    /// `paths` er filene watcheren så endret. Tom når reloaden kom av noe annet.
+    /// `paths` are the files the watcher saw change. Empty when the reload came from something else.
     pub fn reloaded(&mut self, loaded: Result<Loaded, String>, paths: &[String]) -> Reloaded {
         let Loaded {
             commit,
@@ -136,7 +136,7 @@ impl Changes {
                 };
             }
         };
-        // Bare working tree mot working tree er en oppdatering. En commit endrer seg ikke.
+        // Only Local changes against Local changes is an update. A commit doesn't change.
         let same_work_tree = commit.is_none() && self.loaded_commit.is_none();
         let touched = if same_work_tree && !paths.is_empty() {
             jetdiff_changes::touched(&self.changes, &changes, paths)
@@ -150,14 +150,14 @@ impl Changes {
             self.changes = changes.into();
             self.changes.clone()
         });
-        // Valgt fil beholdes så lenge den er med
+        // The selected file is kept as long as it is included
         let file = selected
             .and_then(|p| self.changes.iter().position(|c| c.path == p))
             .or_else(|| self.first());
         let notice = match touched {
             0 => None,
-            1 => Some(Notice::info("Oppdatert: 1 fil endret")),
-            n => Some(Notice::info(format!("Oppdatert: {n} filer endret"))),
+            1 => Some(Notice::info("Updated: 1 file changed")),
+            n => Some(Notice::info(format!("Updated: {n} files changed"))),
         };
         Reloaded::Done {
             commits,
@@ -170,7 +170,7 @@ impl Changes {
     pub fn load(&mut self, file: Option<usize>) -> Show {
         let Some(change) = file.map(|i| self.changes[i].clone()) else {
             self.shown = None;
-            return Show::Empty(Notice::info("Ingen endringer"));
+            return Show::Empty(Notice::info("No changes"));
         };
         let content = self.repo.read(&change);
         self.show(change, content)
@@ -193,7 +193,7 @@ impl Changes {
         }))
     }
 
-    /// Kjør en `reload` etterpå, så lista følger med.
+    /// Run a `reload` afterwards, so the list keeps up.
     pub fn rollback(&mut self, request: &RollbackRequest) -> Option<Result<Show, String>> {
         let Some((change, Ok([left, _]))) = self.shown.clone() else {
             return None;
@@ -269,8 +269,8 @@ mod tests {
     }
 
     #[test]
-    fn reload_beholder_valgt_fil() {
-        let r = TempRepo::new("beholder");
+    fn reload_keeps_selected_file() {
+        let r = TempRepo::new("keeps");
         r.write("a.rs", "a\n");
         r.write("b.rs", "b\n");
         r.git(&["add", "-A"]);
@@ -291,22 +291,22 @@ mod tests {
             ..
         } = reload(&mut c, &["b.rs", "c.rs"])
         else {
-            panic!("reload feilet");
+            panic!("reload failed");
         };
         assert!(changes.is_some());
         assert_eq!(path(&c, file), "b.rs");
-        assert_eq!(notice, Some(Notice::info("Oppdatert: 2 filer endret")));
+        assert_eq!(notice, Some(Notice::info("Updated: 2 files changed")));
         assert!(matches!(c.load(file), Show::Diff(s) if s.same_file));
     }
 
     #[test]
-    fn ukjent_commit_viser_det_som_vises() {
-        let r = TempRepo::new("ukjent");
+    fn unknown_commit_shows_what_is_shown() {
+        let r = TempRepo::new("unknown");
         r.write("a.rs", "a\n");
         r.git(&["add", "-A"]);
         r.git(&["commit", "-q", "-m", "c"]);
         let mut c = r.changes();
-        c.select_commit(Some("finnes-ikke".into()));
+        c.select_commit(Some("missing".into()));
         assert!(matches!(
             reload(&mut c, &[]),
             Reloaded::Failed { shown: None, .. }

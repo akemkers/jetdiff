@@ -1,4 +1,4 @@
-//! Terminalvisningen, med én rad per linje.
+//! The terminal view, with one row per line.
 
 mod app;
 mod backend;
@@ -27,14 +27,14 @@ use ratatui::crossterm::terminal::SetTitle;
 use crate::app::App;
 use crate::backend::TermBackend;
 
-/// Rader per hakk på scrollhjulet, i diffen og i panelet.
+/// Rows per notch on the scroll wheel, in the diff and in the panel.
 const WHEEL_ROWS: usize = 3;
 
 pub struct Settings {
     pub theme: Theme,
     pub unified: bool,
     pub side_panel_open: bool,
-    /// Nerd Font-tegn foran filene i treet.
+    /// Nerd Font characters in front of the files in the tree.
     pub icons: bool,
 }
 
@@ -56,12 +56,12 @@ pub fn run_changes(
     run(App::changes(repo, changes, &settings), title)
 }
 
-/// Hele framen i én skriving, og terminalen viser den først når den er ferdig. Uten dette
-/// tegnes radene synlig én etter én.
+/// The whole frame in one write, and the terminal shows it only when it is done. Without this
+/// the rows are drawn visibly one after another.
 pub type Term = Terminal<TermBackend<BufWriter<Stdout>>>;
 
 fn run(app: App, title: &str) -> io::Result<()> {
-    // `init` gjenoppretter terminalen også ved panikk
+    // `init` restores the terminal also on panic
     drop(ratatui::init());
     let backend = TermBackend::new(BufWriter::with_capacity(1 << 20, io::stdout()));
     let mut terminal = Terminal::new(backend)?;

@@ -1,5 +1,5 @@
-//! Tegning som split og unified deler: tekst med syntaks, ord-markering, linjenumre og
-//! error stripe.
+//! Drawing that Split and Unified share: text with syntax, inline highlights, line numbers and
+//! the hunk minimap.
 
 use std::ops::Range;
 
@@ -36,7 +36,7 @@ pub fn mask(bounds: Bounds<Pixels>) -> Option<ContentMask<Pixels>> {
     Some(ContentMask { bounds })
 }
 
-/// Bakgrunn for hele siden eller unified, og 1px strek ved separatoren i gutteren.
+/// Background for the whole side or for Unified, and a 1px stroke at the separator in the gutter.
 pub fn paint_code_background(
     geom: &SideGeometry,
     top: f32,
@@ -54,8 +54,8 @@ pub fn paint_code_background(
     window.paint_quad(fill(rect(separator, top, bottom), theme.indent_guide));
 }
 
-/// Diff-farge for en endring: full farge i nummerområdet. Ytterste 3px av gutteren og hele
-/// teksten får ignored-farge når endringen bare er whitespace.
+/// Diff color for a hunk: full color in the number area. The outermost 3px of the gutter and all
+/// of the text get the ignored color when the hunk is whitespace only.
 pub fn paint_change(
     geom: &SideGeometry,
     top: f32,
@@ -77,8 +77,8 @@ pub fn paint_change(
     window.paint_quad(fill(rect(outer, top, bottom), text_color));
 }
 
-/// Markert linje, over diff-bakgrunnene så den ikke forsvinner i endringer. Med fokus
-/// markeres også nummeret, som er lettest å finne igjen etter et hopp.
+/// The cursor's line, over the diff backgrounds so it doesn't disappear in hunks. With focus
+/// the number is also highlighted, which is easiest to find again after a jump.
 pub fn paint_caret_row(
     geom: &SideGeometry,
     top: f32,
@@ -99,10 +99,10 @@ pub fn paint_caret_row(
     }
 }
 
-/// Én linje shapet med syntaksfarger og tabs ekspandert.
+/// One line shaped with syntax colors and tabs expanded.
 pub struct ShapedText {
     pub expanded: ExpandedLine,
-    /// `None` for tomme linjer, de har ingenting å shape.
+    /// `None` for empty lines; they have nothing to shape.
     pub shaped: Option<ShapedLine>,
 }
 
@@ -125,7 +125,7 @@ impl ShapedText {
         Self { expanded, shaped }
     }
 
-    /// X i den viste teksten for en byte-kolonne i originallinja.
+    /// X in the shown text for a byte column in the original line.
     pub fn x_for_col(&self, col: usize) -> f32 {
         match &self.shaped {
             Some(shaped) => f32::from(shaped.x_for_index(self.expanded.display_index(col))),
@@ -139,8 +139,8 @@ impl ShapedText {
             .map_or(0., |shaped| f32::from(shaped.width))
     }
 
-    /// Ord-markering for linja. `text_x` er der teksten starter etter horisontal scroll,
-    /// `text_end` er høyre kant av tekstområdet og `row` er linjas y-område.
+    /// Inline highlight for the line. `text_x` is where the text starts after horizontal scroll,
+    /// `text_end` is the right edge of the text area and `row` is the line's y range.
     pub fn paint_inline(
         &self,
         highlights: &[InlineHighlight],
@@ -169,7 +169,7 @@ impl ShapedText {
     }
 }
 
-/// Runs for teksten med tabs ekspandert. Hull mellom tokens får standardfargen.
+/// Runs for the text with tabs expanded. Holes between tokens get the default color.
 fn syntax_runs(
     syntax: &[SyntaxSpan],
     expanded: &ExpandedLine,
@@ -199,7 +199,7 @@ fn syntax_runs(
     runs
 }
 
-/// Linjenummeret til en linje som telles fra 0.
+/// The line number of a line counted from 0.
 pub fn shape_number(
     line: usize,
     color: Hsla,
@@ -213,10 +213,10 @@ pub fn shape_number(
         .shape_line(text, style.number_font_size, &runs, None)
 }
 
-/// Error stripe-rektangler i sporet, slått sammen per piksel. Regnes ut når sporhøyden endres.
+/// Hunk minimap rectangles in the track, merged per pixel. Recomputed when the track height changes.
 #[derive(Debug, Clone, Default)]
 pub struct StripeRects {
-    /// Hele høyden til kodevisningen.
+    /// The whole height of the code view.
     pub track_height: f32,
     pub rects: Vec<(f32, f32, Hsla)>,
 }
@@ -243,7 +243,7 @@ impl StripeRects {
         }
     }
 
-    /// Markørene og scrollbar-tommelen. Scrollbaren ligger over teksten, så den males etter den.
+    /// The hunk minimap and the scrollbar thumb. The scrollbar lies over the text, so it is painted after it.
     pub fn paint(
         &self,
         geom: &SideGeometry,

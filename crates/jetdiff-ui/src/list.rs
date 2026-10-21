@@ -1,4 +1,4 @@
-//! Det treet og commit-lista har felles: mål, taster og radfarger.
+//! What the tree and the commit list have in common: sizes, keys and row colors.
 
 use gpui::{Hsla, KeyDownEvent};
 
@@ -28,7 +28,7 @@ pub fn list_key(ev: &KeyDownEvent) -> Option<ListKey> {
     }
 }
 
-/// Markøren vises bare med fokus. Det som er åpnet er svakere.
+/// The cursor is shown only with focus. The selection is fainter.
 pub fn row_bg(theme: &UiTheme, cursor: bool, open: bool, focused: bool) -> Option<Hsla> {
     if focused && cursor {
         Some(theme.tree_selection)

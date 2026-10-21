@@ -1,26 +1,26 @@
-//! Størrelsen på paneler som kan dras. Bredden følger innholdet til den dras i kanten til
-//! høyre. Høyden på en seksjon nederst i et panel dras i overkanten.
+//! The size of panels that can be dragged. The width follows the content until it is dragged at the right
+//! edge. The height of a section at the bottom of a panel is dragged at its top edge.
 
 use gpui::{ClickEvent, Context, Div, DragMoveEvent, EmptyView, Stateful, div, prelude::*, px};
 
 const MIN_WIDTH: f32 = 320.;
-/// Automatisk bredde tar aldri mer enn dette av vinduet.
+/// Automatic width never takes more than this of the window.
 const MAX_AUTO_FRACTION: f32 = 0.4;
 const MAX_FRACTION: f32 = 0.8;
 const MIN_HEIGHT: f32 = 80.;
 const DEFAULT_HEIGHT_FRACTION: f32 = 1. / 3.;
 const HANDLE_WIDTH: f32 = 20.;
-/// Høydehåndtaket ligger over kanten, så det ikke dekker første rad.
+/// The height handle lies above the edge, so it doesn't cover the first row.
 const HANDLE_HEIGHT: f32 = 8.;
 
-/// Egne typer, siden `on_drag_move` lytter på alle drag av samme type.
+/// Separate types, since `on_drag_move` listens to all drags of the same type.
 struct WidthDrag;
 struct HeightDrag;
 
-/// Uskalert, så bredden følger zoomen.
+/// Unscaled, so the width follows the zoom.
 #[derive(Default)]
 pub struct PanelWidth {
-    /// Satt med musa. `None` følger innholdet.
+    /// Set with the mouse. `None` follows the content.
     manual: Option<f32>,
 }
 
@@ -33,8 +33,8 @@ impl PanelWidth {
         .max(MIN_WIDTH)
     }
 
-    /// Håndtaket i kanten. Dobbeltklikk går tilbake til å følge innholdet. `get` gir bredden
-    /// og zoomen fra panelets tilstand.
+    /// The handle at the edge. A double click goes back to following the content. `get` gives the width
+    /// and the zoom from the panel's state.
     pub fn attach<T: 'static>(
         panel: Div,
         cx: &mut Context<T>,
@@ -62,10 +62,10 @@ impl PanelWidth {
     }
 }
 
-/// Uskalert, som `PanelWidth`.
+/// Unscaled, like `PanelWidth`.
 #[derive(Default)]
 pub struct PanelHeight {
-    /// Satt med musa. `None` er en fast andel av panelet.
+    /// Set with the mouse. `None` is a fixed share of the panel.
     manual: Option<f32>,
 }
 
@@ -77,8 +77,8 @@ impl PanelHeight {
             .clamp(MIN_HEIGHT, max)
     }
 
-    /// Legger `section` nederst i `panel`, med håndtaket i overkanten. Dobbeltklikk går
-    /// tilbake til standardhøyden.
+    /// Puts `section` at the bottom of `panel`, with the handle at its top edge. A double click goes
+    /// back to the default height.
     pub fn attach<T: 'static>(
         panel: Div,
         section: Div,
@@ -108,7 +108,7 @@ impl PanelHeight {
     }
 }
 
-/// Et håndtak som drar `drag`. Dobbeltklikk kaller `reset`.
+/// A handle that drags `drag`. A double click calls `reset`.
 fn handle<T: 'static, D: 'static>(
     id: &'static str,
     drag: D,
@@ -132,7 +132,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bredde_innenfor_grensene() {
+    fn width_within_limits() {
         let auto = PanelWidth::default();
         assert_eq!(auto.resolve(350., 1000.), 350.);
         assert_eq!(auto.resolve(600., 1000.), 400.);
@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn hoyde_innenfor_grensene() {
+    fn height_within_limits() {
         assert_eq!(PanelHeight::default().resolve(900.), 300.);
         assert_eq!(PanelHeight::default().resolve(90.), MIN_HEIGHT);
         let manual = |h| PanelHeight { manual: Some(h) };

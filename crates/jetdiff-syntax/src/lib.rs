@@ -1,5 +1,5 @@
-//! Syntax highlighting med tree-sitter. Gir tokens med byte-intervaller for en hel fil, så
-//! slettede linjer får riktig syntaks. Tokenene tilsvarer IntelliJ sine `DEFAULT_*`-nøkler.
+//! Syntax highlighting with tree-sitter. Gives tokens with byte ranges for a whole file, so
+//! deleted lines get the right syntax. The tokens correspond to IntelliJ's `DEFAULT_*` keys.
 
 use std::ops::Range;
 use std::sync::OnceLock;
@@ -22,7 +22,7 @@ pub enum Language {
     Yaml,
 }
 
-/// Samme rekkefølge som enumen, så `lang as usize` er indeksen.
+/// The same order as the enum, so `lang as usize` is the index.
 const LANGUAGES: [Language; 12] = [
     Language::Go,
     Language::Java,
@@ -69,7 +69,7 @@ pub enum Token {
     DocComment,
     Function,
     FunctionCall,
-    /// Klasse- og typenavn, `DEFAULT_CLASS_NAME` og `DEFAULT_CLASS_REFERENCE`.
+    /// Class and type names, `DEFAULT_CLASS_NAME` and `DEFAULT_CLASS_REFERENCE`.
     Type,
     Constant,
     Property,
@@ -80,17 +80,17 @@ pub enum Token {
     Link,
     Strong,
     Emphasis,
-    /// `DEFAULT_PARENTHS`, `DEFAULT_BRACES`, `DEFAULT_COMMA` og lignende.
+    /// `DEFAULT_PARENTHS`, `DEFAULT_BRACES`, `DEFAULT_COMMA` and the like.
     Punctuation,
     /// `DEFAULT_OPERATION_SIGN`.
     Operator,
-    /// Rust har egne nøkler med farge der `DEFAULT_*` er vanlig tekst, som `org.rust.STRUCT`.
+    /// Rust has its own keys with a color where `DEFAULT_*` is plain text, like `org.rust.STRUCT`.
     Struct,
     Enum,
     EnumVariant,
     Crate,
     Macro,
-    /// `self` som verdi, `org.rust.SELF_EXPRESSION` og `SELF_PARAMETER`.
+    /// `self` as a value, `org.rust.SELF_EXPRESSION` and `SELF_PARAMETER`.
     SelfValue,
     /// `?`, `org.rust.Q_OPERATOR`.
     QOperator,
@@ -134,9 +134,9 @@ pub struct Span {
     pub token: Token,
 }
 
-/// Capture-navnene i `queries/`. `plain` nullstiller foreldren, som `${}` i en streng.
-/// Ved flere treff på samme node vinner det siste mønsteret, og captures på barn legger seg
-/// inni foreldren.
+/// The capture names in `queries/`. `plain` resets the parent, like `${}` in a string.
+/// With several matches on the same node the last pattern wins, and captures on children sit
+/// inside the parent.
 const NAMES: [(&str, Option<Token>); 28] = [
     ("keyword", Some(Token::Keyword)),
     ("string", Some(Token::String)),
@@ -174,7 +174,7 @@ fn config(lang: Language) -> &'static HighlightConfiguration {
     CONFIGS[lang as usize].get_or_init(|| build(lang))
 }
 
-/// Inline-grammatikken til Markdown, som blokk-grammatikken injiserer.
+/// The inline grammar of Markdown, which the block grammar injects.
 fn markdown_inline() -> &'static HighlightConfiguration {
     static CONFIG: OnceLock<HighlightConfiguration> = OnceLock::new();
     CONFIG.get_or_init(|| {
@@ -228,7 +228,7 @@ fn build(lang: Language) -> HighlightConfiguration {
             "",
         ),
         Tsx => (tree_sitter_typescript::LANGUAGE_TSX, [JS, TS].concat(), ""),
-        // JSX-mønstrene i javascript.scm finnes ikke i TypeScript-grammatikken
+        // The JSX patterns in javascript.scm don't exist in the TypeScript grammar
         TypeScript => (
             tree_sitter_typescript::LANGUAGE_TYPESCRIPT,
             [strip_jsx(JS), TS].concat(),
@@ -258,7 +258,7 @@ fn new_config(
     injections: &str,
 ) -> HighlightConfiguration {
     let mut config = HighlightConfiguration::new(language, "", highlights, injections, "")
-        .unwrap_or_else(|e| panic!("ugyldig query: {e}"));
+        .unwrap_or_else(|e| panic!("invalid query: {e}"));
     config.configure(&NAMES.map(|(n, _)| n));
     config
 }
@@ -267,7 +267,7 @@ fn injection(name: &str) -> Option<&'static HighlightConfiguration> {
     (name == "markdown_inline").then(markdown_inline)
 }
 
-/// Sortert og uten overlapp. Nestede captures gir det innerste tokenet.
+/// Sorted and without overlap. Nested captures give the innermost token.
 pub fn highlight(lang: Language, text: &str) -> Vec<Span> {
     let config = config(lang);
     let mut highlighter = Highlighter::new();
@@ -298,7 +298,7 @@ pub fn highlight(lang: Language, text: &str) -> Vec<Span> {
                     }),
                 }
             }
-            // Avbrutt eller for dypt nestet: vis det vi har
+            // Cancelled or nested too deeply: show what we have
             Err(_) => break,
         }
     }
@@ -319,28 +319,28 @@ mod tests {
     fn has(lang: Language, text: &str, want: &[(&str, Token)]) {
         let got = tokens(lang, text);
         for w in want {
-            assert!(got.contains(w), "{w:?} mangler i {got:?}");
+            assert!(got.contains(w), "{w:?} missing in {got:?}");
         }
     }
 
-    /// Ingen token for disse, de vises som vanlig tekst.
+    /// No token for these; they are shown as plain text.
     fn lacks(lang: Language, text: &str, plain: &[&str]) {
         let got = tokens(lang, text);
         for p in plain {
             assert!(
                 !got.iter().any(|(t, _)| t == p),
-                "{p:?} har token i {got:?}"
+                "{p:?} has a token in {got:?}"
             );
         }
     }
 
     #[test]
-    fn rekkefolge_som_enumen() {
+    fn order_like_the_enum() {
         for (i, t) in Token::ALL.iter().enumerate() {
             assert_eq!(*t as usize, i, "{t:?}");
             assert!(
                 NAMES.iter().any(|(_, n)| *n == Some(*t)),
-                "{t:?} mangler i NAMES"
+                "{t:?} missing in NAMES"
             );
         }
         for (i, l) in LANGUAGES.iter().enumerate() {
@@ -349,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn alle_queries_bygger() {
+    fn all_queries_build() {
         for lang in LANGUAGES {
             config(lang);
         }
@@ -357,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn filendelse() {
+    fn file_extension() {
         assert_eq!(Language::from_path("a/b.kt"), Some(Language::Kotlin));
         assert_eq!(Language::from_path("App.TSX"), Some(Language::Tsx));
         assert_eq!(Language::from_path("Makefile"), None);
@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn rust_som_rustrover() {
+    fn rust_like_rustrover() {
         use Token::*;
         let text = "use std::path::{Path, PathBuf};\nuse jetdiff_changes::Status;\n\
             fn f(dir: &Path) -> Result<Self, String> {\n\
@@ -431,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn rust_attributt_i_en_farge() {
+    fn rust_attribute_in_one_color() {
         let got = tokens(
             Language::Rust,
             "#[derive(Debug, serde::Serialize)]\n#[cfg(all(unix, not(test)))]\n",
@@ -446,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    fn tegn() {
+    fn operators_and_punctuation() {
         use Token::*;
         has(
             Language::Go,
@@ -478,7 +478,7 @@ mod tests {
     #[test]
     fn kotlin() {
         use Token::*;
-        let text = "/** Doc */\n@Test\nfun f(x: Int): String = \"hei $x\"\nval MAX = y.z\n";
+        let text = "/** Doc */\n@Test\nfun f(x: Int): String = \"hi $x\"\nval MAX = y.z\n";
         has(
             Language::Kotlin,
             text,
@@ -487,7 +487,7 @@ mod tests {
                 ("@Test", Metadata),
                 ("fun", Keyword),
                 ("f", Function),
-                ("\"hei $", String),
+                ("\"hi $", String),
                 ("MAX", Constant),
                 ("z", Property),
                 ("Int", Type),
@@ -546,7 +546,7 @@ mod tests {
     }
 
     #[test]
-    fn kall() {
+    fn calls() {
         use Token::*;
         has(
             Language::Go,
@@ -571,7 +571,7 @@ mod tests {
         has(
             Language::Rust,
             "fn f() { UiTheme::dark(); g(b.c()); std::env::args(); }",
-            // Rust farger kall som deklarasjoner
+            // Rust colors calls like declarations
             &[
                 ("dark", Function),
                 ("g", Function),
@@ -587,7 +587,7 @@ mod tests {
     }
 
     #[test]
-    fn tsx_og_jsx() {
+    fn tsx_and_jsx() {
         use Token::*;
         has(
             Language::Tsx,
@@ -602,21 +602,21 @@ mod tests {
     }
 
     #[test]
-    fn nokler() {
+    fn keys() {
         has(
             Language::Yaml,
-            "navn: verdi\n",
-            &[("navn", Token::Keyword), ("verdi", Token::String)],
+            "name: value\n",
+            &[("name", Token::Keyword), ("value", Token::String)],
         );
         has(
             Language::Toml,
-            "[t]\nnavn = 1\n",
-            &[("t", Token::Keyword), ("navn", Token::Keyword)],
+            "[t]\nname = 1\n",
+            &[("t", Token::Keyword), ("name", Token::Keyword)],
         );
         has(
             Language::Json,
-            "{\"navn\": \"v\"}",
-            &[("\"navn\"", Token::Property), ("\"v\"", Token::String)],
+            "{\"name\": \"v\"}",
+            &[("\"name\"", Token::Property), ("\"v\"", Token::String)],
         );
     }
 
@@ -625,14 +625,14 @@ mod tests {
         use Token::*;
         let got = tokens(
             Language::Markdown,
-            "# Tittel\n\nLitt **fet** tekst.\n\n```rust\nfn f() {}\n```\n",
+            "# Title\n\nSome **bold** text.\n\n```rust\nfn f() {}\n```\n",
         );
         assert!(
             got.iter()
-                .any(|&(t, k)| t.contains("Tittel") && k == Heading),
+                .any(|&(t, k)| t.contains("Title") && k == Heading),
             "{got:?}"
         );
-        assert!(got.contains(&("**fet**", Strong)), "{got:?}");
+        assert!(got.contains(&("**bold**", Strong)), "{got:?}");
         assert!(!got.iter().any(|&(t, _)| t.contains("fn")), "{got:?}");
     }
 

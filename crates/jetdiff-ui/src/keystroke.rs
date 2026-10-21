@@ -1,10 +1,10 @@
-//! GPUI-tast til `Key` fra `jetdiff-viewmodel`, som oversetter videre til `Command`.
+//! GPUI key to `Key` from `jetdiff-viewmodel`, which translates it further to `Command`.
 
 use gpui::Keystroke;
 use jetdiff_viewmodel::{Key, KeyCode};
 
-/// `key_char` har shift og alt med, så `G`, `$` og `[` på norsk tastatur kommer riktig. Med
-/// ctrl er `key_char` tom, og `key` er grunntasten.
+/// `key_char` includes shift and alt, so `G`, `$` and `[` on a Norwegian keyboard come out right. With
+/// ctrl, `key_char` is empty, and `key` is the base key.
 pub fn to_key(keystroke: &Keystroke) -> Key {
     let modifiers = keystroke.modifiers;
     let single = |text: &str| {
@@ -62,7 +62,7 @@ mod tests {
     }
 
     #[test]
-    fn taster_fra_gpui() {
+    fn keys_from_gpui() {
         let none = Modifiers::default();
         let shift = Modifiers {
             shift: true,
@@ -78,7 +78,7 @@ mod tests {
             KeyCode::Char('G')
         );
         assert_eq!(to_key(&stroke("d", None, ctrl)), Key::ctrl('d'));
-        // Norsk Alt+8 gir `[`
+        // Norwegian Alt+8 gives `[`
         assert_eq!(
             to_key(&stroke("8", Some("["), alt)).code,
             KeyCode::Char('[')
