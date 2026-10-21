@@ -205,3 +205,43 @@ fn ny_tekst_beholder_linja() {
     state.replace_diff(file_diff(&old, &new), VIEWPORT);
     assert_eq!(state.location(), Cursor::new(Side::Right, 40));
 }
+
+#[test]
+fn aligned_setter_linjene_parvis() {
+    let diff = UnifiedDiff::aligned(file_diff("a\nb\nc\nd\n", "a\nB\nd\ne\n"));
+    let rows = lines(&diff);
+    // `b c` mot `B`, og `e` er ny
+    assert_eq!(rows[0], [Some(0), Some(0)]);
+    assert_eq!(rows[1], [Some(1), Some(1)]);
+    assert_eq!(rows[2], [Some(2), None]);
+    assert_eq!(rows[3], [Some(3), Some(2)]);
+    assert_eq!(rows[4], [None, Some(3)]);
+    assert_eq!(diff.block_rows(), [1..3, 4..5]);
+    assert_eq!(diff.row_of(Side::Right, 2), 3);
+}
+
+#[test]
+fn realign_beholder_linja() {
+    let mut state = UnifiedState::new(Rc::new(unified("a\nb\nc\n", "a\nB\nc\n")));
+    state.init(VIEWPORT);
+    // Unified: a, b, B, c. Cursoren på c.
+    state.click(3);
+    let aligned = state.realign(true, VIEWPORT);
+    assert!(aligned.diff.is_aligned());
+    assert_eq!(aligned.diff.row(aligned.row).lines, [Some(2), Some(2)]);
+    let back = aligned.realign(false, VIEWPORT);
+    assert_eq!(back.row, 3);
+}
+
+#[test]
+fn aligned_parrer_linjer_med_felles_tekst() {
+    let old = "a\nuse x::{\n    A,\n};\nuse app::{Keys, B};\nz\n";
+    let new = "a\nuse app::C;\nz\n";
+    let diff = UnifiedDiff::aligned(file_diff(old, new));
+    let rows = lines(&diff);
+    // `use x::{ A, };` er borte, `use app::` står mot `use app::`
+    assert_eq!(rows[1], [Some(1), None]);
+    assert_eq!(rows[3], [Some(3), None]);
+    assert_eq!(rows[4], [Some(4), Some(1)]);
+    assert_eq!(rows[5], [Some(5), Some(2)]);
+}

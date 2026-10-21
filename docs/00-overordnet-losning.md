@@ -63,7 +63,13 @@ jetdiff-ui       GPUI
   changes_view   treet + én fil, som commit-dialogen i IntelliJ
   theme          fargetabell fra JetBrains (light og dark)
 
-jetdiff          binær: CLI
+jetdiff-tui      terminalen, ratatui
+  diff_view      taster, mus og overlay for diffen
+  paint          justerte rader og unified i celler, uten folding
+  panel          filtreet og commit-lista
+  app            hendelsesløkka, watcher og reload i en tråd
+
+jetdiff          binær: CLI, featurene gui og tui
 ```
 
 Moduler kjenner ikke hverandre. Delt tilstand ligger i små GPUI-entiteter som alle observerer: `Selection` (valgt fil), og etter hvert policy. Treet skriver til `Selection` ved klikk, og diff-viewen følger den. `J`/`K` og Tab flytter valget i treet uansett hvor fokus er. Skallet lager entitetene og gir dem til modulene. Kjernen får aldri stier eller git.

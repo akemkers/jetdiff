@@ -93,7 +93,7 @@ pub struct UiTheme {
 }
 
 impl UiTheme {
-    fn new(theme: &Theme) -> Self {
+    pub fn new(theme: &Theme) -> Self {
         Self {
             dark: theme.dark,
             editor_bg: hsla(theme.editor_bg),

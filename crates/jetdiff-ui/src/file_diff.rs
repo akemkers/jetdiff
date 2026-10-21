@@ -10,7 +10,6 @@ use gpui::{
 };
 use jetdiff_app::{RollbackRequest, location, rollback_request};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::columns::display_width;
 use jetdiff_viewmodel::metrics::zoomed;
 use jetdiff_viewmodel::{
     Command, DiffMode, FileDiff, FoldId, Folding, Horizontal, KeyParser, Parsed, StripeMarker,
@@ -85,7 +84,7 @@ impl FileDiffView {
     ) -> Self {
         let unified = cx.global::<Settings>().unified;
         Self {
-            max_cols: max_cols(&diff),
+            max_cols: diff.max_display_width(),
             mode: diff_mode(diff, unified, cx),
             unified,
             font_size: cx.global::<Settings>().font_size,
@@ -114,7 +113,7 @@ impl FileDiffView {
             self.overlay = None;
         }
         self.paths = paths;
-        self.max_cols = max_cols(&diff);
+        self.max_cols = diff.max_display_width();
         self.mode = diff_mode(diff, self.unified, cx);
         self.scroll = ScrollAnimator::default();
         self.keys.reset();
@@ -131,7 +130,7 @@ impl FileDiffView {
             return;
         };
         self.paths = paths;
-        self.max_cols = max_cols(&diff);
+        self.max_cols = diff.max_display_width();
         self.stop_animation();
         let folding = folding(&diff, cx);
         self.mode
@@ -235,7 +234,7 @@ impl FileDiffView {
                 return;
             }
             Command::CopyLocation => {
-                if let Some(location) = location(&self.mode, &self.paths) {
+                if let Some(location) = location(self.mode.location(), &self.paths) {
                     cx.write_to_clipboard(ClipboardItem::new_string(location.clone()));
                     self.show_message(format!("Kopierte {location}"), cx);
                 }
@@ -284,7 +283,11 @@ impl FileDiffView {
     /// Sjekker at endringen kan rulles tilbake og åpner dialogen. `on_key_down` sender
     /// `Rollback` på Enter.
     fn rollback(&mut self, cx: &mut Context<Self>) {
-        match rollback_request(&self.mode, self.can_rollback) {
+        match rollback_request(
+            self.mode.diff(),
+            self.mode.cursor_block(),
+            self.can_rollback,
+        ) {
             Ok(request) => {
                 self.overlay = Some(Overlay::Confirm(Rollback(request)));
                 cx.notify();
@@ -497,15 +500,6 @@ fn folding(diff: &FileDiff, cx: &App) -> Folding {
     let mut folding = Folding::new(diff);
     folding.expand_all(!cx.global::<Settings>().collapse_unchanged);
     folding
-}
-
-fn max_cols(diff: &FileDiff) -> usize {
-    SIDES
-        .iter()
-        .flat_map(|&s| (0..diff.line_count(s)).map(move |l| (s, l)))
-        .map(|(s, l)| display_width(diff.line(s, l)))
-        .max()
-        .unwrap_or(0)
 }
 
 impl EventEmitter<Zoomed> for FileDiffView {}

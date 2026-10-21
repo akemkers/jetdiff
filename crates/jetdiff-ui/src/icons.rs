@@ -1,5 +1,6 @@
 //! Filtype-ikoner fra New UI i IntelliJ (`expui/fileTypes`), Apache 2.0. Rust-ikonet er fra
-//! intellij-rust (MIT, se `icons/LICENSE-intellij-rust.txt`). Go har ikon bare i GoLand.
+//! intellij-rust (MIT, se `icons/LICENSE-intellij-rust.txt`). Go har ikon bare i GoLand, så
+//! Go-ikonet er fra Seti UI (MIT, se `icons/LICENSE-seti-ui.txt`).
 
 use std::borrow::Cow;
 
@@ -15,10 +16,11 @@ macro_rules! icons {
     };
 }
 
-const ICONS: [(&str, &[u8]); 28] = icons!(
+const ICONS: [(&str, &[u8]); 30] = icons!(
     "chevronDown",
     "chevronRight",
     "folder",
+    "go",
     "java",
     "javaScript",
     "json",
@@ -60,7 +62,8 @@ pub fn file_icon(path: &str, dark: bool) -> String {
         Some(Xml) => "xml",
         Some(Yaml) => "yaml",
         Some(Rust) => "rust",
-        Some(Go) | None => "text",
+        Some(Go) => "go",
+        None => "text",
     };
     icon(name, dark)
 }
@@ -94,7 +97,7 @@ mod tests {
         assert_eq!(file_icon("src/A.kt", true), "kotlin_dark.svg");
         assert_eq!(file_icon("App.tsx", false), "typeScript.svg");
         assert_eq!(file_icon("main.rs", false), "rust.svg");
-        assert_eq!(file_icon("main.go", false), "text.svg");
+        assert_eq!(file_icon("main.go", false), "go.svg");
         assert_eq!(file_icon("Makefile", true), "text_dark.svg");
         assert_eq!(folder_icon(true), "folder_dark.svg");
     }
@@ -102,8 +105,8 @@ mod tests {
     #[test]
     fn alle_ikoner_finnes() {
         for path in [
-            "a.java", "a.js", "a.json", "a.kt", "a.md", "a.rs", "a.toml", "a.ts", "a.xml", "a.yml",
-            "a",
+            "a.go", "a.java", "a.js", "a.json", "a.kt", "a.md", "a.rs", "a.toml", "a.ts", "a.xml",
+            "a.yml", "a",
         ] {
             for dark in [false, true] {
                 assert!(

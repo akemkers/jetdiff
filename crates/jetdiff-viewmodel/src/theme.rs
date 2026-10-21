@@ -5,6 +5,8 @@
 
 use jetdiff_syntax::Token;
 
+use crate::model::DiffType;
+
 /// RGBA, alfa 255 er ugjennomsiktig.
 pub type Rgba = [u8; 4];
 
@@ -292,6 +294,14 @@ impl Theme {
                 Token::Macro => style(BLUE),
                 Token::SelfValue => style(MAUVE),
             }),
+        }
+    }
+
+    pub fn diff(&self, diff_type: DiffType) -> &DiffColors {
+        match diff_type {
+            DiffType::Inserted => &self.inserted,
+            DiffType::Deleted => &self.deleted,
+            DiffType::Modified => &self.modified,
         }
     }
 

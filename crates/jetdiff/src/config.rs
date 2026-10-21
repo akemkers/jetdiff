@@ -5,7 +5,7 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use jetdiff_ui::UiTheme;
+use jetdiff_viewmodel::Theme;
 use jetdiff_viewmodel::metrics::{MAX_FONT_SIZE, MIN_FONT_SIZE};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
@@ -13,31 +13,38 @@ use toml::{Table, Value};
 
 const TEMPLATE: &str = include_str!("config.toml");
 
-type NewTheme = fn() -> UiTheme;
+type NewTheme = fn() -> Theme;
 
 const THEMES: [(&str, NewTheme); 3] = [
-    ("catppuccin-mocha", UiTheme::mocha),
-    ("jetbrains-dark", UiTheme::dark),
-    ("jetbrains-light", UiTheme::light),
+    ("catppuccin-mocha", Theme::mocha),
+    ("jetbrains-dark", Theme::dark),
+    ("jetbrains-light", Theme::light),
 ];
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(deserialize_with = "theme")]
-    pub theme: UiTheme,
+    pub theme: Theme,
     #[serde(deserialize_with = "font_size")]
     pub font_size: f32,
     pub collapse_unchanged: bool,
     #[serde(rename = "view", deserialize_with = "view")]
     pub unified: bool,
     pub side_panel: SidePanel,
+    pub terminal: Terminal,
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SidePanel {
     pub open: bool,
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Terminal {
+    pub icons: bool,
 }
 
 pub fn load() -> Result<Config, String> {
@@ -76,7 +83,7 @@ fn merge(base: &mut Table, over: Table) {
     }
 }
 
-fn theme<'de, D: Deserializer<'de>>(d: D) -> Result<UiTheme, D::Error> {
+fn theme<'de, D: Deserializer<'de>>(d: D) -> Result<Theme, D::Error> {
     let name = String::deserialize(d)?;
     THEMES
         .iter()
@@ -126,16 +133,17 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\ncollapse_unchanged = false\nview = \"unified\"\n[side_panel]\nopen = true\n";
+    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\ncollapse_unchanged = false\nview = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\n";
 
     #[test]
     fn malen_er_gyldig() {
         let config = parse(TEMPLATE).unwrap();
-        assert_eq!(config.theme, UiTheme::mocha());
+        assert_eq!(config.theme, Theme::mocha());
         assert_eq!(config.font_size, 14.);
         assert!(config.collapse_unchanged);
         assert!(!config.unified);
         assert!(!config.side_panel.open);
+        assert!(config.terminal.icons);
     }
 
     #[test]
@@ -148,11 +156,12 @@ mod tests {
     #[test]
     fn leser_alle_innstillingene() {
         let config = parse(OK).unwrap();
-        assert_eq!(config.theme, UiTheme::dark());
+        assert_eq!(config.theme, Theme::dark());
         assert_eq!(config.font_size, 16.);
         assert!(!config.collapse_unchanged);
         assert!(config.unified);
         assert!(config.side_panel.open);
+        assert!(!config.terminal.icons);
     }
 
     #[test]
@@ -183,7 +192,7 @@ mod tests {
     #[test]
     fn manglende_nokler_hentes_fra_malen() {
         let config = parse("theme = \"jetbrains-dark\"\n[side_panel]\nopen = true\n").unwrap();
-        assert_eq!(config.theme, UiTheme::dark());
+        assert_eq!(config.theme, Theme::dark());
         assert_eq!(config.font_size, 14.);
         assert!(config.collapse_unchanged);
         assert!(config.side_panel.open);

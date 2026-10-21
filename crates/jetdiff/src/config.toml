@@ -15,3 +15,7 @@ view = "split"
 [side_panel]
 # true viser filtreet og commitene ved oppstart. b viser og skjuler dem.
 open = false
+
+[terminal]
+# Filikoner i terminalvisningen. Krever en Nerd Font, se README.
+icons = true

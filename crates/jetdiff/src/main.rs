@@ -1,11 +1,18 @@
-//! jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
+//! jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 //!
 //! Uten argumenter vises lokale endringer, på en branch mot der den gikk ut fra main.
 //! En mappe viser lokale endringer der. Med én commit vises den mot forelderen.
 //! En PR-lenke hentes inn i repoet du står i. Innstillingene
-//! ligger i config-fila, se `config.rs`.
+//! ligger i config-fila, se `config.rs`. `--tui` viser diffen i terminalen.
 
 mod config;
+#[cfg(feature = "gui")]
+mod gui;
+#[cfg(feature = "tui")]
+mod tui;
+
+#[cfg(not(any(feature = "gui", feature = "tui")))]
+compile_error!("jetdiff trenger minst én av featurene gui og tui");
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -14,20 +21,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use gpui::{
-    App, AppContext, Application, Bounds, Context, Focusable, KeyBinding, Render, WindowBounds,
-    WindowOptions, actions, px, size,
-};
-use jetdiff_app::{AppCommand, BINDINGS};
+use jetdiff_app::LOCAL_CHANGES;
 use jetdiff_git::{PullRequest, Repo};
-use jetdiff_ui::{
-    Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp,
-    LOCAL_CHANGES, NextFile, PrevFile, ResetZoom, Settings, ToggleHelp, ToggleSidePanel,
-    ToggleView, ZoomIn, ZoomOut, load_font,
-};
 use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
-
-actions!(jetdiff, [Quit]);
 
 enum Source {
     WorkTree(PathBuf),
@@ -36,12 +32,39 @@ enum Source {
     Files(String, String),
 }
 
-fn parse_args() -> Result<Source, String> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    if let Some(flag) = args.iter().find(|a| a.starts_with("--")) {
-        return Err(format!("ukjent flagg: {flag}"));
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Frontend {
+    #[cfg(feature = "gui")]
+    Gui,
+    #[cfg(feature = "tui")]
+    Tui,
+}
+
+fn parse_args() -> Result<(Source, Frontend), String> {
+    let mut tui = false;
+    let mut paths = Vec::new();
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "--tui" => tui = true,
+            flag if flag.starts_with("--") => return Err(format!("ukjent flagg: {flag}")),
+            _ => paths.push(arg),
+        }
     }
-    parse_source(&args)
+    Ok((parse_source(&paths)?, frontend(tui)?))
+}
+
+/// Vinduet når GPUI er bygd inn, ellers terminalen.
+fn frontend(tui: bool) -> Result<Frontend, String> {
+    match tui {
+        #[cfg(feature = "tui")]
+        true => Ok(Frontend::Tui),
+        #[cfg(not(feature = "tui"))]
+        true => Err("bygd uten featuren tui".into()),
+        #[cfg(feature = "gui")]
+        false => Ok(Frontend::Gui),
+        #[cfg(not(feature = "gui"))]
+        false => Ok(Frontend::Tui),
+    }
 }
 
 fn parse_source(paths: &[String]) -> Result<Source, String> {
@@ -53,7 +76,9 @@ fn parse_source(paths: &[String]) -> Result<Source, String> {
         [dir] if Path::new(dir).is_dir() => Ok(Source::WorkTree(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
         [left, right] => Ok(Source::Files(left.clone(), right.clone())),
-        _ => Err("bruk: jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]".into()),
+        _ => Err(
+            "bruk: jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]".into(),
+        ),
     }
 }
 
@@ -63,33 +88,8 @@ fn read(path: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-fn bind_keys(cx: &mut App) {
-    // Resten av tastene går gjennom vim-parseren i `FileDiffView`
-    cx.bind_keys(BINDINGS.iter().map(|&(keys, cmd)| key_binding(keys, cmd)));
-    cx.on_action(|_: &Quit, cx| cx.quit());
-}
-
-fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
-    match cmd {
-        AppCommand::ZoomIn => KeyBinding::new(keys, ZoomIn, None),
-        AppCommand::ZoomOut => KeyBinding::new(keys, ZoomOut, None),
-        AppCommand::ResetZoom => KeyBinding::new(keys, ResetZoom, None),
-        AppCommand::FocusLeft => KeyBinding::new(keys, FocusLeft, None),
-        AppCommand::FocusDown => KeyBinding::new(keys, FocusDown, None),
-        AppCommand::FocusUp => KeyBinding::new(keys, FocusUp, None),
-        AppCommand::FocusRight => KeyBinding::new(keys, FocusRight, None),
-        AppCommand::ToggleSidePanel => KeyBinding::new(keys, ToggleSidePanel, None),
-        AppCommand::ToggleView => KeyBinding::new(keys, ToggleView, None),
-        AppCommand::NextFile => KeyBinding::new(keys, NextFile, None),
-        AppCommand::PrevFile => KeyBinding::new(keys, PrevFile, None),
-        AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),
-        AppCommand::HideHelp => KeyBinding::new(keys, HideHelp, None),
-        AppCommand::Quit => KeyBinding::new(keys, Quit, None),
-    }
-}
-
 /// Det vinduet skal vise, klart før appen starter så feil kan skrives til terminalen.
-enum Content {
+pub enum Content {
     File(Box<FileDiff>, [String; 2]),
     Changes(Repo, Vec<jetdiff_changes::FileChange>),
 }
@@ -165,38 +165,8 @@ fn file_diff(left: &str, right: &str) -> Result<FileDiff, String> {
     Ok(diff)
 }
 
-fn open<V: Render + Focusable>(
-    cx: &mut App,
-    title: String,
-    build: impl FnOnce(&mut Context<V>) -> V + 'static,
-) {
-    // Nær skjermstørrelsen, så zoom-animasjonen på macOS blir kort
-    let screen = cx.primary_display().map(|d| d.bounds().size);
-    let start = screen.map_or(size(px(1400.), px(900.)), |s| {
-        size(s.width * 0.95, s.height * 0.95)
-    });
-    let bounds = Bounds::centered(None, start, cx);
-    cx.open_window(
-        WindowOptions {
-            window_bounds: Some(WindowBounds::Maximized(bounds)),
-            titlebar: Some(gpui::TitlebarOptions {
-                title: Some(title.into()),
-                ..Default::default()
-            }),
-            focus: true,
-            ..Default::default()
-        },
-        |window, cx| {
-            let view = cx.new(build);
-            window.focus(&view.focus_handle(cx));
-            view
-        },
-    )
-    .expect("kunne ikke åpne vindu");
-}
-
 fn main() -> ExitCode {
-    let (source, config) = match parse_args().and_then(|s| Ok((s, config::load()?))) {
+    let ((source, frontend), config) = match parse_args().and_then(|a| Ok((a, config::load()?))) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{e}");
@@ -211,28 +181,16 @@ fn main() -> ExitCode {
         }
     };
 
-    Application::new()
-        .with_assets(Assets)
-        .run(move |cx: &mut App| {
-            bind_keys(cx);
-            load_font(cx);
-            cx.set_global(Settings {
-                theme: config.theme,
-                font_size: config.font_size,
-                collapse_unchanged: config.collapse_unchanged,
-                unified: config.unified,
-                side_panel_open: config.side_panel.open,
-            });
-            match content {
-                Content::File(diff, paths) => open(cx, title, move |cx| {
-                    FileDiffView::standalone(*diff, paths, cx)
-                }),
-                Content::Changes(repo, changes) => {
-                    open(cx, title, move |cx| ChangesView::new(repo, changes, cx))
-                }
+    match frontend {
+        #[cfg(feature = "gui")]
+        Frontend::Gui => gui::run(content, title, config),
+        #[cfg(feature = "tui")]
+        Frontend::Tui => {
+            if let Err(e) = tui::run(content, &title, config) {
+                eprintln!("{e}");
+                return ExitCode::from(1);
             }
-            cx.on_window_closed(|cx| cx.quit()).detach();
-            cx.activate(true);
-        });
+        }
+    }
     ExitCode::SUCCESS
 }

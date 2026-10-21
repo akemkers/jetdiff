@@ -1,6 +1,6 @@
 # jetdiff
 
-En rask diff-viewer for macOS, med diffen fra JetBrains-IDE-ene. Rendres på GPU-en med [GPUI](https://www.gpui.rs).
+En rask diff-viewer for macOS, med diffen fra JetBrains-IDE-ene. Rendres på GPU-en med [GPUI](https://www.gpui.rs), eller i terminalen over SSH.
 
 Den viser lokale endringer, en commit eller to filer side om side, med trakt mellom sidene, ord-markering, folding av uendrede linjer og syntaksfarger. `v` bytter til unified, der slettede linjer står over de nye i én editor. Diff-algoritmen er portert fra IntelliJ og gir samme resultat. Alt er for lesing, ingenting kan redigeres.
 
@@ -16,10 +16,22 @@ cargo install --path crates/jetdiff
 
 Det legger `jetdiff` på PATH. Krever Rust stable.
 
+Featurene `gui` og `tui` er begge på som standard. På en server uten skjerm holder terminalvisningen, og GPUI trengs ikke:
+
+```
+cargo install --path crates/jetdiff --no-default-features --features tui
+```
+
+## Oppsett
+
+Terminalvisningen viser filikoner med tegn fra [Nerd Fonts](https://www.nerdfonts.com), så terminalen må bruke en Nerd Font med filikoner, for eksempel Hack Nerd Font Mono. Velg Mono-varianten, ellers blir ikonene for brede. Over SSH er det fonten i terminalen på din egen maskin som gjelder.
+
+Uten en slik font blir ikonene tomme firkanter. Skru dem av med `icons = false` under `[terminal]` i [innstillingene](#innstillinger).
+
 ## Bruk
 
 ```
-jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
+jetdiff [--tui] [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 ```
 
 - Uten argumenter: det som ikke er committet, også nye filer git ikke kjenner. Alltid mot HEAD
@@ -27,8 +39,9 @@ jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 - `<commit>`: commiten mot forelderen, f.eks. `HEAD~2`
 - `<pr-lenke>`: en PR på GitHub, f.eks. `https://github.com/eier/repo/pull/12`, som den vises der. Må kjøres i repoet PR-en hører til, og henter den fra `origin`. Krever `gh`
 - `<venstre> <høyre>`: to filer
+- `--tui`: viser diffen i terminalen i stedet for i et vindu. Bygd uten `gui` er terminalen standard
 
-Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
+Tittelen på vinduet, eller terminalen, starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
 Til venstre er et tre over endrede filer. Nye og slettede filer vises alltid unified, binærfiler vises ikke. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
 
@@ -52,6 +65,9 @@ view = "split"             # eller "unified", v bytter mens appen kjører
 
 [side_panel]
 open = false               # true viser filtreet og commitene ved oppstart
+
+[terminal]
+icons = true               # filikoner i terminalvisningen, krever en Nerd Font
 ```
 
 `theme` er `catppuccin-mocha`, `jetbrains-dark` eller `jetbrains-light`. De to siste er IntelliJ sine Islands-temaer.
@@ -97,11 +113,14 @@ cargo test
 
 GPUI bygges med `runtime_shaders`, så Metal-shaderne kompileres ved oppstart og Xcode sin Metal Toolchain trengs ikke.
 
-Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI. All logikk for scroll, folding og geometri ligger i `jetdiff-viewmodel`, og tilstanden rundt diffen (endringer, reload, tre og commits) i `jetdiff-app`. Begge testes uten vindu.
+Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI, og bare `jetdiff-tui` kjenner terminalen. All logikk for scroll, folding og geometri ligger i `jetdiff-viewmodel`, og tilstanden rundt diffen (endringer, reload, tre og commits) i `jetdiff-app`. Begge testes uten vindu.
 
 ```mermaid
 graph TD
     jetdiff --> ui[jetdiff-ui]
+    jetdiff --> tui[jetdiff-tui]
+    tui --> app
+    tui --> view
     jetdiff --> view[jetdiff-viewmodel]
     jetdiff --> git[jetdiff-git]
     jetdiff --> changes[jetdiff-changes]
@@ -122,6 +141,7 @@ graph TD
 | ----------------------------------------------- | ------------------------------------------------------------- |
 | [`jetdiff`](crates/jetdiff)                     | Binæren: argumenter, config og vindu                          |
 | [`jetdiff-ui`](crates/jetdiff-ui)               | GPUI-visningen                                                |
+| [`jetdiff-tui`](crates/jetdiff-tui)             | Terminalvisningen                                             |
 | [`jetdiff-app`](crates/jetdiff-app)             | Tilstanden rundt diffen uten GUI: endringer, reload, tre, commits |
 | [`jetdiff-viewmodel`](crates/jetdiff-viewmodel) | Visningsmodell uten GUI: scroll, folding, markert linje, taster |
 | [`jetdiff-core`](crates/jetdiff-core)           | Diff-algoritmen, portert fra IntelliJ                         |
@@ -137,4 +157,4 @@ graph TD
 
 Commit-meldinger er på norsk i imperativ, f.eks. «Legg til b for å skjule venstre panel».
 
-Fonten er JetBrains Mono (SIL Open Font License). Ikonene er fra intellij-community (Apache 2.0) og intellij-rust (MIT).
+Fonten er JetBrains Mono (SIL Open Font License). Ikonene er fra intellij-community (Apache 2.0), intellij-rust (MIT) og Seti UI (MIT).
