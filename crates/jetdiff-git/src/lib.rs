@@ -745,10 +745,15 @@ mod tests {
         let pr = PullRequest::parse("https://github.com/owner/repo/pull/1").unwrap();
         let err = |r: &TempRepo| Repo::pull_request(&r.0, &pr).err().unwrap();
         assert_eq!(err(&r), "the repo has no origin");
-        r.git(&["remote", "add", "origin", "git@github.com:owner/other.git"]);
+        r.git(&[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/owner/other.git",
+        ]);
         assert_eq!(
             err(&r),
-            "the PR belongs to owner/repo, not git@github.com:owner/other.git"
+            "the PR belongs to owner/repo, not https://github.com/owner/other.git"
         );
     }
 
