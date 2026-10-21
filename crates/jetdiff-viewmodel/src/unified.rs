@@ -212,47 +212,50 @@ impl UnifiedDiff {
 fn pair_lines(diff: &FileDiff, block: &Block) -> Vec<[Option<usize>; 2]> {
     let [left, right] = &block.lines;
     let mut rows = Vec::new();
-    let zip = |l: Range<usize>, r: Range<usize>, rows: &mut Vec<[Option<usize>; 2]>| {
+    let zip = |left_lines: Range<usize>,
+               right_lines: Range<usize>,
+               rows: &mut Vec<[Option<usize>; 2]>| {
         let at = |lines: &Range<usize>, i: usize| (i < lines.len()).then(|| lines.start + i);
-        for i in 0..l.len().max(r.len()) {
-            rows.push([at(&l, i), at(&r, i)]);
+        for i in 0..left_lines.len().max(right_lines.len()) {
+            rows.push([at(&left_lines, i), at(&right_lines, i)]);
         }
     };
     let mut anchors: Vec<(usize, usize)> = Vec::new();
     if let Some(inner) = &block.inner {
-        let texts = [Side::Left, Side::Right].map(|s| &diff.text(s)[block.offsets[idx(s)].clone()]);
+        let texts = [Side::Left, Side::Right]
+            .map(|side| &diff.text(side)[block.offsets[idx(side)].clone()]);
         let ends = [texts[0].len(), texts[1].len()];
         let changed = inner
             .iter()
-            .map(|f| [f.offsets1.clone(), f.offsets2.clone()])
+            .map(|fragment| [fragment.offsets1.clone(), fragment.offsets2.clone()])
             .chain([[ends[0]..ends[0], ends[1]..ends[1]]]);
         let mut equal_from = [0, 0];
-        for [l, r] in changed {
-            let equal = (l.start - equal_from[0]).min(r.start - equal_from[1]);
+        for [left_changed, right_changed] in changed {
+            let equal =
+                (left_changed.start - equal_from[0]).min(right_changed.start - equal_from[1]);
             let segment = &texts[0][equal_from[0]..equal_from[0] + equal];
-            for (k, _) in segment.char_indices().filter(|(_, c)| !c.is_whitespace()) {
-                let line = |s: Side| {
-                    let from = block.offsets[idx(s)].start + equal_from[idx(s)];
-                    diff.line_of_offset(s, from + k)
+            for (offset, _) in segment.char_indices().filter(|(_, ch)| !ch.is_whitespace()) {
+                let line = |side: Side| {
+                    let from = block.offsets[idx(side)].start + equal_from[idx(side)];
+                    diff.line_of_offset(side, from + offset)
                 };
                 let pair = (line(Side::Left), line(Side::Right));
-                if anchors
-                    .last()
-                    .is_none_or(|&(al, ar)| pair.0 > al && pair.1 > ar)
-                {
+                if anchors.last().is_none_or(|&(last_left, last_right)| {
+                    pair.0 > last_left && pair.1 > last_right
+                }) {
                     anchors.push(pair);
                 }
             }
-            equal_from = [l.end, r.end];
+            equal_from = [left_changed.end, right_changed.end];
         }
     }
-    let (mut l, mut r) = (left.start, right.start);
-    for (al, ar) in anchors {
-        zip(l..al, r..ar, &mut rows);
-        rows.push([Some(al), Some(ar)]);
-        (l, r) = (al + 1, ar + 1);
+    let (mut next_left, mut next_right) = (left.start, right.start);
+    for (anchor_left, anchor_right) in anchors {
+        zip(next_left..anchor_left, next_right..anchor_right, &mut rows);
+        rows.push([Some(anchor_left), Some(anchor_right)]);
+        (next_left, next_right) = (anchor_left + 1, anchor_right + 1);
     }
-    zip(l..left.end, r..right.end, &mut rows);
+    zip(next_left..left.end, next_right..right.end, &mut rows);
     rows
 }
 
