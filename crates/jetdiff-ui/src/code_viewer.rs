@@ -1,5 +1,11 @@
-//! Det UI-et gjør ulikt i split og unified: tegning, hva musa treffer og tekstbredden.
+//! Koden i diffen, i split eller unified: tegning, hva musa treffer og tekstbredden.
 //! `FileDiffView` lager en `Painter` i `render` og tegner den i canvas-en.
+
+mod code_paint;
+mod divider;
+mod split;
+mod split_side;
+mod unified;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -8,12 +14,12 @@ use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::{DiffMode, ScrollState, StripeMarker, Viewport};
 
-use crate::editor_paint::StripeRects;
-use crate::side_editor::{CaretRow, SideCache};
-use crate::split::{self, SplitPainter};
+use self::code_paint::StripeRects;
+use self::split::SplitPainter;
+use self::split_side::{CaretRow, SideCache};
+use self::unified::{RowCache, UnifiedPainter};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
-use crate::unified_editor::{self, RowCache, UnifiedPainter};
 
 /// Linjer utenfor viewporten som beholdes shapet per side.
 const CACHE_CAPACITY: usize = 2000;
@@ -97,7 +103,7 @@ pub fn hit(
         )
         .map(|(side, line)| Hit::Split(side, line)),
         DiffMode::Unified(state) => {
-            unified_editor::hit(&state.diff, style, bounds, scroll_y[0], position).map(Hit::Unified)
+            unified::hit(&state.diff, style, bounds, scroll_y[0], position).map(Hit::Unified)
         }
     }
 }
@@ -124,7 +130,7 @@ pub fn wheel(
 pub fn text_width(mode: &DiffMode, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
     match mode {
         DiffMode::Split(state) => split::text_width(&state.diff, style, bounds),
-        DiffMode::Unified(state) => unified_editor::text_width(&state.diff, style, bounds),
+        DiffMode::Unified(state) => unified::text_width(&state.diff, style, bounds),
     }
 }
 

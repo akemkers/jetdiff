@@ -36,8 +36,8 @@ pub fn mask(bounds: Bounds<Pixels>) -> Option<ContentMask<Pixels>> {
     Some(ContentMask { bounds })
 }
 
-/// Bakgrunn for hele editoren, og 1px strek ved separatoren i gutteren.
-pub fn paint_editor_background(
+/// Bakgrunn for hele siden eller unified, og 1px strek ved separatoren i gutteren.
+pub fn paint_code_background(
     geom: &SideGeometry,
     top: f32,
     bottom: f32,
@@ -216,7 +216,7 @@ pub fn shape_number(
 /// Error stripe-rektangler i sporet, slått sammen per piksel. Regnes ut når sporhøyden endres.
 #[derive(Debug, Clone, Default)]
 pub struct StripeRects {
-    /// Hele høyden til editoren.
+    /// Hele høyden til kodevisningen.
     pub track_height: f32,
     pub rects: Vec<(f32, f32, Hsla)>,
 }

@@ -1,4 +1,4 @@
-//! Vim sin `scrolloff` for én editor: hvor cursoren kan stå uten at det scrolles, og minste
+//! Vim sin `scrolloff` for én kodevisning: hvor cursoren kan stå uten at det scrolles, og minste
 //! scroll som holder den der. Cursoren er en visuell linje i `layout`.
 
 use crate::layout::{LineLayout, Viewport};

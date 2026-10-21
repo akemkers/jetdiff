@@ -1,6 +1,6 @@
 //! Trakten mellom sidene. Port av `DiffDividerDrawUtil` (`DividerPaintableHandlerImpl`,
 //! `DividerPolygon.paint`) og `DiffDrawUtil.drawCurveTrapezium`. Koordinater er lokale for
-//! divideren: x fra 0 til bredden, y fra toppen av editorene.
+//! divideren: x fra 0 til bredden, y fra toppen av sidene.
 
 use crate::folding::{FoldId, Folding};
 use crate::layout::{LineLayout, Viewport};
@@ -61,7 +61,7 @@ pub struct DividerBand {
     pub mid: Cubic,
 }
 
-/// Blokker som er synlige i minst én editor. `scroll_y` er per side, `[venstre, høyre]`.
+/// Blokker som er synlige på minst én side. `scroll_y` er per side, `[venstre, høyre]`.
 pub fn divider_bands(
     diff: &FileDiff,
     folding: &Folding,

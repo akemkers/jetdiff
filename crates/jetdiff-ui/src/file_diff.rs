@@ -16,10 +16,10 @@ use jetdiff_viewmodel::{
     Viewport, stripe_markers,
 };
 
+use crate::code_viewer::{self, Hit, Painter, Shared};
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
 use crate::keystroke::to_key;
 use crate::message::{Level, Message};
-use crate::painter::{self, Hit, Painter, Shared};
 use crate::rollback_dialog::rollback_dialog;
 use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
@@ -146,7 +146,7 @@ impl FileDiffView {
     /// høyde.
     pub(crate) fn toggle_view(&mut self, _: &ToggleView, _: &mut Window, cx: &mut Context<Self>) {
         // Nye og slettede filer vises alltid unified, så `v` gjør ingenting der
-        if self.mode.diff().single_side().is_some() {
+        if !self.mode.diff().can_split() {
             return;
         }
         self.unified = !self.unified;
@@ -211,7 +211,7 @@ impl FileDiffView {
             return Horizontal::default();
         };
         Horizontal {
-            text_width: painter::text_width(&self.mode, style, bounds),
+            text_width: code_viewer::text_width(&self.mode, style, bounds),
             char_width: style.char_width,
             max_x: self.max_scroll_x(),
         }
@@ -369,7 +369,7 @@ impl FileDiffView {
 
     fn hit(&self, position: Point<Pixels>) -> Option<Hit> {
         let (bounds, style) = (self.shared.bounds.get()?, self.style.as_ref()?);
-        painter::hit(&self.mode, style, bounds, self.scroll.shown().y, position)
+        code_viewer::hit(&self.mode, style, bounds, self.scroll.shown().y, position)
     }
 
     /// Bare split har folds.
@@ -398,7 +398,7 @@ impl FileDiffView {
             return 0.;
         };
         let content = (self.max_cols + 1) as f32 * style.char_width;
-        content.max(self.shared.widest.get()) - painter::text_width(&self.mode, style, bounds)
+        content.max(self.shared.widest.get()) - code_viewer::text_width(&self.mode, style, bounds)
     }
 
     fn on_scroll(&mut self, ev: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -410,7 +410,7 @@ impl FileDiffView {
         self.stop_animation();
         if dy != 0. {
             let bounds = self.shared.bounds.get();
-            painter::wheel(&mut self.mode, bounds, ev.position.x, -dy, vp);
+            code_viewer::wheel(&mut self.mode, bounds, ev.position.x, -dy, vp);
         }
         if dx != 0. {
             let max_x = self.max_scroll_x();

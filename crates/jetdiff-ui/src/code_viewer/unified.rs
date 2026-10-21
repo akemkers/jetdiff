@@ -1,4 +1,4 @@
-//! Unified-visningen: én editor der slettede rader står over de nye, med gammelt og nytt
+//! Unified-visningen: én kodevisning der slettede rader står over de nye, med gammelt og nytt
 //! linjenummer i gutteren. Tegning, og hvilken rad musa treffer.
 
 use std::ops::{Range, RangeInclusive};
@@ -8,12 +8,12 @@ use gpui::{App, Bounds, Hsla, Pixels, Point, ShapedLine, SharedString, Window, p
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::{InlineHighlight, UnifiedDiff, UnifiedGeometry};
 
-use crate::cache::LineCache;
-use crate::editor_paint::{
-    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_editor_background, rect,
+use super::code_paint::{
+    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_code_background, rect,
     shape_number,
 };
-use crate::side_editor::CaretRow;
+use super::split_side::CaretRow;
+use crate::cache::LineCache;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -72,16 +72,16 @@ impl UnifiedPainter {
             bottom: top + height,
             visible: first..=last.min(self.diff.row_count() - 1),
         };
-        let editor = &frame.geom.editor;
+        let code = &frame.geom.code;
 
-        let widest = window.with_content_mask(mask(frame.area(editor.bounds())), |window| {
-            paint_editor_background(editor, frame.top, frame.bottom, &self.theme, window);
+        let widest = window.with_content_mask(mask(frame.area(code.bounds())), |window| {
+            paint_code_background(code, frame.top, frame.bottom, &self.theme, window);
             frame.paint_changes(window);
             frame.paint_caret_row(window);
             let widest = frame.paint_text(cache, window, cx);
             frame.paint_line_numbers(cache, window, cx);
             stripe.paint(
-                editor,
+                code,
                 top,
                 self.scroll_y,
                 content_height,
@@ -129,7 +129,7 @@ impl UnifiedPainter {
 }
 
 impl Frame<'_> {
-    /// Hele høyden til editoren, fra `x.start` til `x.end`.
+    /// Hele høyden til kodevisningen, fra `x.start` til `x.end`.
     fn area(&self, x: Range<f32>) -> Bounds<Pixels> {
         rect(x, self.top, self.bottom)
     }
@@ -168,7 +168,7 @@ impl Frame<'_> {
                 let (band_top, band_bottom) = layout.block_band(part);
                 let (top, bottom) = (self.screen_y(band_top), self.screen_y(band_bottom));
                 let ignored = blocks[index].ignored();
-                paint_change(&self.geom.editor, top, bottom, colors, ignored, window);
+                paint_change(&self.geom.code, top, bottom, colors, ignored, window);
             }
         }
     }
@@ -181,18 +181,18 @@ impl Frame<'_> {
         let top = self.row_top(caret.line);
         let bottom = top + self.painter.style.line_height();
         let theme = &self.painter.theme;
-        paint_caret_row(&self.geom.editor, top, bottom, caret.active, theme, window);
+        paint_caret_row(&self.geom.code, top, bottom, caret.active, theme, window);
     }
 
     /// Ord-markering og tekst, klippet så teksten ikke flyter inn i gutteren ved sidescroll.
     /// Returnerer bredden av den bredeste raden.
     fn paint_text(&self, cache: &mut RowCache, window: &mut Window, cx: &mut App) -> f32 {
         let painter = self.painter;
-        let editor = &self.geom.editor;
+        let code = &self.geom.code;
         let line_height = painter.style.line_height();
-        let text_x = editor.text_x - painter.scroll_x;
+        let text_x = code.text_x - painter.scroll_x;
         let mut widest: f32 = 0.;
-        window.with_content_mask(mask(self.area(editor.text_x..editor.text.end)), |window| {
+        window.with_content_mask(mask(self.area(code.text_x..code.text.end)), |window| {
             for row_index in self.visible.clone() {
                 let row = painter.diff.row(row_index);
                 let top = self.row_top(row_index);
@@ -214,7 +214,7 @@ impl Frame<'_> {
                 entry.text.paint_inline(
                     &highlights,
                     text_x,
-                    editor.text.end,
+                    code.text.end,
                     top..top + line_height,
                     &painter.theme,
                     window,
@@ -231,7 +231,7 @@ impl Frame<'_> {
     fn paint_line_numbers(&self, cache: &mut RowCache, window: &mut Window, cx: &mut App) {
         let painter = self.painter;
         let line_height = painter.style.line_height();
-        window.with_content_mask(mask(self.area(self.geom.editor.gutter.clone())), |window| {
+        window.with_content_mask(mask(self.area(self.geom.code.gutter.clone())), |window| {
             for row_index in self.visible.clone() {
                 let y = self.row_top(row_index) + painter.style.number_dy;
                 let caret_numbers;
@@ -265,7 +265,7 @@ fn geometry(diff: &UnifiedDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> Un
     UnifiedGeometry::new(&diff.diff, style.number_char_width, x, width)
 }
 
-/// Raden under musa, `None` utenfor editoren.
+/// Raden under musa, `None` utenfor kodevisningen.
 pub fn hit(
     diff: &UnifiedDiff,
     style: &TextStyle,
@@ -273,8 +273,8 @@ pub fn hit(
     scroll_y: f32,
     position: Point<Pixels>,
 ) -> Option<usize> {
-    let editor = geometry(diff, style, bounds).editor;
-    if !editor.bounds().contains(&f32::from(position.x)) {
+    let code = geometry(diff, style, bounds).code;
+    if !code.bounds().contains(&f32::from(position.x)) {
         return None;
     }
     let layout = diff.layout(style.line_height());
@@ -284,6 +284,6 @@ pub fn hit(
 
 /// Bredden teksten har, for horisontal scroll.
 pub fn text_width(diff: &UnifiedDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
-    let editor = geometry(diff, style, bounds).editor;
-    editor.text.end - editor.text_x
+    let code = geometry(diff, style, bounds).code;
+    code.text.end - code.text_x
 }

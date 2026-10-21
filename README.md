@@ -2,7 +2,7 @@
 
 En rask diff-viewer for macOS, med diffen fra JetBrains-IDE-ene. Rendres på GPU-en med [GPUI](https://www.gpui.rs), eller i terminalen over SSH.
 
-Den viser lokale endringer, en commit eller to filer side om side, med trakt mellom sidene, ord-markering, folding av uendrede linjer og syntaksfarger. `v` bytter til unified, der slettede linjer står over de nye i én editor. Diff-algoritmen er portert fra IntelliJ og gir samme resultat. Alt er for lesing, ingenting kan redigeres.
+Den viser lokale endringer, en commit eller to filer side om side, med trakt mellom sidene, ord-markering, folding av uendrede linjer og syntaksfarger. `v` bytter til unified, der slettede linjer står over de nye i én kodevisning. Diff-algoritmen er portert fra IntelliJ og gir samme resultat. Alt er for lesing, ingenting kan redigeres.
 
 ![Lokale endringer med filtre og commits](docs/screenshots/endringer.png)
 
@@ -112,6 +112,8 @@ cargo test
 `examples/` har et filpar per språk å prøve viewen på.
 
 GPUI bygges med `runtime_shaders`, så Metal-shaderne kompileres ved oppstart og Xcode sin Metal Toolchain trengs ikke.
+
+Hvordan koden organiseres står i [CODING_STANDARDS.md](CODING_STANDARDS.md).
 
 Koden er delt i crates med ett ansvar hver. Bare `jetdiff-ui` og binæren kjenner GPUI, og bare `jetdiff-tui` kjenner terminalen. All logikk for scroll, folding og geometri ligger i `jetdiff-viewmodel`, og tilstanden rundt diffen (endringer, reload, tre og commits) i `jetdiff-app`. Begge testes uten vindu.
 

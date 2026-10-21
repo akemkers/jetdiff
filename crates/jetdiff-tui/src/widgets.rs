@@ -11,6 +11,11 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
 
 use crate::color::color;
 
+const HELP_WIDTH: u16 = 42;
+const CONFIRM_WIDTH: u16 = 28;
+/// Tastene i hjelpen står i en kolonne, med beskrivelsen til høyre.
+const KEY_COLUMN: usize = 15;
+
 fn text_row(text: &str, style: Style, area: Rect, buf: &mut Buffer) {
     Clear.render(area, buf);
     buf.set_style(area, style);
@@ -86,14 +91,14 @@ pub fn help(area: Rect, theme: &Theme, buf: &mut Buffer) {
         lines.push(Line::styled(section, title));
         for (key, description) in rows {
             lines.push(Line::from(vec![
-                Span::styled(format!("{key:<15}"), keys),
+                Span::styled(format!("{key:<KEY_COLUMN$}"), keys),
                 Span::styled(*description, what),
             ]));
         }
         lines.push(Line::raw(""));
     }
     lines.push(Line::styled("? eller Esc lukker", what));
-    popup(42, lines, area, theme, buf);
+    popup(HELP_WIDTH, lines, area, theme, buf);
 }
 
 pub fn confirm_rollback(area: Rect, theme: &Theme, buf: &mut Buffer) {
@@ -107,5 +112,5 @@ pub fn confirm_rollback(area: Rect, theme: &Theme, buf: &mut Buffer) {
             Style::default().fg(color(theme.line_number)),
         ),
     ];
-    popup(28, lines, area, theme, buf);
+    popup(CONFIRM_WIDTH, lines, area, theme, buf);
 }

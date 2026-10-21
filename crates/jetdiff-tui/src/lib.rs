@@ -3,13 +3,13 @@
 mod app;
 mod backend;
 mod clipboard;
+mod code_viewer;
 mod color;
 mod diff_view;
 mod geometry;
 mod icons;
 mod input;
 mod message;
-mod paint;
 mod panel;
 mod text;
 mod widgets;

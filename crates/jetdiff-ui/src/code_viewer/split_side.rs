@@ -1,4 +1,4 @@
-//! Én editor: bakgrunner, ord-markering, tekst, linjenumre og error stripe. Tegner bare
+//! Én side i split: bakgrunner, ord-markering, tekst, linjenumre og error stripe. Tegner bare
 //! det `jetdiff-viewmodel` gir, og bare synlige linjer.
 
 use std::ops::{Range, RangeInclusive};
@@ -7,12 +7,12 @@ use gpui::{App, Bounds, Pixels, ShapedLine, SharedString, Window, fill, point, p
 use jetdiff_viewmodel::separator::{stroke_width, wave};
 use jetdiff_viewmodel::{FileDiff, Folding, LineLayout, SideGeometry};
 
-use crate::cache::LineCache;
-use crate::divider::stroke_path;
-use crate::editor_paint::{
-    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_editor_background, rect,
+use super::code_paint::{
+    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_code_background, rect,
     shape_number,
 };
+use super::divider::stroke_path;
+use crate::cache::LineCache;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -23,7 +23,7 @@ pub struct CachedLine {
 
 pub type SideCache = LineCache<(SharedString, u32), CachedLine>;
 
-pub struct SideEditor<'a> {
+pub struct SplitSide<'a> {
     pub diff: &'a FileDiff,
     pub folding: &'a Folding,
     pub geom: &'a SideGeometry,
@@ -56,14 +56,14 @@ struct Visible {
     lines: Vec<usize>,
 }
 
-impl SideEditor<'_> {
+impl SplitSide<'_> {
     /// Maler lagene nedenfra og opp. Returnerer bredden av den bredeste synlige linja, for
     /// maks horisontal scroll.
     pub fn paint(&self, cache: &mut SideCache, window: &mut Window, cx: &mut App) -> f32 {
         let visible = self.visible();
         let widest = window.with_content_mask(mask(self.area(self.geom.bounds())), |window| {
             let bottom = self.top + self.height;
-            paint_editor_background(self.geom, self.top, bottom, self.theme, window);
+            paint_code_background(self.geom, self.top, bottom, self.theme, window);
             self.paint_block_backgrounds(&visible, window);
             // Over diff-bakgrunnene, ellers forsvinner den i endringer
             self.paint_caret_row(&visible, window);
@@ -95,7 +95,7 @@ impl SideEditor<'_> {
         self.top + y - self.scroll_y
     }
 
-    /// Hele høyden til editoren, fra `x.start` til `x.end`.
+    /// Hele høyden til siden, fra `x.start` til `x.end`.
     fn area(&self, x: Range<f32>) -> Bounds<Pixels> {
         rect(x, self.top, self.top + self.height)
     }

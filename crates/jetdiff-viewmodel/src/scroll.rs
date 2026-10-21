@@ -89,8 +89,8 @@ fn id_range(line: usize) -> SyncRange {
     }
 }
 
-/// `ScrollHelper.transferVisualLine`: grensene konverteres til visuelle linjer i hver
-/// editor, så foldede områder blir riktige uten spesialkode.
+/// `ScrollHelper.transferVisualLine`: grensene konverteres til visuelle linjer på hver
+/// side, så foldede områder blir riktige uten spesialkode.
 fn transfer_visual_line(
     mapping: &LineMapping,
     master: Side,

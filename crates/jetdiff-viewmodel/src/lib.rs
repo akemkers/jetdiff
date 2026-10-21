@@ -40,4 +40,4 @@ pub use separator::PathSeg;
 pub use state::{DiffState, Horizontal, Outcome};
 pub use stripe::{StripeMarker, stripe_markers, thumb_range};
 pub use theme::{Rgba, SyntaxStyle, Theme};
-pub use unified::{Row, UnifiedDiff, UnifiedState};
+pub use unified::{Row, RowLayout, UnifiedDiff, UnifiedState};

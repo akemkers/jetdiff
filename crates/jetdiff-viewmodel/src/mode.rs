@@ -19,10 +19,9 @@ pub enum DiffMode {
 }
 
 impl DiffMode {
-    /// `folding` brukes bare i split. Nye og slettede filer vises alltid unified, så split
-    /// slipper å vise én side alene.
+    /// `folding` brukes bare i split.
     pub fn new(diff: Rc<FileDiff>, folding: Rc<Folding>, unified: bool) -> Self {
-        if unified || diff.single_side().is_some() {
+        if unified || !diff.can_split() {
             Self::Unified(UnifiedState::new(Rc::new(UnifiedDiff::new(diff))))
         } else {
             Self::Split(DiffState::new(diff, folding))
@@ -123,7 +122,7 @@ impl DiffMode {
         unified: bool,
         viewport: Viewport,
     ) {
-        let unified = unified || diff.single_side().is_some();
+        let unified = unified || !diff.can_split();
         if unified && !self.is_unified() {
             self.toggle(folding.clone(), viewport);
         }
