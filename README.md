@@ -35,7 +35,7 @@ jetdiff [<mappe> | <commit> | <pr-lenke> | <venstre> <høyre>]
 - `<venstre> <høyre>`: to filer
 - `--gui`, `--tui`: velger visning. Uten dem brukes terminalen over SSH og når det ikke er noen skjerm
 
-Tittelen på vinduet starter med mappenavnet til repoet, så flere vinduer kan skilles.
+Tittelen på vinduet, eller terminalen, starter med mappenavnet til repoet, så flere vinduer kan skilles.
 
 Til venstre er et tre over endrede filer. Nye og slettede filer vises alltid unified, binærfiler vises ikke. Dra i kanten for å endre bredden, dobbeltklikk for å gå tilbake.
 

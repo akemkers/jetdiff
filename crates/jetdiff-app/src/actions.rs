@@ -32,7 +32,6 @@ pub fn rollback_request(
 
 /// `cursor` er markert linje i nyeste versjon.
 pub fn location(cursor: Cursor, paths: &[String; 2]) -> Option<String> {
-    let c = cursor;
-    let path = &paths[c.side.select(0, 1)];
-    (!path.is_empty()).then(|| format!("{path}:{}", c.line + 1))
+    let path = &paths[cursor.side.select(0, 1)];
+    (!path.is_empty()).then(|| format!("{path}:{}", cursor.line + 1))
 }

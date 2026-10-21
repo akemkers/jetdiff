@@ -14,8 +14,8 @@ Trakten trenger piksler, så split er justerte rader i stedet: `UnifiedDiff::ali
 use jetdiff_tui::{Settings, run_changes, run_file};
 
 let settings = Settings { theme, unified: false, side_panel_open: false };
-run_file(diff, paths, settings)?;          // to filer
-run_changes(repo, changes, settings)?;     // et repo eller en commit
+run_file(diff, paths, &title, settings)?;          // to filer
+run_changes(repo, changes, &title, settings)?;     // et repo eller en commit
 ```
 
 Forskjeller fra GPUI-visningen:
@@ -32,6 +32,7 @@ graph TD
     app --> panel[panel: tre og commits]
     app --> widgets[widgets: sti, taster, beskjed, hjelp]
     app --> changes[jetdiff-app: Changes, Watcher]
+    app --> backend[backend: sender bare fargene som endres]
     diff --> paint[paint: split og unified]
     paint --> text[text: én linje]
     paint --> geometry[geometry: celler]

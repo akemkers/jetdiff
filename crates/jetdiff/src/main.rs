@@ -210,8 +210,7 @@ fn main() -> ExitCode {
         Frontend::Gui => gui::run(content, title, config),
         #[cfg(feature = "tui")]
         Frontend::Tui => {
-            let _ = title;
-            if let Err(e) = tui::run(content, config) {
+            if let Err(e) = tui::run(content, &title, config) {
                 eprintln!("{e}");
                 return ExitCode::from(1);
             }

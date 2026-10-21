@@ -148,8 +148,7 @@ impl Panel {
         (widest as u16 + 2).clamp(24, max.max(24))
     }
 
-    pub fn click(&self, x: u16, y: u16) -> Option<Click> {
-        let _ = x;
+    pub fn click(&self, y: u16) -> Option<Click> {
         for (heading, section) in self.headings.iter().zip([Section::Files, Section::Commits]) {
             if *heading == Some(y) {
                 return Some(Click::Heading(section));
@@ -274,15 +273,15 @@ impl Panel {
     }
 
     fn render_files(
-        &mut self,
+        &self,
         focused: bool,
         selected: Option<usize>,
         theme: &Theme,
         buf: &mut Buffer,
     ) {
         let list = self.files;
-        let rows = self.tree.rows().clone();
-        let changes = self.tree.changes().clone();
+        let rows = self.tree.rows();
+        let changes = self.tree.changes();
         let dim = Style::default().fg(color(theme.line_number));
         for (i, row) in rows
             .iter()
@@ -334,7 +333,7 @@ impl Panel {
         }
     }
 
-    fn render_commits(&mut self, focused: bool, theme: &Theme, buf: &mut Buffer) {
+    fn render_commits(&self, focused: bool, theme: &Theme, buf: &mut Buffer) {
         let Some(commits) = &self.commits else {
             return;
         };

@@ -6,7 +6,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 
-use crate::color::{color, diff_colors, faded, over};
+use crate::color::{color, faded, over};
 use crate::geometry::{self, Columns};
 use crate::text::{LineText, fill, paint_line, tint};
 
@@ -33,20 +33,19 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
                 continue;
             };
             let row = unified.row(index);
-            let diff_type = row.block.map(|b| diff.blocks()[b].diff_type);
+            let block = row.block.map(|b| (b, diff.blocks()[b].diff_type));
             for (columns, side) in cells.sides.iter().zip([Side::Left, Side::Right]) {
                 let line = row.lines[side.select(0, 1)];
                 let painted = Painted {
                     diff,
                     columns,
                     y,
-                    block: row.block,
-                    diff_type,
+                    block,
                 };
                 match line {
                     Some(line) => {
                         painted.line(side, line, None, scroll_x, theme, buf);
-                        let (x, number) = columns.number(line, columns.number_end());
+                        let (x, number) = geometry::number(line, columns.number_end());
                         painted.number(x, number, index == state.row, theme, buf);
                     }
                     None => filler(columns.row(y), theme, buf),
@@ -70,15 +69,14 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
                 diff,
                 columns,
                 y,
-                block: row.block,
-                diff_type: row.block.map(|_| row.diff_type()),
+                block: row.block.map(|b| (b, row.diff_type())),
             };
             let inline_type = Some(row.diff_type());
             painted.line(row.side(), row.line(), inline_type, scroll_x, theme, buf);
             let ends = [cells.old_end, columns.number_end()];
             for (line, end) in row.lines.into_iter().zip(ends) {
                 if let Some(line) = line {
-                    let (x, number) = columns.number(line, end);
+                    let (x, number) = geometry::number(line, end);
                     painted.number(x, number, index == state.row, theme, buf);
                 }
             }
@@ -97,8 +95,8 @@ struct Painted<'a> {
     diff: &'a FileDiff,
     columns: &'a Columns,
     y: u16,
-    block: Option<usize>,
-    diff_type: Option<DiffType>,
+    /// Blokken raden er i, med fargen raden skal ha.
+    block: Option<(usize, DiffType)>,
 }
 
 impl Painted<'_> {
@@ -112,8 +110,8 @@ impl Painted<'_> {
         buf: &mut Buffer,
     ) {
         let (gutter, text) = (self.columns.gutter(self.y), self.columns.text(self.y));
-        if let (Some(block), Some(diff_type)) = (self.block, self.diff_type) {
-            let colors = diff_colors(theme, diff_type);
+        if let Some((block, diff_type)) = self.block {
+            let colors = theme.diff(diff_type);
             fill(gutter, color(colors.background), buf);
             let ignored = self.diff.blocks()[block].ignored();
             fill(
@@ -213,7 +211,7 @@ fn paint_scrollbar(
         });
         match marker {
             Some(m) => {
-                let marker = brighter(color(diff_colors(theme, m.diff_type).background));
+                let marker = brighter(color(theme.diff(m.diff_type).background));
                 cell.set_char('▐').set_fg(marker);
             }
             None => {

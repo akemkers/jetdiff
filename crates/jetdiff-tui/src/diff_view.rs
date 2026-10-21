@@ -3,9 +3,8 @@
 use std::rc::Rc;
 
 use jetdiff_app::{RollbackRequest, location, rollback_request};
-use jetdiff_viewmodel::columns::display_width;
 use jetdiff_viewmodel::{
-    Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, Side, Theme, UnifiedDiff,
+    Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, Theme, UnifiedDiff,
     UnifiedState, Viewport,
 };
 use ratatui::buffer::Buffer;
@@ -43,8 +42,8 @@ pub struct DiffView {
 impl DiffView {
     pub fn new(diff: FileDiff, paths: [String; 2], unified: bool) -> Self {
         Self {
-            max_cols: max_cols(&diff),
-            state: state(diff, unified),
+            max_cols: diff.max_display_width(),
+            state: state(Rc::new(diff), unified),
             keys: KeyParser::default(),
             unified,
             can_rollback: false,
@@ -64,8 +63,8 @@ impl DiffView {
             self.overlay = None;
         }
         self.paths = paths;
-        self.max_cols = max_cols(&diff);
-        self.state = state(diff, self.unified);
+        self.max_cols = diff.max_display_width();
+        self.state = state(Rc::new(diff), self.unified);
         self.keys.reset();
         self.initialized = false;
     }
@@ -76,8 +75,8 @@ impl DiffView {
             return self.set_diff(diff, paths);
         };
         self.paths = paths;
-        self.max_cols = max_cols(&diff);
-        let aligned = !self.unified && diff.single_side().is_none();
+        self.max_cols = diff.max_display_width();
+        let aligned = aligned(&diff, self.unified);
         if aligned != self.state.diff.is_aligned() {
             self.state = self.state.realign(aligned, vp);
         }
@@ -141,7 +140,7 @@ impl DiffView {
         self.unified = !self.unified;
         match self.viewport().filter(|_| self.initialized) {
             Some(vp) => self.state = self.state.realign(!self.unified, vp),
-            None => self.state = state_for(self.state.diff.diff.clone(), self.unified),
+            None => self.state = state(self.state.diff.diff.clone(), self.unified),
         }
         self.clamp_scroll_x();
         Some(Effect::Message(
@@ -222,25 +221,16 @@ impl DiffView {
     }
 }
 
-fn state(diff: FileDiff, unified: bool) -> UnifiedState {
-    state_for(Rc::new(diff), unified)
+/// Nye og slettede filer vises alltid unified.
+fn aligned(diff: &FileDiff, unified: bool) -> bool {
+    !unified && diff.single_side().is_none()
 }
 
-/// Nye og slettede filer vises alltid unified.
-fn state_for(diff: Rc<FileDiff>, unified: bool) -> UnifiedState {
-    let rows = if unified || diff.single_side().is_some() {
-        UnifiedDiff::new(diff)
-    } else {
+fn state(diff: Rc<FileDiff>, unified: bool) -> UnifiedState {
+    let rows = if aligned(&diff, unified) {
         UnifiedDiff::aligned(diff)
+    } else {
+        UnifiedDiff::new(diff)
     };
     UnifiedState::new(Rc::new(rows))
-}
-
-fn max_cols(diff: &FileDiff) -> usize {
-    [Side::Left, Side::Right]
-        .iter()
-        .flat_map(|&s| (0..diff.line_count(s)).map(move |l| (s, l)))
-        .map(|(s, l)| display_width(diff.line(s, l)))
-        .max()
-        .unwrap_or(0)
 }

@@ -231,10 +231,11 @@ fn pair_lines(diff: &FileDiff, block: &Block) -> Vec<[Option<usize>; 2]> {
             let equal = (l.start - equal_from[0]).min(r.start - equal_from[1]);
             let segment = &texts[0][equal_from[0]..equal_from[0] + equal];
             for (k, _) in segment.char_indices().filter(|(_, c)| !c.is_whitespace()) {
-                let pair = (
-                    line_at(diff, Side::Left, left, equal_from[0] + k),
-                    line_at(diff, Side::Right, right, equal_from[1] + k),
-                );
+                let line = |s: Side| {
+                    let from = block.offsets[idx(s)].start + equal_from[idx(s)];
+                    diff.line_of_offset(s, from + k)
+                };
+                let pair = (line(Side::Left), line(Side::Right));
                 if anchors
                     .last()
                     .is_none_or(|&(al, ar)| pair.0 > al && pair.1 > ar)
@@ -253,18 +254,6 @@ fn pair_lines(diff: &FileDiff, block: &Block) -> Vec<[Option<usize>; 2]> {
     }
     zip(l..left.end, r..right.end, &mut rows);
     rows
-}
-
-/// Linja et byte-offset fra starten av blokken står på.
-fn line_at(diff: &FileDiff, side: Side, lines: &Range<usize>, offset: usize) -> usize {
-    let mut start = 0;
-    for line in lines.clone() {
-        start += diff.line(side, line).len() + 1;
-        if offset < start {
-            return line;
-        }
-    }
-    lines.end.saturating_sub(1).max(lines.start)
 }
 
 #[derive(Debug, Clone)]
@@ -300,12 +289,7 @@ impl UnifiedState {
         let row = self.diff.row(self.row);
         let cursor = Cursor::new(row.side(), row.line());
         let offset = self.row as f32 * viewport.line_height - self.scroll_y();
-        let diff = self.diff.diff.clone();
-        let diff = Rc::new(if aligned {
-            UnifiedDiff::aligned(diff)
-        } else {
-            UnifiedDiff::new(diff)
-        });
+        let diff = Rc::new(UnifiedDiff::build(self.diff.diff.clone(), aligned));
         Self::place(diff, cursor, offset, self.scroll.x, viewport)
     }
 

@@ -11,19 +11,23 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
 
 use crate::color::color;
 
-pub fn header(path: &str, area: Rect, theme: &Theme, buf: &mut Buffer) {
-    let style = Style::default()
-        .fg(color(theme.editor_fg))
-        .bg(color(theme.editor_bg));
+fn text_row(text: &str, style: Style, area: Rect, buf: &mut Buffer) {
     Clear.render(area, buf);
     buf.set_style(area, style);
     buf.set_stringn(
         area.x + 1,
         area.y,
-        path,
+        text,
         area.width.saturating_sub(1) as usize,
         style,
     );
+}
+
+pub fn header(path: &str, area: Rect, theme: &Theme, buf: &mut Buffer) {
+    let style = Style::default()
+        .fg(color(theme.editor_fg))
+        .bg(color(theme.editor_bg));
+    text_row(path, style, area, buf);
 }
 
 pub fn key_bar(area: Rect, theme: &Theme, buf: &mut Buffer) {
@@ -45,20 +49,13 @@ pub fn message(notice: &Notice, area: Rect, theme: &Theme, buf: &mut Buffer) {
         Level::Warning => theme.warning_bg,
     };
     let style = Style::default().fg(color(theme.message_fg)).bg(color(bg));
-    Clear.render(area, buf);
-    buf.set_style(area, style);
-    buf.set_stringn(
-        area.x + 1,
-        area.y,
-        &notice.text,
-        area.width.saturating_sub(1) as usize,
-        style,
-    );
+    text_row(&notice.text, style, area, buf);
 }
 
-fn popup(width: u16, height: u16, area: Rect, theme: &Theme, buf: &mut Buffer) -> Rect {
+/// Linjene i en ramme midt i `area`, med én kolonne luft til venstre.
+fn popup(width: u16, lines: Vec<Line>, area: Rect, theme: &Theme, buf: &mut Buffer) {
     let width = width.min(area.width);
-    let height = height.min(area.height);
+    let height = (lines.len() as u16 + 2).min(area.height);
     let rect = Rect {
         x: area.x + (area.width - width) / 2,
         y: area.y + (area.height - height) / 2,
@@ -72,7 +69,12 @@ fn popup(width: u16, height: u16, area: Rect, theme: &Theme, buf: &mut Buffer) -
         .style(Style::default().bg(color(theme.editor_bg)));
     let inner = block.inner(rect);
     block.render(rect, buf);
-    inner
+    let inner = Rect {
+        x: inner.x + 1,
+        width: inner.width.saturating_sub(1),
+        ..inner
+    };
+    Paragraph::new(lines).render(inner, buf);
 }
 
 pub fn help(area: Rect, theme: &Theme, buf: &mut Buffer) {
@@ -91,13 +93,7 @@ pub fn help(area: Rect, theme: &Theme, buf: &mut Buffer) {
         lines.push(Line::raw(""));
     }
     lines.push(Line::styled("? eller Esc lukker", what));
-    let inner = popup(42, lines.len() as u16 + 2, area, theme, buf);
-    let inner = Rect {
-        x: inner.x + 1,
-        width: inner.width.saturating_sub(1),
-        ..inner
-    };
-    Paragraph::new(lines).render(inner, buf);
+    popup(42, lines, area, theme, buf);
 }
 
 pub fn confirm_rollback(area: Rect, theme: &Theme, buf: &mut Buffer) {
@@ -111,11 +107,5 @@ pub fn confirm_rollback(area: Rect, theme: &Theme, buf: &mut Buffer) {
             Style::default().fg(color(theme.line_number)),
         ),
     ];
-    let inner = popup(28, 4, area, theme, buf);
-    let inner = Rect {
-        x: inner.x + 1,
-        width: inner.width.saturating_sub(1),
-        ..inner
-    };
-    Paragraph::new(lines).render(inner, buf);
+    popup(28, lines, area, theme, buf);
 }

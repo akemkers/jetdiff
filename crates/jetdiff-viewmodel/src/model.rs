@@ -7,6 +7,7 @@ use jetdiff_core::side::Side;
 use jetdiff_core::{ComparisonPolicy, DiffFragment, DiffTooBig, LineOffsets, compare_for_viewer};
 use jetdiff_syntax::{Language, Token};
 
+use crate::columns::display_width;
 use crate::scroll::LineMapping;
 
 /// `TextDiffType` uten CONFLICT, som bare brukes i merge.
@@ -162,6 +163,20 @@ impl FileDiff {
     /// Minst én linje. Tekst som slutter på `'\n'` har en tom siste linje, som i IntelliJ.
     pub fn line_count(&self, side: Side) -> usize {
         self.side(side).line_count()
+    }
+
+    /// Linja byte-offsetet står på.
+    pub fn line_of_offset(&self, side: Side, offset: usize) -> usize {
+        line_of_offset(&self.side(side).line_offsets, offset)
+    }
+
+    /// Bredeste linje på begge sider, i kolonner.
+    pub fn max_display_width(&self) -> usize {
+        [Side::Left, Side::Right]
+            .into_iter()
+            .flat_map(|s| (0..self.line_count(s)).map(move |l| display_width(self.line(s, l))))
+            .max()
+            .unwrap_or(0)
     }
 
     /// Uten `'\n'`.

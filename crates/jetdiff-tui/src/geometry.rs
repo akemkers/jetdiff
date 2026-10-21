@@ -5,7 +5,6 @@ use std::ops::Range;
 use jetdiff_viewmodel::{FileDiff, Side};
 use ratatui::layout::Rect;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Columns {
     pub gutter: Range<u16>,
     pub text: Range<u16>,
@@ -36,15 +35,15 @@ impl Columns {
         self.text.end - self.text.start
     }
 
-    /// Høyrejustert med ett mellomrom mot teksten.
-    pub fn number(&self, line: usize, end: u16) -> (u16, String) {
-        let text = (line + 1).to_string();
-        (end.saturating_sub(text.len() as u16), text)
-    }
-
     pub fn number_end(&self) -> u16 {
         self.gutter.end - 1
     }
+}
+
+/// Linjenummeret høyrejustert til `end`.
+pub fn number(line: usize, end: u16) -> (u16, String) {
+    let text = (line + 1).to_string();
+    (end.saturating_sub(text.len() as u16), text)
 }
 
 fn digits(diff: &FileDiff, side: Side) -> u16 {
@@ -56,7 +55,6 @@ fn without_scrollbar(area: Rect) -> (Rect, u16) {
     (Rect { width, ..area }, area.x + width)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Aligned {
     pub sides: [Columns; 2],
     pub divider: u16,
@@ -79,7 +77,6 @@ pub fn aligned(diff: &FileDiff, area: Rect) -> Aligned {
 }
 
 /// Gammelt og nytt nummer i gutteren.
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unified {
     pub columns: Columns,
     pub old_end: u16,
@@ -120,8 +117,8 @@ mod tests {
         );
         assert_eq!(a.scrollbar, 43);
         let right = &a.sides[1];
-        assert_eq!(right.number(8, right.number_end()), (25, "9".into()));
-        assert_eq!(right.number(119, right.number_end()), (23, "120".into()));
+        assert_eq!(number(8, right.number_end()), (25, "9".into()));
+        assert_eq!(number(119, right.number_end()), (23, "120".into()));
     }
 
     #[test]
@@ -130,10 +127,7 @@ mod tests {
         let u = unified(&diff, Rect::new(0, 0, 40, 10));
         // " 1 10 " før teksten
         assert_eq!(u.columns.gutter, 0..6);
-        assert_eq!(u.columns.number(0, u.old_end), (1, "1".into()));
-        assert_eq!(
-            u.columns.number(9, u.columns.number_end()),
-            (3, "10".into())
-        );
+        assert_eq!(number(0, u.old_end), (1, "1".into()));
+        assert_eq!(number(9, u.columns.number_end()), (3, "10".into()));
     }
 }

@@ -1,9 +1,9 @@
 //! Hendelsesløkka: taster og mus, watcheren og reload i bakgrunnen.
 
 use std::io;
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
@@ -41,12 +41,23 @@ struct Repository {
     selected: Option<usize>,
     panel_open: bool,
     watcher: Option<Watcher>,
-    reloads: (
-        std::sync::mpsc::Sender<ReloadResult>,
-        Receiver<ReloadResult>,
-    ),
+    reloads: (Sender<ReloadResult>, Receiver<ReloadResult>),
     /// Bare svaret på siste reload brukes.
     generation: u64,
+}
+
+impl Repository {
+    fn reload(&mut self, paths: Vec<String>) {
+        self.generation += 1;
+        let (generation, job, tx) = (
+            self.generation,
+            self.changes.reload(),
+            self.reloads.0.clone(),
+        );
+        thread::spawn(move || {
+            let _ = tx.send((generation, job.run(), paths));
+        });
+    }
 }
 
 pub struct App {
@@ -91,6 +102,7 @@ impl App {
         let panel = Panel::new(FileTree::new(changes.changes().clone()), commits);
         let selected = changes.first();
         let mut app = Self {
+            message,
             repository: Some(Repository {
                 changes,
                 panel,
@@ -102,7 +114,6 @@ impl App {
             }),
             ..Self::file(empty_diff(), Default::default(), settings)
         };
-        app.message = message;
         app.select(selected);
         app
     }
@@ -112,13 +123,10 @@ impl App {
             queue!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
             terminal.draw(|frame| self.draw(frame))?;
             execute!(terminal.backend_mut(), EndSynchronizedUpdate)?;
-            if event::poll(POLL)? {
-                loop {
-                    self.event(event::read()?)?;
-                    if !event::poll(std::time::Duration::ZERO)? {
-                        break;
-                    }
-                }
+            let mut timeout = POLL;
+            while event::poll(timeout)? {
+                self.event(event::read()?)?;
+                timeout = Duration::ZERO;
             }
             self.background();
         }
@@ -130,11 +138,8 @@ impl App {
             return;
         };
         if let Some(paths) = repo.watcher.as_ref().and_then(|w| w.take()) {
-            self.reload(paths);
+            repo.reload(paths);
         }
-        let Some(repo) = &mut self.repository else {
-            return;
-        };
         let mut latest = None;
         while let Ok(result) = repo.reloads.1.try_recv() {
             if result.0 == repo.generation {
@@ -145,21 +150,6 @@ impl App {
             let reloaded = repo.changes.reloaded(loaded, &paths);
             self.reloaded(reloaded);
         }
-    }
-
-    fn reload(&mut self, paths: Vec<String>) {
-        let Some(repo) = &mut self.repository else {
-            return;
-        };
-        repo.generation += 1;
-        let (generation, job, tx) = (
-            repo.generation,
-            repo.changes.reload(),
-            repo.reloads.0.clone(),
-        );
-        thread::spawn(move || {
-            let _ = tx.send((generation, job.run(), paths));
-        });
     }
 
     fn reloaded(&mut self, reloaded: Reloaded) {
@@ -247,8 +237,8 @@ impl App {
                 match repo.changes.rollback(&request) {
                     None => {}
                     Some(Ok(show)) => {
+                        repo.reload(Vec::new());
                         self.show(show);
-                        self.reload(Vec::new());
                     }
                     Some(Err(text)) => self.message.show(text, Level::Warning),
                 }
@@ -322,9 +312,11 @@ impl App {
             }
             AppCommand::FocusLeft => {
                 if self.focus == Focus::Diff
-                    && let Some(section) = self.open_sections().first()
+                    && let Some(section) = [Section::Files, Section::Commits]
+                        .into_iter()
+                        .find(|&s| self.section_open(s))
                 {
-                    self.focus = Focus::Panel(*section);
+                    self.focus = Focus::Panel(section);
                 }
             }
             AppCommand::FocusRight => self.focus = Focus::Diff,
@@ -333,8 +325,7 @@ impl App {
                     AppCommand::FocusDown => (Section::Files, Section::Commits),
                     _ => (Section::Commits, Section::Files),
                 };
-                let open = self.open_sections();
-                if self.focus == Focus::Panel(from) && open.contains(&from) && open.contains(&to) {
+                if self.focus == Focus::Panel(from) && self.section_open(to) {
                     self.focus = Focus::Panel(to);
                 }
             }
@@ -342,14 +333,10 @@ impl App {
         Ok(true)
     }
 
-    fn open_sections(&self) -> Vec<Section> {
-        let Some(repo) = self.repository.as_ref().filter(|r| r.panel_open) else {
-            return Vec::new();
-        };
-        [Section::Files, Section::Commits]
-            .into_iter()
-            .filter(|&s| repo.panel.is_open(s))
-            .collect()
+    fn section_open(&self, section: Section) -> bool {
+        self.repository
+            .as_ref()
+            .is_some_and(|r| r.panel_open && r.panel.is_open(section))
     }
 
     fn list_key(&mut self, section: Section, key: jetdiff_viewmodel::Key) {
@@ -377,7 +364,7 @@ impl App {
     fn select_commit(&mut self, hash: Option<Option<String>>) {
         if let (Some(hash), Some(repo)) = (hash, &mut self.repository) {
             repo.changes.select_commit(hash);
-            self.reload(Vec::new());
+            repo.reload(Vec::new());
         }
     }
 
@@ -395,7 +382,7 @@ impl App {
         let Some(repo) = &mut self.repository else {
             return;
         };
-        match repo.panel.click(x, y) {
+        match repo.panel.click(y) {
             Some(Click::Heading(section)) => {
                 repo.panel.toggle(section);
                 // Fokus i en lukket seksjon går til diffen
