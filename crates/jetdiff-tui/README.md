@@ -36,9 +36,9 @@ graph TD
     app --> widgets[widgets: sti, taster, beskjed, hjelp]
     app --> changes[jetdiff-app: Changes, Watcher]
     app --> backend[backend: sender bare fargene som endres]
-    diff --> paint[paint: split og unified]
-    paint --> text[text: én linje]
-    paint --> geometry[geometry: celler]
+    diff --> viewer[code_viewer: split og unified]
+    viewer --> text[text: én linje]
+    viewer --> geometry[geometry: celler]
     diff --> state[jetdiff-viewmodel: UnifiedState]
 ```
 

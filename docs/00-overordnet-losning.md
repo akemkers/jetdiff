@@ -65,7 +65,7 @@ jetdiff-ui       GPUI
 
 jetdiff-tui      terminalen, ratatui
   diff_view      taster, mus og overlay for diffen
-  paint          justerte rader og unified i celler, uten folding
+  code_viewer    split og unified som rader i celler, uten folding
   panel          filtreet og commit-lista
   app            hendelsesløkka, watcher og reload i en tråd
 

@@ -11,8 +11,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::WHEEL_ROWS;
-use crate::geometry;
-use crate::paint::{paint, row_at};
+use crate::{code_viewer, geometry};
 
 pub enum Overlay {
     /// Enter bekrefter, alt annet avbryter.
@@ -205,7 +204,7 @@ impl DiffView {
         }
         let layout = self.state.diff.layout(1.);
         let screen = y - self.area.y;
-        if let Some(row) = row_at(&layout, self.state.scroll_y(), screen) {
+        if let Some(row) = code_viewer::row_at(&layout, self.state.scroll_y(), screen) {
             self.state.click(row);
         }
     }
@@ -218,7 +217,7 @@ impl DiffView {
     }
 
     pub fn render(&self, focused: bool, theme: &Theme, buf: &mut Buffer) {
-        paint(&self.state, focused, self.area, theme, buf);
+        code_viewer::paint(&self.state, focused, self.area, theme, buf);
     }
 }
 
