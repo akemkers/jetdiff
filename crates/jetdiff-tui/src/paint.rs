@@ -135,12 +135,12 @@ impl Painted<'_> {
 
     /// Standardfargen forsvinner mot diff-bakgrunnen.
     fn number(&self, x: u16, number: String, caret: bool, theme: &Theme, buf: &mut Buffer) {
-        let c = if self.block.is_some() || caret {
+        let number_color = if self.block.is_some() || caret {
             theme.line_number_caret_row
         } else {
             theme.line_number
         };
-        buf.set_string(x, self.y, number, Style::default().fg(color(c)));
+        buf.set_string(x, self.y, number, Style::default().fg(color(number_color)));
     }
 }
 
@@ -198,10 +198,10 @@ fn paint_scrollbar(
     let thumb = thumb_range(scroll_y, track, content, track);
     for row in 0..area.height {
         let (top, bottom) = (row as f32, row as f32 + 1.);
-        let in_thumb = thumb.is_some_and(|(s, e)| s < bottom && e > top);
-        let marker = markers.iter().find(|m| {
-            let start = to_track(m.start_y);
-            start < bottom && to_track(m.end_y).max(start + 1.) > top
+        let in_thumb = thumb.is_some_and(|(start, end)| start < bottom && end > top);
+        let marker = markers.iter().find(|marker| {
+            let start = to_track(marker.start_y);
+            start < bottom && to_track(marker.end_y).max(start + 1.) > top
         });
         let cell = &mut buf[(x, area.y + row)];
         cell.set_bg(if in_thumb {
@@ -210,9 +210,9 @@ fn paint_scrollbar(
             bg
         });
         match marker {
-            Some(m) => {
-                let marker = brighter(color(theme.diff(m.diff_type).background));
-                cell.set_char('▐').set_fg(marker);
+            Some(marker) => {
+                let marker_color = brighter(color(theme.diff(marker.diff_type).background));
+                cell.set_char('▐').set_fg(marker_color);
             }
             None => {
                 cell.set_char(' ');

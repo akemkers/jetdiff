@@ -4,10 +4,10 @@ use jetdiff_viewmodel::{Key, KeyCode};
 use ratatui::crossterm::event::{KeyCode as Code, KeyEvent, KeyModifiers};
 
 pub fn to_key(event: KeyEvent) -> Key {
-    let m = event.modifiers;
-    let shift = m.contains(KeyModifiers::SHIFT);
+    let modifiers = event.modifiers;
+    let shift = modifiers.contains(KeyModifiers::SHIFT);
     let code = match event.code {
-        Code::Char(c) => KeyCode::Char(c),
+        Code::Char(ch) => KeyCode::Char(ch),
         Code::Up => KeyCode::Up,
         Code::Down => KeyCode::Down,
         Code::Left => KeyCode::Left,
@@ -22,14 +22,14 @@ pub fn to_key(event: KeyEvent) -> Key {
         }
         Code::Enter => KeyCode::Enter,
         Code::Esc => KeyCode::Escape,
-        Code::F(n) => KeyCode::F(n),
+        Code::F(number) => KeyCode::F(number),
         _ => KeyCode::Other,
     };
     Key {
         code,
-        ctrl: m.contains(KeyModifiers::CONTROL),
+        ctrl: modifiers.contains(KeyModifiers::CONTROL),
         shift,
-        cmd: m.contains(KeyModifiers::SUPER),
+        cmd: modifiers.contains(KeyModifiers::SUPER),
     }
 }
 

@@ -174,7 +174,9 @@ impl FileDiff {
     pub fn max_display_width(&self) -> usize {
         [Side::Left, Side::Right]
             .into_iter()
-            .flat_map(|s| (0..self.line_count(s)).map(move |l| display_width(self.line(s, l))))
+            .flat_map(|side| {
+                (0..self.line_count(side)).map(move |line| display_width(self.line(side, line)))
+            })
             .max()
             .unwrap_or(0)
     }

@@ -45,36 +45,36 @@ impl<W: Write> Backend for TermBackend<W> {
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
     {
-        let w = self.0.writer_mut();
+        let writer = self.0.writer_mut();
         let (mut fg, mut bg, mut modifier) = (Color::Reset, Color::Reset, Modifier::empty());
         let mut last = None;
         for (x, y, cell) in content {
             if last != Some((x.wrapping_sub(1), y)) {
-                queue!(w, MoveTo(x, y))?;
+                queue!(writer, MoveTo(x, y))?;
             }
             last = Some((x, y));
             if cell.modifier != modifier {
                 // Reset tar fargene også
-                queue!(w, SetAttribute(Attribute::Reset))?;
+                queue!(writer, SetAttribute(Attribute::Reset))?;
                 (fg, bg) = (Color::Reset, Color::Reset);
-                for (m, attribute) in ATTRIBUTES {
-                    if cell.modifier.contains(m) {
-                        queue!(w, SetAttribute(attribute))?;
+                for (flag, attribute) in ATTRIBUTES {
+                    if cell.modifier.contains(flag) {
+                        queue!(writer, SetAttribute(attribute))?;
                     }
                 }
                 modifier = cell.modifier;
             }
             if cell.fg != fg {
-                queue!(w, SetForegroundColor(cell.fg.into_crossterm()))?;
+                queue!(writer, SetForegroundColor(cell.fg.into_crossterm()))?;
                 fg = cell.fg;
             }
             if cell.bg != bg {
-                queue!(w, SetBackgroundColor(cell.bg.into_crossterm()))?;
+                queue!(writer, SetBackgroundColor(cell.bg.into_crossterm()))?;
                 bg = cell.bg;
             }
-            queue!(w, Print(cell.symbol()))?;
+            queue!(writer, Print(cell.symbol()))?;
         }
-        queue!(w, SetAttribute(Attribute::Reset))
+        queue!(writer, SetAttribute(Attribute::Reset))
     }
 
     fn append_lines(&mut self, n: u16) -> io::Result<()> {

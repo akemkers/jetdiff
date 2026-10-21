@@ -174,7 +174,7 @@ impl Panel {
             (&mut self.files, self.tree.rows().len()),
             (
                 &mut self.commit_rows,
-                self.commits.as_ref().map_or(0, |c| c.len()),
+                self.commits.as_ref().map_or(0, |commits| commits.len()),
             ),
         ] {
             if (list.area.y..list.area.bottom()).contains(&y) {
@@ -360,10 +360,10 @@ impl Panel {
                 ..list.area
             };
             let spans = match commits.commit(i) {
-                Some(c) => vec![
+                Some(commit) => vec![
                     Span::styled(" ● ", graph),
-                    Span::raw(c.subject.clone()),
-                    Span::styled(format!("  {}", age(now - c.time)), dim),
+                    Span::raw(commit.subject.clone()),
+                    Span::styled(format!("  {}", age(now - commit.time)), dim),
                 ],
                 None => vec![Span::styled(" ○ ", graph), Span::raw(LOCAL_CHANGES)],
             };

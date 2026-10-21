@@ -53,15 +53,15 @@ pub fn paint_line(line: &LineText, scroll_x: usize, area: Rect, theme: &Theme, b
     let mut text_style = Style::default().fg(color(theme.editor_fg));
     let (mut next_syntax, mut next_inline) = (0, 0);
     for (at, ch) in expanded.text.char_indices() {
-        let w = ch.width().unwrap_or(0);
+        let cells = ch.width().unwrap_or(0);
         if col >= scroll_x + width {
             break;
         }
-        if col + w > scroll_x && w > 0 {
+        if col + cells > scroll_x && cells > 0 {
             let x = area.x + col.saturating_sub(scroll_x) as u16;
             let cell = &mut buf[(x, area.y)];
             // Et bredt tegn som starter før scroll vises som mellomrom
-            let shown = if col < scroll_x || col + w > scroll_x + width {
+            let shown = if col < scroll_x || col + cells > scroll_x + width {
                 ' '
             } else {
                 ch
@@ -87,7 +87,7 @@ pub fn paint_line(line: &LineText, scroll_x: usize, area: Rect, theme: &Theme, b
             }
             cell.set_style(style);
         }
-        col += w;
+        col += cells;
     }
     let end = expanded.text.len();
     if let Some((_, bg)) = inline

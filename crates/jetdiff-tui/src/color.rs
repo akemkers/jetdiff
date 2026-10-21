@@ -4,21 +4,23 @@
 use jetdiff_viewmodel::Rgba;
 use ratatui::style::Color;
 
-pub fn color(c: Rgba) -> Color {
-    Color::Rgb(c[0], c[1], c[2])
+pub fn color(rgba: Rgba) -> Color {
+    Color::Rgb(rgba[0], rgba[1], rgba[2])
 }
 
 pub fn over(top: Rgba, bottom: Color) -> Color {
     let Color::Rgb(r, g, b) = bottom else {
         return bottom;
     };
-    let a = top[3] as u16;
-    let mix = |t: u8, b: u8| ((t as u16 * a + b as u16 * (255 - a)) / 255) as u8;
+    let alpha = top[3] as u16;
+    let mix = |top_channel: u8, bottom_channel: u8| {
+        ((top_channel as u16 * alpha + bottom_channel as u16 * (255 - alpha)) / 255) as u8
+    };
     Color::Rgb(mix(top[0], r), mix(top[1], g), mix(top[2], b))
 }
 
-pub fn faded(c: Rgba, opacity: f32) -> Rgba {
-    [c[0], c[1], c[2], (c[3] as f32 * opacity) as u8]
+pub fn faded(rgba: Rgba, opacity: f32) -> Rgba {
+    [rgba[0], rgba[1], rgba[2], (rgba[3] as f32 * opacity) as u8]
 }
 
 #[cfg(test)]

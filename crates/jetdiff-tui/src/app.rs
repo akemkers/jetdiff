@@ -95,7 +95,7 @@ impl App {
                 Vec::new()
             })));
             match Watcher::new(repo.root()) {
-                Ok(w) => watcher = Some(w),
+                Ok(started) => watcher = Some(started),
                 Err(e) => message.show(format!("Følger ikke endringer: {e}"), Level::Warning),
             }
         }
@@ -138,7 +138,7 @@ impl App {
         let Some(repo) = &mut self.repository else {
             return;
         };
-        if let Some(paths) = repo.watcher.as_ref().and_then(|w| w.take()) {
+        if let Some(paths) = repo.watcher.as_ref().and_then(|watcher| watcher.take()) {
             repo.reload(paths);
         }
         let mut latest = None;
@@ -177,8 +177,8 @@ impl App {
                     repo.panel.tree.set_changes(changes);
                 }
                 self.select(file);
-                if let Some(n) = notice {
-                    self.message.show(n.text, n.level);
+                if let Some(notice) = notice {
+                    self.message.show(notice.text, notice.level);
                 }
             }
         }
@@ -354,7 +354,11 @@ impl App {
                     }
                 }
                 Section::Commits => {
-                    let hash = repo.panel.commits.as_mut().and_then(|c| c.open_cursor());
+                    let hash = repo
+                        .panel
+                        .commits
+                        .as_mut()
+                        .and_then(|commits| commits.open_cursor());
                     self.select_commit(hash);
                 }
             },
@@ -399,7 +403,11 @@ impl App {
             }
             Some(Click::Commit(row)) => {
                 self.focus = Focus::Panel(Section::Commits);
-                let hash = repo.panel.commits.as_mut().and_then(|c| c.select(row));
+                let hash = repo
+                    .panel
+                    .commits
+                    .as_mut()
+                    .and_then(|commits| commits.select(row));
                 self.select_commit(hash);
             }
             None => {}
