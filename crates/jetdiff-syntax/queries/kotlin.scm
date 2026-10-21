@@ -1,4 +1,4 @@
-; Først, så alt mer spesifikt vinner
+; First, so anything more specific wins
 ["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
 [
   "=" "==" "!=" "===" "!==" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "&&" "||" "!" "+=" "-=" "*=" "/=" "%=" "++" "--" "->" "::" ".." "?:" "?." "!!"
@@ -9,7 +9,7 @@
 (navigation_suffix (simple_identifier) @property)
 (call_expression (navigation_expression (navigation_suffix (simple_identifier) @function_call) .))
 (call_expression (simple_identifier) @function_call)
-; Stor forbokstav er en konstruktør, som IntelliJ farger som klassen
+; A capital first letter is a constructor, which IntelliJ colors like the class
 ((call_expression (simple_identifier) @type)
  (#match? @type "^[A-Z]"))
 
@@ -44,7 +44,7 @@
 ] @number
 
 (annotation) @metadata
-; Ellers blir navnet farget som en type
+; Otherwise the name is colored as a type
 (annotation [
   (user_type (type_identifier) @metadata)
   (constructor_invocation (user_type (type_identifier) @metadata))

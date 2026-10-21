@@ -1,4 +1,4 @@
-; Kodeblokker vises uten highlighting.
+; Code blocks are shown without highlighting.
 
 [(atx_heading) (setext_heading)] @heading
 (link_destination) @link

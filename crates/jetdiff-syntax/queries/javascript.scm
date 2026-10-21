@@ -1,4 +1,4 @@
-; Først, så alt mer spesifikt vinner
+; First, so anything more specific wins
 ["(" ")" "[" "]" "{" "}" "," "." ";"] @punctuation
 [
   "=" "==" "===" "!=" "!==" "<" ">" "<=" ">=" "+" "-" "*" "/" "%" "**" "&&" "||" "??" "!" "&" "|" "^" "~" "<<" ">>" ">>>" "+=" "-=" "*=" "/=" "%=" "**=" "&=" "|=" "^=" "<<=" ">>=" ">>>=" "&&=" "||=" "??=" "++" "--" "=>" "..." "?"
@@ -34,7 +34,7 @@
 (template_substitution ["${" "}"] @plain)
 (ternary_expression ":" @operator)
 (new_expression constructor: (identifier) @type)
-; `identifier` i JavaScript og `type_identifier` i TypeScript
+; `identifier` in JavaScript and `type_identifier` in TypeScript
 (class_declaration name: (_) @type)
 (escape_sequence) @escape
 (number) @number
