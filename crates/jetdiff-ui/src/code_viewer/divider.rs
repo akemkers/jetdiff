@@ -1,5 +1,5 @@
-//! Trakten mellom editorene. Geometrien kommer ferdig fra `divider_bands` og
-//! `divider_separators`, lokal for divideren med samme y-akse som editorene.
+//! Trakten mellom sidene. Geometrien kommer ferdig fra `divider_bands` og
+//! `divider_separators`, lokal for divideren med samme y-akse som sidene.
 
 use gpui::{Bounds, ContentMask, Hsla, PathBuilder, Pixels, Window, fill, point, px, size};
 use jetdiff_viewmodel::divider::DIVIDER_WIDTH;

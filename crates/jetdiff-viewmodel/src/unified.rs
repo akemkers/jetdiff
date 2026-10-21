@@ -1,4 +1,4 @@
-//! Unified diff: én editor der slettede linjer står over de nye i hver endring. Port av
+//! Unified diff: én kodevisning der slettede linjer står over de nye i hver endring. Port av
 //! `UnifiedFragmentBuilder`, men radene peker inn i `FileDiff` i stedet for å bygge ny
 //! tekst, så syntaks og ord-markering gjenbrukes. Ingen folding. `RowLayout::Split` gir samme
 //! rader med slettet og ny linje side om side, for split i terminalen.

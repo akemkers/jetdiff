@@ -52,12 +52,12 @@ jetdiff-app      tilstanden rundt diffen, fortsatt uten GUI. Delt av alle UI-er
   watcher        endrede stier, samlet til det er stille
 
 jetdiff-ui       GPUI
-  side_editor    én side i split: bakgrunner, folds, tekst og linjenumre
-  divider        bezier-trakt og fold-koblinger
-  split          to editorer + divider, og treff for musa
-  unified_editor én editor med gammelt og nytt nummer, og treff for musa
-  painter        velger split eller unified for tegning og mus
-  editor_paint   det begge tegner likt: tekst, ord-markering, error stripe
+  code_viewer    velger split eller unified for tegning og mus
+    split        to sider + divider, og treff for musa
+    split_side   én side i split: bakgrunner, folds, tekst og linjenumre
+    divider      bezier-trakt og fold-koblinger
+    unified      én kodevisning med gammelt og nytt nummer, og treff for musa
+    code_paint   det begge tegner likt: tekst, ord-markering, error stripe
   file_diff      taster, mus, zoom og scroll-animasjon for diffen
   changes_tree   filtreet med ikoner og status-farger
   changes_view   treet + én fil, som commit-dialogen i IntelliJ

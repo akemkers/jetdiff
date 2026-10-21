@@ -14,7 +14,7 @@ const MIN_MARK_HEIGHT: f32 = 2.;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StripeMarker {
     pub diff_type: DiffType,
-    /// Y i editoren, piksler fra toppen av dokumentet.
+    /// Y i kodevisningen, piksler fra toppen av dokumentet.
     pub start_y: f32,
     pub end_y: f32,
 }

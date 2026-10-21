@@ -3,9 +3,8 @@
 mod cache;
 mod changes_tree;
 mod changes_view;
+mod code_viewer;
 mod commit_list;
-mod divider;
-mod editor_paint;
 mod file_diff;
 mod file_header;
 mod help;
@@ -13,16 +12,12 @@ mod icons;
 mod keystroke;
 mod list;
 mod message;
-mod painter;
 mod panel_size;
 mod rollback_dialog;
 mod scroll_animator;
 mod settings;
-mod side_editor;
-mod split;
 mod text;
 mod theme;
-mod unified_editor;
 mod watcher;
 
 pub use changes_view::{

@@ -1,4 +1,4 @@
-//! Split-visningen: to `SideEditor` med trakten mellom. Tegning, og hvor på skjermen sidene
+//! Split-visningen: to `SplitSide` med trakten mellom. Tegning, og hvor på skjermen sidene
 //! og linjene er. Nye og slettede filer vises alltid unified.
 
 use std::rc::Rc;
@@ -7,9 +7,9 @@ use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::{FileDiff, Folding, SideGeometry, StripeMarker, Viewport};
 
-use crate::divider::Divider;
-use crate::editor_paint::StripeRects;
-use crate::side_editor::{CaretRow, SideCache, SideEditor};
+use super::code_paint::StripeRects;
+use super::divider::Divider;
+use super::split_side::{CaretRow, SideCache, SplitSide};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -49,7 +49,7 @@ impl SplitPainter {
                 stripes[index] =
                     StripeRects::new(&self.markers[index], content_height, height, &self.theme);
             }
-            let editor = SideEditor {
+            let split_side = SplitSide {
                 diff: &self.diff,
                 folding: &self.folding,
                 geom,
@@ -62,7 +62,7 @@ impl SplitPainter {
                 caret: self.carets[index],
                 stripe: &stripes[index],
             };
-            widest = widest.max(editor.paint(&mut caches[index], window, cx));
+            widest = widest.max(split_side.paint(&mut caches[index], window, cx));
         }
         Divider {
             diff: &self.diff,

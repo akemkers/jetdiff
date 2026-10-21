@@ -148,7 +148,7 @@ impl<'a> LineLayout<'a> {
         }
     }
 
-    /// Y-intervallet en blokk dekker i editoren. Tom side blir 2px `[grense-1, grense+1)`,
+    /// Y-intervallet en blokk dekker i kodevisningen. Tom side blir 2px `[grense-1, grense+1)`,
     /// samme bånd som `DiffLineMarkerRenderer` og `DiffDefaultBorderRenderer` tegner.
     pub fn block_band(&self, lines: Range<usize>) -> (f32, f32) {
         let (y1, y2) = self.marker_range(lines);
@@ -181,7 +181,7 @@ impl<'a> LineLayout<'a> {
         )
     }
 
-    /// Samme intervall i visuelle linjer, det editoren faktisk tegner.
+    /// Samme intervall i visuelle linjer, det kodevisningen faktisk tegner.
     pub fn painted_visual_lines(&self, scroll_y: f32, viewport_height: f32) -> (usize, usize) {
         (
             self.y_to_visual_line(scroll_y),
