@@ -7,7 +7,7 @@ A diff viewer for local changes, commits and pull requests in a git repo, or for
 ### Diff
 
 **Side**:
-One of the two versions being compared: Left is the old version, Right is the new one. Applies in Unified too, where they are not shown next to each other.
+One of the two versions being compared: Left is the old version, Right is the new one. Applies in Unified too, where they are not shown next to each other. Not to be confused with left and right as directions on screen, which is what the words mean alone.
 _Avoid_: old/new, before/after, 1/2
 
 **Hunk**:
@@ -17,6 +17,10 @@ _Avoid_: block, chunk, change, fragment
 **Hunk kind**:
 Added (lines only on Right), Deleted (lines only on Left) or Modified (lines on both sides).
 _Avoid_: inserted
+
+**Changed file**:
+A file that differs between the two sides in the current source, with its file status.
+_Avoid_: file change, change
 
 **File status**:
 Added, Deleted, Modified or Renamed. The first three mean the same as for hunk kind, for the whole file.
@@ -30,8 +34,8 @@ The changed words inside a Modified hunk, marked on each side.
 _Avoid_: word highlight, word diff, fragment
 
 **Fold**:
-A run of unchanged lines hidden behind a single line that can be opened.
-_Avoid_: collapsed region, gap
+A run of unchanged lines hidden behind a single line that can be opened. A fold is either open or closed.
+_Avoid_: collapsed region, gap, collapsed, expanded
 
 ### Source
 
@@ -48,6 +52,10 @@ A single commit compared with its parent.
 
 **Pull request**:
 A GitHub pull request compared with the merge base of its base branch.
+
+**Repo source**:
+A source read from a git repo: Local changes, Commit or Pull request. Shown with the side panel.
+_Avoid_: changes, multi file
 
 **File pair**:
 Two files on disk compared directly, without a repo.
@@ -66,6 +74,10 @@ _Avoid_: side-by-side, view
 **Cursor**:
 The line in the diff, or the row in a list, that you are on. In the diff it is one line on one side, with no column.
 _Avoid_: caret, highlighted line
+
+**Mirrored cursor**:
+In Split, the cursor's line carried over to the other side and shown more faintly, so you see where the cursor lands if you switch side.
+_Avoid_: transferred cursor, caret, other cursor
 
 **Selection**:
 A choice that has been made in a list, such as the file or commit being shown. Moving the cursor does not change it.
@@ -90,9 +102,9 @@ Local changes followed by commits, to pick between.
 The most important keys, shown at the bottom.
 _Avoid_: key bar, status bar
 
-**Message**:
-A short Info or Warning text above the keymap bar, either **Brief** (disappears by itself) or **Pinned** (stays until removed).
-_Avoid_: notice, toast
+**Notification**:
+A short Info or Warning text above the keymap bar, either **Pinned** (about the file being shown, stays as long as it is shown) or **Brief** (about something that just happened, disappears by itself). A brief notification lies over the pinned one while it lasts.
+_Avoid_: message, notice, toast
 
 **Diff divider**:
 The band between the sides in Split, connecting each hunk on Left to the same hunk on Right.
@@ -100,7 +112,11 @@ _Avoid_: funnel
 
 **Fold link**:
 The line across the diff divider joining a closed fold on Left to the same fold on Right.
-_Avoid_: connector
+_Avoid_: connector, separator
+
+**Fold wave**:
+The wavy line drawn across a closed fold on each side.
+_Avoid_: separator
 
 **Hunk minimap**:
 Colored marks in the scrollbar showing where the hunks are in the file.
