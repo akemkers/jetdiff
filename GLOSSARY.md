@@ -7,7 +7,7 @@ A diff viewer for local changes, commits and pull requests in a git repo, or for
 ### Diff
 
 **Side**:
-One of the two versions being compared: Left is the old version, Right is the new one. Applies in Unified too, where they are not shown next to each other. Not to be confused with left and right as directions on screen, which is what the words mean alone.
+One of the two versions being compared: Left is the old version, Right is the new one. Applies in Unified too, where they are not shown next to each other. Left and Right with a capital letter are the sides. Not to be confused with left and right as directions on screen.
 _Avoid_: old/new, before/after, 1/2
 
 **Hunk**:
@@ -88,7 +88,7 @@ The file path and line number of the cursor's line in the newest version of the 
 _Avoid_: location, reference, position
 
 **Side panel**:
-The panel left of the diff, holding the file tree and the commit list.
+The panel left of the diff, holding the file tree, and for Local changes also the commit list.
 _Avoid_: left panel, sidebar, panel
 
 **File tree**:
@@ -103,7 +103,7 @@ The most important keys, shown at the bottom.
 _Avoid_: key bar, status bar
 
 **Notification**:
-A short Info or Warning text above the keymap bar, either **Pinned** (about the file being shown, stays as long as it is shown) or **Brief** (about something that just happened, disappears by itself). A brief notification lies over the pinned one while it lasts.
+A short Info or Warning text above the keymap bar, either **Pinned** (about what the diff shows, such as an identical file or no changed files, stays until that changes) or **Brief** (about something that just happened, disappears by itself). A brief notification lies over the pinned one while it lasts.
 _Avoid_: message, notice, toast
 
 **Diff divider**:
