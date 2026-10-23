@@ -1,13 +1,13 @@
 //! The scrollbar: the thumb shows what is visible, and the hunk minimap shows where the hunks are.
 
-use jetdiff_viewmodel::StripeMarker;
-use jetdiff_viewmodel::stripe::thumb_range;
+use jetdiff_viewmodel::HunkMinimapMark;
+use jetdiff_viewmodel::thumb_range;
 use ratatui::layout::Rect;
 
 use super::painter::Painter;
 
 pub(super) fn paint(painter: &mut Painter, x: u16, area: Rect) {
-    let markers = painter.markers();
+    let marks = painter.hunk_minimap_marks();
     let track = Track {
         height: area.height as f32,
         content: painter.content_height(),
@@ -15,8 +15,8 @@ pub(super) fn paint(painter: &mut Painter, x: u16, area: Rect) {
     let thumb = track.thumb(painter.scroll_y());
     for row in 0..area.height {
         let in_thumb = thumb.is_some_and(|(start, end)| track.covers(row, start, end));
-        let marker = markers.iter().find(|marker| track.shows(row, marker));
-        painter.scrollbar_cell(x, area.y + row, in_thumb, marker.map(|marker| marker.kind));
+        let mark = marks.iter().find(|mark| track.shows(row, mark));
+        painter.scrollbar_cell(x, area.y + row, in_thumb, mark.map(|mark| mark.kind));
     }
 }
 
@@ -45,8 +45,8 @@ impl Track {
     }
 
     /// The mark shows in row `row`, at least one row high.
-    fn shows(&self, row: u16, marker: &StripeMarker) -> bool {
-        let start = self.to_track(marker.start_y);
-        self.covers(row, start, self.to_track(marker.end_y).max(start + 1.))
+    fn shows(&self, row: u16, mark: &HunkMinimapMark) -> bool {
+        let start = self.to_track(mark.start_y);
+        self.covers(row, start, self.to_track(mark.end_y).max(start + 1.))
     }
 }

@@ -1,5 +1,5 @@
 //! Vertical geometry for one side. Everything that goes from line to y goes here, so scroll, divider
-//! and stripe see folding only through visual lines. A closed fold is one visual
+//! and hunk minimap see folding only through visual lines. A closed fold is one visual
 //! line of normal height, like `FoldRegion` with a placeholder in `EditorImpl`.
 
 use std::ops::Range;

@@ -179,13 +179,13 @@ mod tests {
 
     #[test]
     fn left_side_is_mirrored_around_divider() {
-        let right = fold_wave_path(100. ..120., 100., false, 0., 18.);
-        let left = fold_wave_path(80. ..100., 100., true, 0., 18.);
-        assert_eq!(left.len(), right.len());
-        for (l, r) in left.iter().zip(&right) {
-            let (l, r) = (end(l), end(r));
-            assert_eq!(l.y, r.y);
-            assert_eq!(100. - l.x, r.x - 100.);
+        let right_side = fold_wave_path(100. ..120., 100., false, 0., 18.);
+        let left_side = fold_wave_path(80. ..100., 100., true, 0., 18.);
+        assert_eq!(left_side.len(), right_side.len());
+        for (left_side_segment, right_side_segment) in left_side.iter().zip(&right_side) {
+            let (left_side_end, right_side_end) = (end(left_side_segment), end(right_side_segment));
+            assert_eq!(left_side_end.y, right_side_end.y);
+            assert_eq!(100. - left_side_end.x, right_side_end.x - 100.);
         }
     }
 

@@ -8,7 +8,7 @@ use jetdiff_viewmodel::fold_paths::{fold_wave_path, stroke_width};
 use jetdiff_viewmodel::{FileDiff, Folding, LineLayout, SideGeometry};
 
 use super::code_paint::{
-    ShapedText, StripeRects, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
+    HunkMinimapRects, ShapedText, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
     shape_number,
 };
 use super::divider::stroke_path;
@@ -34,7 +34,7 @@ pub struct SplitSide<'a> {
     pub scroll_y: f32,
     pub scroll_x: f32,
     pub cursor_row: CursorRow,
-    pub stripe: &'a StripeRects,
+    pub hunk_minimap: &'a HunkMinimapRects,
 }
 
 /// The cursor's line as this side draws it.
@@ -71,7 +71,7 @@ impl SplitSide<'_> {
             let widest = self.paint_text(&visible, cache, window, cx);
             self.paint_line_numbers(&visible, cache, window, cx);
             let content_height = self.layout().content_height();
-            self.stripe.paint(
+            self.hunk_minimap.paint(
                 self.geom,
                 self.top,
                 self.scroll_y,

@@ -22,14 +22,14 @@ use ratatui::layout::Rect;
 use crate::clipboard;
 use crate::diff_view::{DiffView, Effect, Overlay};
 use crate::input::to_key;
-use crate::panel::{Click, ListKey, Panel, Section, list_key};
+use crate::side_panel::{Click, ListKey, Section, SidePanel, list_key};
 use crate::widgets;
 use crate::{Settings, Term};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
     Diff,
-    Panel(Section),
+    SidePanel(Section),
 }
 
 /// The answer from a read in the background.
@@ -40,9 +40,9 @@ struct ReadAnswer {
 
 struct Repository {
     repo_source: RepoSource,
-    panel: Panel,
+    side_panel: SidePanel,
     selected: Option<usize>,
-    panel_open: bool,
+    side_panel_open: bool,
     watcher: Option<Watcher>,
     read_sender: Sender<ReadAnswer>,
     read_receiver: Receiver<ReadAnswer>,
@@ -79,7 +79,7 @@ pub struct App {
     notification_slot: NotificationSlot,
     repository: Option<Repository>,
     focus: Focus,
-    panel_area: Rect,
+    side_panel_area: Rect,
     quit: bool,
 }
 
@@ -91,7 +91,7 @@ impl App {
             notification_slot: NotificationSlot::default(),
             repository: None,
             focus: Focus::Diff,
-            panel_area: Rect::default(),
+            side_panel_area: Rect::default(),
             quit: false,
         }
     }
@@ -115,14 +115,14 @@ impl App {
             }
         }
         let files = Files::new(repo_source.changed_files().clone());
-        let panel = Panel::new(files, commits, settings.icons);
+        let side_panel = SidePanel::new(files, commits, settings.icons);
         let selected = repo_source.first();
         let (read_sender, read_receiver) = channel();
         app.repository = Some(Repository {
             repo_source,
-            panel,
+            side_panel,
             selected,
-            panel_open: settings.side_panel_open,
+            side_panel_open: settings.side_panel_open,
             watcher,
             read_sender,
             read_receiver,
@@ -170,7 +170,7 @@ impl App {
                 selected_commit,
                 brief,
             } => {
-                if let Some(commits) = &mut repo.panel.commits {
+                if let Some(commits) = &mut repo.side_panel.commits {
                     commits.set_selected(selected_commit);
                 }
                 self.show_brief(brief);
@@ -181,11 +181,11 @@ impl App {
                 file,
                 brief,
             } => {
-                if let Some(list) = &mut repo.panel.commits {
+                if let Some(list) = &mut repo.side_panel.commits {
                     list.set_commits(commits);
                 }
                 if let Some(changed_files) = changed_files {
-                    repo.panel.files.set_changed_files(changed_files);
+                    repo.side_panel.files.set_changed_files(changed_files);
                 }
                 self.select(file);
                 if let Some(brief) = brief {
@@ -205,7 +205,7 @@ impl App {
         };
         repo.selected = file;
         if let Some(file) = file {
-            repo.panel.reveal_file(file);
+            repo.side_panel.reveal_file(file);
         }
         let show = repo.repo_source.load(file);
         self.show(show);
@@ -241,9 +241,9 @@ impl App {
         match effect {
             None => {}
             Some(Effect::ShowBrief(text)) => self.show_brief(Notification::info(text)),
-            Some(Effect::Copy(location)) => {
-                clipboard::copy(&location, &mut io::stdout())?;
-                self.show_brief(Notification::info(format!("Copied {location}")));
+            Some(Effect::Copy(cursor_location)) => {
+                clipboard::copy(&cursor_location, &mut io::stdout())?;
+                self.show_brief(Notification::info(format!("Copied {cursor_location}")));
             }
             Some(Effect::Rollback(request)) => {
                 let Some(repo) = &mut self.repository else {
@@ -291,7 +291,7 @@ impl App {
                 let effect = self.diff.key(key);
                 self.effect(effect)
             }
-            Focus::Panel(section) => {
+            Focus::SidePanel(section) => {
                 self.list_key(section, key);
                 Ok(())
             }
@@ -313,15 +313,15 @@ impl App {
                 let forward = cmd == AppCommand::NextFile;
                 if let Some(repo) = &self.repository
                     && let Some(file) = repo.selected
-                    && let Some(next) = repo.panel.files.next_file(file, forward)
+                    && let Some(next) = repo.side_panel.files.next_file(file, forward)
                 {
                     self.select(Some(next));
                 }
             }
             AppCommand::ToggleSidePanel => {
                 if let Some(repo) = &mut self.repository {
-                    repo.panel_open = !repo.panel_open;
-                    if !repo.panel_open {
+                    repo.side_panel_open = !repo.side_panel_open;
+                    if !repo.side_panel_open {
                         self.focus = Focus::Diff;
                     }
                 }
@@ -332,7 +332,7 @@ impl App {
                         .into_iter()
                         .find(|&s| self.section_open(s))
                 {
-                    self.focus = Focus::Panel(section);
+                    self.focus = Focus::SidePanel(section);
                 }
             }
             AppCommand::FocusRight => self.focus = Focus::Diff,
@@ -341,8 +341,8 @@ impl App {
                     AppCommand::FocusDown => (Section::Files, Section::Commits),
                     _ => (Section::Commits, Section::Files),
                 };
-                if self.focus == Focus::Panel(from) && self.section_open(to) {
-                    self.focus = Focus::Panel(to);
+                if self.focus == Focus::SidePanel(from) && self.section_open(to) {
+                    self.focus = Focus::SidePanel(to);
                 }
             }
         }
@@ -352,7 +352,7 @@ impl App {
     fn section_open(&self, section: Section) -> bool {
         self.repository
             .as_ref()
-            .is_some_and(|r| r.panel_open && r.panel.is_open(section))
+            .is_some_and(|repo| repo.side_panel_open && repo.side_panel.is_open(section))
     }
 
     fn list_key(&mut self, section: Section, key: jetdiff_viewmodel::Key) {
@@ -360,17 +360,17 @@ impl App {
             return;
         };
         match list_key(key) {
-            Some(ListKey::Down) => repo.panel.move_cursor(section, true),
-            Some(ListKey::Up) => repo.panel.move_cursor(section, false),
+            Some(ListKey::Down) => repo.side_panel.move_cursor(section, true),
+            Some(ListKey::Up) => repo.side_panel.move_cursor(section, false),
             Some(ListKey::Select) => match section {
                 Section::Files => {
-                    if let Some(file) = repo.panel.files.select_at_cursor() {
+                    if let Some(file) = repo.side_panel.files.select_at_cursor() {
                         self.select(Some(file));
                     }
                 }
                 Section::Commits => {
                     let hash = repo
-                        .panel
+                        .side_panel
                         .commits
                         .as_mut()
                         .and_then(|commits| commits.select_at_cursor());
@@ -388,13 +388,15 @@ impl App {
         }
     }
 
-    fn panel_contains(&self, x: u16, y: u16) -> bool {
-        self.repository.as_ref().is_some_and(|r| r.panel_open)
-            && self.panel_area.contains((x, y).into())
+    fn side_panel_contains(&self, x: u16, y: u16) -> bool {
+        self.repository
+            .as_ref()
+            .is_some_and(|repo| repo.side_panel_open)
+            && self.side_panel_area.contains((x, y).into())
     }
 
     fn click(&mut self, x: u16, y: u16) {
-        if !self.panel_contains(x, y) {
+        if !self.side_panel_contains(x, y) {
             self.focus = Focus::Diff;
             self.diff.click(x, y);
             return;
@@ -402,23 +404,23 @@ impl App {
         let Some(repo) = &mut self.repository else {
             return;
         };
-        match repo.panel.click(y) {
+        match repo.side_panel.click(y) {
             Some(Click::Heading(section)) => {
-                repo.panel.toggle(section);
-                if self.focus == Focus::Panel(section) && !repo.panel.is_open(section) {
+                repo.side_panel.toggle(section);
+                if self.focus == Focus::SidePanel(section) && !repo.side_panel.is_open(section) {
                     self.focus = Focus::Diff;
                 }
             }
             Some(Click::File(row)) => {
-                self.focus = Focus::Panel(Section::Files);
-                if let Some(file) = repo.panel.files.select(row) {
+                self.focus = Focus::SidePanel(Section::Files);
+                if let Some(file) = repo.side_panel.files.select(row) {
                     self.select(Some(file));
                 }
             }
             Some(Click::Commit(row)) => {
-                self.focus = Focus::Panel(Section::Commits);
+                self.focus = Focus::SidePanel(Section::Commits);
                 let hash = repo
-                    .panel
+                    .side_panel
                     .commits
                     .as_mut()
                     .and_then(|commits| commits.select(row));
@@ -429,9 +431,9 @@ impl App {
     }
 
     fn wheel(&mut self, x: u16, y: u16, down: bool) {
-        if self.panel_contains(x, y) {
+        if self.side_panel_contains(x, y) {
             if let Some(repo) = &mut self.repository {
-                repo.panel.wheel(y, down);
+                repo.side_panel.wheel(y, down);
             }
         } else {
             self.diff.wheel(down);
@@ -452,20 +454,20 @@ impl App {
             ..area
         };
         let focus = self.focus;
-        if let Some(repo) = self.repository.as_mut().filter(|r| r.panel_open) {
-            let width = repo.panel.width(area.width);
-            self.panel_area = Rect {
+        if let Some(repo) = self.repository.as_mut().filter(|repo| repo.side_panel_open) {
+            let width = repo.side_panel.width(area.width);
+            self.side_panel_area = Rect {
                 width: width.min(area.width),
                 ..main
             };
             let section = match focus {
-                Focus::Panel(s) => Some(s),
+                Focus::SidePanel(section) => Some(section),
                 Focus::Diff => None,
             };
-            repo.panel
-                .render(self.panel_area, section, repo.selected, &theme, buf);
-            main.x += self.panel_area.width;
-            main.width -= self.panel_area.width;
+            repo.side_panel
+                .render(self.side_panel_area, section, repo.selected, &theme, buf);
+            main.x += self.side_panel_area.width;
+            main.width -= self.side_panel_area.width;
         }
         if let Some(file) = self
             .repository
@@ -478,7 +480,7 @@ impl App {
         }
         self.diff.layout(main);
         self.diff.render(focus == Focus::Diff, &theme, buf);
-        widgets::key_bar(footer, &theme, buf);
+        widgets::keymap_bar(footer, &theme, buf);
         if let Some(notification) = self
             .notification_slot
             .current(Instant::now())

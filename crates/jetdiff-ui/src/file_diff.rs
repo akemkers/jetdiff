@@ -8,16 +8,16 @@ use gpui::{
     MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window,
     actions, canvas, div, prelude::*, px,
 };
-use jetdiff_app::{Notification, RollbackRequest, location, rollback_request};
+use jetdiff_app::{Notification, RollbackRequest, cursor_location, rollback_request};
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::metrics::zoomed;
 use jetdiff_viewmodel::{
-    Command, DiffMode, FileDiff, FoldId, Folding, Horizontal, KeyParser, Parsed, StripeMarker,
-    Viewport, stripe_markers,
+    Command, DiffMode, FileDiff, FoldId, Folding, Horizontal, HunkMinimapMark, KeyParser, Parsed,
+    Viewport, hunk_minimap_marks,
 };
 
 use crate::code_viewer::{self, Hit, Painter, Shared};
-use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
+use crate::help::{HideHelp, KEYMAP_BAR_HEIGHT, KeyHelp, ToggleHelp};
 use crate::keystroke::to_key;
 use crate::notification_slot_view::NotificationSlotView;
 use crate::rollback_dialog::rollback_dialog;
@@ -53,7 +53,7 @@ pub struct FileDiffView {
     keys: KeyParser,
     initialized: bool,
     viewport_height: f32,
-    markers: Rc<[Vec<StripeMarker>; 2]>,
+    hunk_minimap_marks: Rc<[Vec<HunkMinimapMark>; 2]>,
     /// The longest line in characters, computed once. Gives max horizontal scroll without shaping everything.
     max_cols: usize,
     /// Split or Unified for all files, until `v` switches.
@@ -93,7 +93,7 @@ impl FileDiffView {
             keys: KeyParser::default(),
             initialized: false,
             viewport_height: 0.,
-            markers: Rc::new([Vec::new(), Vec::new()]),
+            hunk_minimap_marks: Rc::new([Vec::new(), Vec::new()]),
             can_rollback: false,
             overlay: None,
             paths,
@@ -119,7 +119,7 @@ impl FileDiffView {
         self.keys.reset();
         self.initialized = false;
         self.shared.clear();
-        self.update_markers();
+        self.update_hunk_minimap_marks();
         cx.notify();
     }
 
@@ -138,7 +138,7 @@ impl FileDiffView {
         self.shared.clear();
         self.clamp_scroll_x();
         self.scroll.jump(self.mode.scroll());
-        self.update_markers();
+        self.update_hunk_minimap_marks();
         cx.notify();
     }
 
@@ -158,7 +158,7 @@ impl FileDiffView {
             // Nothing is shown yet, so `step` lands on the first hunk
             None => self.mode = DiffMode::new(diff, folding, self.unified),
         }
-        self.update_markers();
+        self.update_hunk_minimap_marks();
         self.clamp_scroll_x();
         self.scroll.jump(self.mode.scroll());
         self.show_brief(if self.unified { "Unified" } else { "Split" }, cx);
@@ -191,19 +191,20 @@ impl FileDiffView {
         let style = TextStyle::new(self.font_size, window);
         self.shared.set_style(&style);
         self.style = Some(style);
-        self.update_markers();
+        self.update_hunk_minimap_marks();
     }
 
     /// The hunk minimap follows visual lines, so it must be recomputed when the folds change. Unified
     /// computes its marks when the hunk minimap is drawn.
-    fn update_markers(&mut self) {
-        self.shared.clear_stripes();
+    fn update_hunk_minimap_marks(&mut self) {
+        self.shared.clear_hunk_minimaps();
         let (Some(style), DiffMode::Split(state)) = (&self.style, &self.mode) else {
             return;
         };
-        let lh = style.line_height();
+        let line_height = style.line_height();
         let (diff, folding) = (&state.diff, &state.folding);
-        self.markers = Rc::new(SIDES.map(|s| stripe_markers(diff, folding, s, lh)));
+        self.hunk_minimap_marks =
+            Rc::new(SIDES.map(|side| hunk_minimap_marks(diff, folding, side, line_height)));
     }
 
     fn horizontal(&self) -> Horizontal {
@@ -233,10 +234,12 @@ impl FileDiffView {
                 self.rollback(cx);
                 return;
             }
-            Command::CopyLocation => {
-                if let Some(location) = location(self.mode.location(), &self.paths) {
-                    cx.write_to_clipboard(ClipboardItem::new_string(location.clone()));
-                    self.show_brief(format!("Copied {location}"), cx);
+            Command::CopyCursorLocation => {
+                if let Some(cursor_location) =
+                    cursor_location(self.mode.cursor_location(), &self.paths)
+                {
+                    cx.write_to_clipboard(ClipboardItem::new_string(cursor_location.clone()));
+                    self.show_brief(format!("Copied {cursor_location}"), cx);
                 }
                 return;
             }
@@ -270,7 +273,7 @@ impl FileDiffView {
             return;
         }
         if out.folding_changed {
-            self.update_markers();
+            self.update_hunk_minimap_marks();
         }
         if out.animate {
             self.scroll.animate(self.mode.scroll());
@@ -323,17 +326,28 @@ impl FileDiffView {
         if size == self.font_size {
             return;
         }
-        let Some(old) = self.style.as_ref().map(|s| (s.line_height(), s.char_width)) else {
+        let Some((previous_line_height, previous_char_width)) = self
+            .style
+            .as_ref()
+            .map(|style| (style.line_height(), style.char_width))
+        else {
             self.font_size = size;
             return;
         };
         self.font_size = size;
         self.ensure_style(window);
-        let Some(vp) = self.viewport() else {
+        let Some(viewport) = self.viewport() else {
             return;
         };
-        let char_width = self.style.as_ref().map_or(old.1, |s| s.char_width);
-        self.mode.rescale(old.0, vp, char_width / old.1);
+        let char_width = self
+            .style
+            .as_ref()
+            .map_or(previous_char_width, |style| style.char_width);
+        self.mode.rescale(
+            previous_line_height,
+            viewport,
+            char_width / previous_char_width,
+        );
         self.clamp_scroll_x();
         self.scroll.jump(self.mode.scroll());
     }
@@ -506,13 +520,10 @@ impl Render for FileDiffView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_style(window);
         // The keymap bar can wrap over several lines, so the height comes from the previous layout
-        let height = self
-            .shared
-            .bounds
-            .get()
-            .map_or(f32::from(window.viewport_size().height) - BAR_HEIGHT, |b| {
-                f32::from(b.size.height)
-            });
+        let height = self.shared.bounds.get().map_or(
+            f32::from(window.viewport_size().height) - KEYMAP_BAR_HEIGHT,
+            |b| f32::from(b.size.height),
+        );
         self.resize(height);
         self.step(window);
 
@@ -523,7 +534,7 @@ impl Render for FileDiffView {
             let scale = window.scale_factor();
             Painter::new(
                 &self.mode,
-                &self.markers,
+                &self.hunk_minimap_marks,
                 style,
                 shown,
                 focused,
@@ -539,7 +550,7 @@ impl Render for FileDiffView {
         let footer = div()
             .relative()
             .flex_none()
-            .child(keys.bar())
+            .child(keys.keymap_bar())
             .child(self.notification_slot.clone());
         let overlay = self.overlay.as_ref().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),

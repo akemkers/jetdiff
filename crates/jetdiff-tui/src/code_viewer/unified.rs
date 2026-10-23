@@ -1,5 +1,6 @@
-//! One line per row, with old and new line number in the gutter. The words get the row's color.
+//! One line per row, with a line number for each side in the gutter. The words get the row's color.
 
+use jetdiff_viewmodel::Side;
 use ratatui::layout::Rect;
 
 use super::hunk_color::HunkColor;
@@ -10,7 +11,7 @@ use crate::geometry;
 pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
     let cells = geometry::unified(painter.diff(), area);
     let columns = &cells.columns;
-    let number_ends = [cells.old_end, columns.number_end()];
+    let number_ends = [Side::Left, Side::Right].map(|side| cells.number_end(side));
     for visible in painter.visible_rows(area) {
         let (y, row) = (visible.y, visible.row);
         let hunk_color = HunkColor::of_row(painter.diff(), row);

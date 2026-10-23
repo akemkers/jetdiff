@@ -2,7 +2,7 @@
 
 pub type Keys = (&'static str, &'static str);
 
-pub const BAR: [Keys; 5] = [
+pub const KEYMAP_BAR: [Keys; 5] = [
     ("Tab Shift-Tab", "file"),
     ("j k", "up/down"),
     ("n p", "hunk"),

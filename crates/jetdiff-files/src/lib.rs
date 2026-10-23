@@ -24,7 +24,7 @@ pub struct ChangedFile {
 }
 
 impl ChangedFile {
-    pub fn left_path(&self) -> &str {
+    pub fn left_side_path(&self) -> &str {
         self.renamed_from.as_deref().unwrap_or(&self.path)
     }
 
@@ -57,10 +57,11 @@ fn parts(dir: &str) -> Vec<&str> {
 
 /// The number of files in the list, before or after, that changed on disk or were added,
 /// disappeared or got a new file status. `paths` are the changed paths.
-pub fn touched(old: &[ChangedFile], new: &[ChangedFile], paths: &[String]) -> usize {
+pub fn touched(previous: &[ChangedFile], current: &[ChangedFile], paths: &[String]) -> usize {
     let listed = |p: &str| {
-        old.iter()
-            .chain(new)
+        previous
+            .iter()
+            .chain(current)
             .any(|file| file.path == p || file.renamed_from.as_deref() == Some(p))
     };
     let mut touched: BTreeSet<&str> = paths
@@ -69,13 +70,15 @@ pub fn touched(old: &[ChangedFile], new: &[ChangedFile], paths: &[String]) -> us
         .filter(|p| listed(p))
         .collect();
     touched.extend(
-        old.iter()
-            .filter(|file| !new.contains(file))
+        previous
+            .iter()
+            .filter(|file| !current.contains(file))
             .map(|file| file.path.as_str()),
     );
     touched.extend(
-        new.iter()
-            .filter(|file| !old.contains(file))
+        current
+            .iter()
+            .filter(|file| !previous.contains(file))
             .map(|file| file.path.as_str()),
     );
     touched.len()
@@ -95,18 +98,18 @@ mod tests {
 
     #[test]
     fn counts_changed_files() {
-        let old = [
+        let previous = [
             changed_file("a.rs", FileStatus::Modified),
             changed_file("b.rs", FileStatus::Added),
         ];
-        let new = [
+        let current = [
             changed_file("a.rs", FileStatus::Modified),
             changed_file("b.rs", FileStatus::Modified),
             changed_file("c.rs", FileStatus::Added),
         ];
         let paths = ["a.rs".into(), "c.rs".into(), "target/x".into()];
-        assert_eq!(touched(&old, &new, &paths), 3);
-        assert_eq!(touched(&old, &old, &["target/x".into()]), 0);
+        assert_eq!(touched(&previous, &current, &paths), 3);
+        assert_eq!(touched(&previous, &previous, &["target/x".into()]), 0);
     }
 
     #[test]

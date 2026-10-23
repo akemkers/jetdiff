@@ -135,96 +135,99 @@ mod tests {
         FileDiff::new(&a, &(b.join("\n") + "\n"), ComparisonPolicy::Default).unwrap()
     }
 
-    const VP: Viewport = Viewport {
+    const VIEWPORT: Viewport = Viewport {
         height: 300.,
         line_height: 20.,
     };
 
     #[test]
     fn navigation_over_folds() {
-        let d = three_hunks();
-        let f = Folding::new(&d);
+        let diff = three_hunks();
+        let folding = Folding::new(&diff);
         let mut seen = vec![0];
-        let mut t = target_for_hunk(&d, &f, 0, VP);
+        let mut target = target_for_hunk(&diff, &folding, 0, VIEWPORT);
         loop {
             let hunk = *seen.last().unwrap();
-            let start = d.hunks()[hunk].lines[0].start;
+            let start = diff.hunks()[hunk].lines[0].start;
             for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
-                let layout = f.layout(side, 20.);
+                let layout = folding.layout(side, 20.);
                 // The hunk is visible, and the folds above take one line each
-                let y = layout.line_top(start) - t.scroll_y[i];
-                assert!((0. ..VP.height).contains(&y), "{t:?}");
+                let y = layout.line_top(start) - target.scroll_y[i];
+                assert!((0. ..VIEWPORT.height).contains(&y), "{target:?}");
                 assert!(
-                    layout.line_top(start) < Folding::none(&d).layout(side, 20.).line_top(start)
+                    layout.line_top(start) < Folding::none(&diff).layout(side, 20.).line_top(start)
                 );
             }
-            let Some(next) = next_hunk(&d, Side::Right, t.cursor_lines[1]) else {
+            let Some(next) = next_hunk(&diff, Side::Right, target.cursor_lines[1]) else {
                 break;
             };
             seen.push(next);
-            t = target_for_hunk(&d, &f, next, VP);
+            target = target_for_hunk(&diff, &folding, next, VIEWPORT);
         }
         assert_eq!(seen, [0, 1, 2]);
         // Hunk 2 on line 90 is visual line 25 with three folds above
-        assert_eq!(t.cursor_lines, [90, 90]);
-        assert_eq!(t.scroll_y, [400., 400.]);
-        assert_eq!(previous_hunk(&d, Side::Right, t.cursor_lines[1]), Some(1));
+        assert_eq!(target.cursor_lines, [90, 90]);
+        assert_eq!(target.scroll_y, [400., 400.]);
+        assert_eq!(
+            previous_hunk(&diff, Side::Right, target.cursor_lines[1]),
+            Some(1)
+        );
     }
 
     #[test]
     fn next_and_previous_from_cursor() {
-        let d = three_hunks();
+        let diff = three_hunks();
         let s = Side::Right;
-        assert_eq!(next_hunk(&d, s, 0), Some(0));
-        assert_eq!(next_hunk(&d, s, 10), Some(1));
-        assert_eq!(next_hunk(&d, s, 39), Some(1));
-        assert_eq!(next_hunk(&d, s, 90), None);
-        assert_eq!(next_hunk(&d, s, 100), None);
+        assert_eq!(next_hunk(&diff, s, 0), Some(0));
+        assert_eq!(next_hunk(&diff, s, 10), Some(1));
+        assert_eq!(next_hunk(&diff, s, 39), Some(1));
+        assert_eq!(next_hunk(&diff, s, 90), None);
+        assert_eq!(next_hunk(&diff, s, 100), None);
 
-        assert_eq!(previous_hunk(&d, s, 0), None);
-        assert_eq!(previous_hunk(&d, s, 10), None);
-        assert_eq!(previous_hunk(&d, s, 11), Some(0));
+        assert_eq!(previous_hunk(&diff, s, 0), None);
+        assert_eq!(previous_hunk(&diff, s, 10), None);
+        assert_eq!(previous_hunk(&diff, s, 11), Some(0));
         // Cursor in hunk 1 gives hunk 0
-        assert_eq!(previous_hunk(&d, s, 40), Some(0));
-        assert_eq!(previous_hunk(&d, s, 41), Some(1));
-        assert_eq!(previous_hunk(&d, s, 99), Some(2));
+        assert_eq!(previous_hunk(&diff, s, 40), Some(0));
+        assert_eq!(previous_hunk(&diff, s, 41), Some(1));
+        assert_eq!(previous_hunk(&diff, s, 99), Some(2));
     }
 
     #[test]
     fn cursor_on_last_line_cannot_go_further() {
         // A hunk on the last line with content, cursor on the empty line after it
-        let d = FileDiff::new("a\nb\n", "a\nc\n", ComparisonPolicy::Default).unwrap();
-        assert_eq!(next_hunk(&d, Side::Left, 0), Some(0));
-        assert_eq!(next_hunk(&d, Side::Left, 2), None);
+        let diff = FileDiff::new("a\nb\n", "a\nc\n", ComparisonPolicy::Default).unwrap();
+        assert_eq!(next_hunk(&diff, Side::Left, 0), Some(0));
+        assert_eq!(next_hunk(&diff, Side::Left, 2), None);
     }
 
     #[test]
     fn no_hunks() {
-        let d = FileDiff::new("a\n", "a\n", ComparisonPolicy::Default).unwrap();
-        assert_eq!(next_hunk(&d, Side::Left, 0), None);
-        assert_eq!(previous_hunk(&d, Side::Left, 1), None);
+        let diff = FileDiff::new("a\n", "a\n", ComparisonPolicy::Default).unwrap();
+        assert_eq!(next_hunk(&diff, Side::Left, 0), None);
+        assert_eq!(previous_hunk(&diff, Side::Left, 1), None);
     }
 
     #[test]
     fn small_hunk_lands_a_third_down() {
-        let d = three_hunks();
-        let t = target_for_hunk(&d, &Folding::none(&d), 1, VP);
-        assert_eq!(t.cursor_lines, [40, 40]);
+        let diff = three_hunks();
+        let target = target_for_hunk(&diff, &Folding::none(&diff), 1, VIEWPORT);
+        assert_eq!(target.cursor_lines, [40, 40]);
         // shift = min(300 - 40 - 40, 100) = 100
-        assert_eq!(t.scroll_y, [700., 700.]);
+        assert_eq!(target.scroll_y, [700., 700.]);
     }
 
     #[test]
     fn hunk_at_the_top() {
-        let d = three_hunks();
+        let diff = three_hunks();
         // top = 200 above shift 100, so shift becomes 100
         assert_eq!(
-            target_for_hunk(&d, &Folding::none(&d), 0, VP).scroll_y,
+            target_for_hunk(&diff, &Folding::none(&diff), 0, VIEWPORT).scroll_y,
             [100., 100.]
         );
-        let d = FileDiff::new("a\nb\n", "x\nb\n", ComparisonPolicy::Default).unwrap();
+        let diff = FileDiff::new("a\nb\n", "x\nb\n", ComparisonPolicy::Default).unwrap();
         assert_eq!(
-            target_for_hunk(&d, &Folding::none(&d), 0, VP).scroll_y,
+            target_for_hunk(&diff, &Folding::none(&diff), 0, VIEWPORT).scroll_y,
             [0., 0.]
         );
     }
@@ -238,22 +241,22 @@ mod tests {
             lines("x", 30),
             &a[lines("a", 20).len()..]
         );
-        let d = FileDiff::new(&a, &b, ComparisonPolicy::Default).unwrap();
-        assert_eq!(d.hunks()[0].lines, [20..20, 20..50]);
+        let diff = FileDiff::new(&a, &b, ComparisonPolicy::Default).unwrap();
+        assert_eq!(diff.hunks()[0].lines, [20..20, 20..50]);
         // Right cannot be shown in full: shift = gap = 40 on both
         assert_eq!(
-            target_for_hunk(&d, &Folding::none(&d), 0, VP).scroll_y,
+            target_for_hunk(&diff, &Folding::none(&diff), 0, VIEWPORT).scroll_y,
             [360., 360.]
         );
     }
 
     #[test]
     fn hunk_at_the_end_is_clamped() {
-        let d = three_hunks();
+        let diff = three_hunks();
         // top = 1800, max = (101 + 5) * 20 - 300 = 1820
-        let t = target_for_hunk(&d, &Folding::none(&d), 2, VP);
+        let target = target_for_hunk(&diff, &Folding::none(&diff), 2, VIEWPORT);
         // First attempt 1700 < 1820, so enough room
-        assert_eq!(t.scroll_y, [1700., 1700.]);
+        assert_eq!(target.scroll_y, [1700., 1700.]);
 
         let short = Viewport {
             height: 100.,
@@ -261,7 +264,7 @@ mod tests {
         };
         // Low window: shift = gap = 40 because 2*40 + 40 > 100
         assert_eq!(
-            target_for_hunk(&d, &Folding::none(&d), 2, short).scroll_y,
+            target_for_hunk(&diff, &Folding::none(&diff), 2, short).scroll_y,
             [1760., 1760.]
         );
     }
@@ -271,17 +274,19 @@ mod tests {
         // Left short, Right long: the hunk is at the bottom of Left
         let a = lines("a", 10) + "tail\n";
         let b = lines("a", 10) + "tail2\n" + &lines("z", 50);
-        let d = FileDiff::new(&a, &b, ComparisonPolicy::Default).unwrap();
-        let t = target_for_hunk(&d, &Folding::none(&d), 0, VP);
-        let max_left = Folding::none(&d).layout(Side::Left, 20.).max_scroll(300.);
-        assert_eq!(max_left, 40.);
-        assert!(t.scroll_y[0] <= max_left);
+        let diff = FileDiff::new(&a, &b, ComparisonPolicy::Default).unwrap();
+        let target = target_for_hunk(&diff, &Folding::none(&diff), 0, VIEWPORT);
+        let left_side_max_scroll = Folding::none(&diff)
+            .layout(Side::Left, 20.)
+            .max_scroll(300.);
+        assert_eq!(left_side_max_scroll, 40.);
+        assert!(target.scroll_y[0] <= left_side_max_scroll);
         // The top of the hunk is visible on both sides
         for (i, s) in [Side::Left, Side::Right].into_iter().enumerate() {
-            let top = Folding::none(&d)
+            let top = Folding::none(&diff)
                 .layout(s, 20.)
-                .line_top(d.hunks()[0].lines(s).start);
-            assert!(top >= t.scroll_y[i] && top < t.scroll_y[i] + 300.);
+                .line_top(diff.hunks()[0].lines(s).start);
+            assert!(top >= target.scroll_y[i] && top < target.scroll_y[i] + 300.);
         }
     }
 }

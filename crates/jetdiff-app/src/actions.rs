@@ -1,4 +1,4 @@
-//! Rollback and `file:line` for the cursor's line.
+//! Rollback and the cursor location.
 
 use std::ops::Range;
 
@@ -31,7 +31,7 @@ pub fn rollback_request(
 }
 
 /// `cursor` is the cursor's line in the newest version.
-pub fn location(cursor: Cursor, paths: &[String; 2]) -> Option<String> {
+pub fn cursor_location(cursor: Cursor, paths: &[String; 2]) -> Option<String> {
     let path = &paths[cursor.side.select(0, 1)];
     (!path.is_empty()).then(|| format!("{path}:{}", cursor.line + 1))
 }

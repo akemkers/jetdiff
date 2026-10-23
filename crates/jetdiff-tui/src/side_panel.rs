@@ -24,7 +24,7 @@ const COMMITS_FRACTION: f32 = 0.4;
 const MIN_COMMITS_HEIGHT: u16 = 3;
 
 /// The columns in a row in the tree: margin, indent per level, the arrow in front of a folder (or the same
-/// space in front of a file), and the edge to the right of the panel.
+/// space in front of a file), and the edge to the right of the side panel.
 const LEFT_MARGIN: usize = 1;
 const INDENT: usize = 2;
 const MARKER: usize = 2;
@@ -76,7 +76,7 @@ impl ListArea {
     }
 }
 
-pub struct Panel {
+pub struct SidePanel {
     pub files: Files,
     pub commits: Option<Commits>,
     pub files_open: bool,
@@ -93,7 +93,7 @@ pub enum Click {
     Commit(usize),
 }
 
-impl Panel {
+impl SidePanel {
     pub fn new(files: Files, commits: Option<Commits>, icons: bool) -> Self {
         Self {
             files,

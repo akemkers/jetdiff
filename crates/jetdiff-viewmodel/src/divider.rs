@@ -61,7 +61,7 @@ pub struct DividerBand {
     pub mid: Cubic,
 }
 
-/// Hunks that are visible on at least one side. `scroll_y` is per side, `[left, right]`.
+/// Hunks that are visible on at least one side. `scroll_y` is per side, `[Left, Right]`.
 pub fn divider_bands(
     diff: &FileDiff,
     folding: &Folding,

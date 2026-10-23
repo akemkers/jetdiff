@@ -118,7 +118,7 @@ fn command(key: Key) -> Option<Command> {
             'p' => PreviousHunk,
             'o' => FoldOpen,
             'f' => ToggleFolds,
-            'y' => CopyLocation,
+            'y' => CopyCursorLocation,
             'r' => Rollback,
             'G' => GoToBottom,
             'H' => FocusSide(Side::Left),
@@ -178,7 +178,7 @@ mod tests {
         assert_eq!(last(&chars("p")), c(PreviousHunk));
         assert_eq!(last(&chars("o")), c(FoldOpen));
         assert_eq!(last(&chars("f")), c(ToggleFolds));
-        assert_eq!(last(&chars("y")), c(CopyLocation));
+        assert_eq!(last(&chars("y")), c(CopyCursorLocation));
         assert_eq!(last(&chars("r")), c(Rollback));
         assert_eq!(last(&chars("G")), c(GoToBottom));
         assert_eq!(last(&chars("H")), c(FocusSide(Side::Left)));

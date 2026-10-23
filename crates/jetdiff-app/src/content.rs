@@ -19,7 +19,7 @@ pub fn build_diff(
         Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
             Ok(mut diff) => {
                 let lang = Language::from_path(&file.path)
-                    .or_else(|| Language::from_path(file.left_path()));
+                    .or_else(|| Language::from_path(file.left_side_path()));
                 if let Some(lang) = lang {
                     diff.highlight_syntax(lang);
                 }

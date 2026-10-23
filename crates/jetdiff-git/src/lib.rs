@@ -49,10 +49,10 @@ impl PullRequest {
 
 pub struct Repo {
     root: PathBuf,
-    /// Left. The empty tree if there is no parent.
-    left: String,
-    /// `None` is Local changes.
-    right: Option<String>,
+    /// The revision on Left. The empty tree if there is no parent.
+    left_side: String,
+    /// The revision on Right. `None` is Local changes.
+    right_side: Option<String>,
     /// The revisions the commit list shows. `None` for a commit and for a repo without commits.
     history: Option<String>,
 }
@@ -61,15 +61,15 @@ impl Repo {
     /// A commit against its parent.
     pub fn commit(dir: &Path, rev: &str) -> Result<Self, String> {
         let root = toplevel(dir)?;
-        let right = verify(&root, rev).ok_or_else(|| format!("unknown commit: {rev}"))?;
-        let left = match verify(&root, &format!("{right}^")) {
+        let right_side = verify(&root, rev).ok_or_else(|| format!("unknown commit: {rev}"))?;
+        let left_side = match verify(&root, &format!("{right_side}^")) {
             Some(parent) => parent,
             None => empty_tree(&root)?,
         };
         Ok(Self {
             root,
-            left,
-            right: Some(right),
+            left_side,
+            right_side: Some(right_side),
             history: None,
         })
     }
@@ -116,13 +116,16 @@ impl Repo {
             .trim_end()
             .split_once(' ')
             .ok_or_else(|| format!("unexpected answer from gh: {info}"))?;
-        let right =
+        let right_side =
             verify(&root, head).ok_or_else(|| format!("did not find {head} after fetch"))?;
-        let fork = git(&root, &["merge-base", &format!("origin/{base}"), &right])?;
+        let fork = git(
+            &root,
+            &["merge-base", &format!("origin/{base}"), &right_side],
+        )?;
         Ok(Self {
             root,
-            left: fork.trim_end().to_owned(),
-            right: Some(right),
+            left_side: fork.trim_end().to_owned(),
+            right_side: Some(right_side),
             history: None,
         })
     }
@@ -138,11 +141,11 @@ impl Repo {
         });
         let root = root?;
         let Some(head) = head else {
-            let left = empty_tree(&root)?;
+            let left_side = empty_tree(&root)?;
             return Ok(Self {
                 root,
-                left,
-                right: None,
+                left_side,
+                right_side: None,
                 history: None,
             });
         };
@@ -156,8 +159,8 @@ impl Repo {
         };
         Ok(Self {
             root,
-            left: head,
-            right: None,
+            left_side: head,
+            right_side: None,
             history: Some(history),
         })
     }
@@ -168,7 +171,7 @@ impl Repo {
 
     /// Local changes can change while they are shown; a commit can't.
     pub fn is_local_changes(&self) -> bool {
-        self.right.is_none()
+        self.right_side.is_none()
     }
 
     /// The commits on the branch, or the latest ones. Newest first. Empty for a commit.
@@ -190,12 +193,12 @@ impl Repo {
     }
 
     pub fn changed_files(&self) -> Result<Vec<ChangedFile>, String> {
-        let mut args = vec!["diff", "--name-status", "-z", "-M", &self.left];
-        args.extend(self.right.as_deref());
+        let mut args = vec!["diff", "--name-status", "-z", "-M", &self.left_side];
+        args.extend(self.right_side.as_deref());
         let untracked = ["ls-files", "-z", "--others", "--exclude-standard"];
         let (diff, untracked) = thread::scope(|s| {
             let untracked = self
-                .right
+                .right_side
                 .is_none()
                 .then(|| s.spawn(|| git(&self.root, &untracked)));
             (git(&self.root, &args), untracked.map(|t| t.join().unwrap()))
@@ -213,11 +216,11 @@ impl Repo {
 
     /// The content on each side. A side that doesn't exist is empty.
     pub fn read(&self, file: &ChangedFile) -> Result<[String; 2], String> {
-        let left = match file.status {
+        let left_side = match file.status {
             FileStatus::Added => String::new(),
-            _ => self.blob(&self.left, file.left_path())?,
+            _ => self.blob(&self.left_side, file.left_side_path())?,
         };
-        let right = match (file.status, &self.right) {
+        let right_side = match (file.status, &self.right_side) {
             (FileStatus::Deleted, _) => String::new(),
             (_, Some(rev)) => self.blob(rev, &file.path)?,
             (_, None) => {
@@ -226,7 +229,7 @@ impl Repo {
                 String::from_utf8_lossy(&bytes).into_owned()
             }
         };
-        Ok([left, right])
+        Ok([left_side, right_side])
     }
 
     /// Rolls back one hunk in Local changes: the lines `lines[1]` are replaced with `lines[0]`
@@ -247,11 +250,11 @@ impl Repo {
         if String::from_utf8_lossy(&disk) != before {
             return Err(format!("{path} has changed on disk"));
         }
-        let left = match file.status {
+        let left_side = match file.status {
             FileStatus::Added => Vec::new(),
-            _ => self.blob_bytes(&self.left, file.left_path())?,
+            _ => self.blob_bytes(&self.left_side, file.left_side_path())?,
         };
-        let after = replace_with_left(&left, &disk, lines)
+        let after = replace_with_left_side(&left_side, &disk, lines)
             .ok_or_else(|| format!("{path}: the lines don't exist"))?;
         std::fs::write(&full, &after).map_err(|e| format!("{path}: {e}"))?;
         Ok(String::from_utf8_lossy(&after).into_owned())
@@ -315,15 +318,19 @@ fn empty_tree(root: &Path) -> Result<String, String> {
     Ok(out.trim_end().to_owned())
 }
 
-/// Replaces the lines `lines[1]` in `right` with the lines `lines[0]` from `left`. `None` if
-/// the lines don't exist.
-fn replace_with_left(left: &[u8], right: &[u8], lines: [Range<usize>; 2]) -> Option<Vec<u8>> {
-    let left: Vec<&[u8]> = left.split(|&b| b == b'\n').collect();
-    let right: Vec<&[u8]> = right.split(|&b| b == b'\n').collect();
-    let [l, r] = lines;
-    let before = right.get(..r.start)?;
-    let replacement = left.get(l)?;
-    let after = right.get(r.end..)?;
+/// Replaces the lines `lines[1]` in `right_side` with the lines `lines[0]` from `left_side`.
+/// `None` if the lines don't exist.
+fn replace_with_left_side(
+    left_side: &[u8],
+    right_side: &[u8],
+    lines: [Range<usize>; 2],
+) -> Option<Vec<u8>> {
+    let left_side: Vec<&[u8]> = left_side.split(|&b| b == b'\n').collect();
+    let right_side: Vec<&[u8]> = right_side.split(|&b| b == b'\n').collect();
+    let [left_side_lines, right_side_lines] = lines;
+    let before = right_side.get(..right_side_lines.start)?;
+    let replacement = left_side.get(left_side_lines)?;
+    let after = right_side.get(right_side_lines.end..)?;
     Some([before, replacement, after].concat().join(&b'\n'))
 }
 
@@ -389,9 +396,11 @@ fn parse_name_status(out: &str) -> Vec<ChangedFile> {
                 status: FileStatus::Deleted,
             },
             b'R' | b'C' => {
-                let Some(new) = fields.next() else { break };
+                let Some(renamed_to) = fields.next() else {
+                    break;
+                };
                 ChangedFile {
-                    path: new.to_owned(),
+                    path: renamed_to.to_owned(),
                     renamed_from: Some(path.to_owned()),
                     status: FileStatus::Renamed,
                 }
@@ -567,7 +576,7 @@ mod tests {
     #[test]
     fn replace_lines() {
         let replace = |l: &str, r: &str, lines: [Range<usize>; 2]| {
-            String::from_utf8(replace_with_left(l.as_bytes(), r.as_bytes(), lines).unwrap())
+            String::from_utf8(replace_with_left_side(l.as_bytes(), r.as_bytes(), lines).unwrap())
                 .unwrap()
         };
         // The ranges are what `FileDiff` gives for these pairs
@@ -585,7 +594,7 @@ mod tests {
             replace("a\r\nb\r\n", "a\r\nx\r\n", [1..2, 1..2]),
             "a\r\nb\r\n"
         );
-        assert_eq!(replace_with_left(b"a", b"a", [0..1, 1..2]), None);
+        assert_eq!(replace_with_left_side(b"a", b"a", [0..1, 1..2]), None);
     }
 
     #[test]

@@ -17,8 +17,8 @@ use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::notification_slot_view::NotificationSlotView;
-use crate::panel_size::{PanelHeight, PanelWidth};
 use crate::settings::Settings;
+use crate::side_panel_size::{SectionHeight, SidePanelWidth};
 use crate::text::FAMILY;
 use crate::watcher::Watcher;
 
@@ -45,12 +45,12 @@ pub struct RepoView {
     /// Only for Local changes.
     commits: Option<Entity<CommitList>>,
     scale: f32,
-    panel_open: bool,
+    side_panel_open: bool,
     /// The sections in the side panel can be closed to just the heading.
     files_open: bool,
     commits_open: bool,
-    width: PanelWidth,
-    commits_height: PanelHeight,
+    width: SidePanelWidth,
+    commits_height: SectionHeight,
     _watcher: Option<Watcher>,
     _read: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
@@ -111,11 +111,11 @@ impl RepoView {
             notification_slot,
             commits,
             scale: 1.,
-            panel_open: cx.global::<Settings>().side_panel_open,
+            side_panel_open: cx.global::<Settings>().side_panel_open,
             files_open: true,
             commits_open: true,
-            width: PanelWidth::default(),
-            commits_height: PanelHeight::default(),
+            width: SidePanelWidth::default(),
+            commits_height: SectionHeight::default(),
             _watcher: watcher,
             _read: None,
             _subscriptions: subscriptions,
@@ -248,7 +248,7 @@ impl RepoView {
 
     /// The tree and the commit list, only the ones that are open.
     fn open_panes(&self, cx: &App) -> (Option<FocusHandle>, Option<FocusHandle>) {
-        if !self.panel_open {
+        if !self.side_panel_open {
             return (None, None);
         }
         let tree = self.files_open.then(|| self.files.focus_handle(cx));
@@ -262,8 +262,8 @@ impl RepoView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.panel_open = !self.panel_open;
-        if !self.panel_open {
+        self.side_panel_open = !self.side_panel_open;
+        if !self.side_panel_open {
             window.focus(&self.diff.focus_handle(cx));
         }
         cx.notify();
@@ -341,7 +341,7 @@ impl RepoView {
         let content = self.files.update(cx, |t, _| t.content_width(window));
         let width = self.width.resolve(content, unscaled(viewport.width));
         let theme = cx.global::<Settings>().theme;
-        let mut panel = div()
+        let mut side_panel = div()
             .flex_none()
             .w(px(width * self.scale))
             .h_full()
@@ -369,19 +369,22 @@ impl RepoView {
                     d.child(div().flex_1().min_h_0().child(commits))
                 });
             // When closed, the section moves to the bottom. Without the tree, the commit list takes the rest.
-            panel = match (self.files_open, self.commits_open) {
+            side_panel = match (self.files_open, self.commits_open) {
                 (true, true) => {
                     let height = self.commits_height.resolve(unscaled(viewport.height));
-                    PanelHeight::attach(panel, section.h(px(height * self.scale)), cx, |this| {
-                        (&mut this.commits_height, this.scale)
-                    })
+                    SectionHeight::attach(
+                        side_panel,
+                        section.h(px(height * self.scale)),
+                        cx,
+                        |this| (&mut this.commits_height, this.scale),
+                    )
                 }
-                (false, true) => panel.child(section.flex_1().min_h_0()),
-                (true, false) => panel.child(section),
-                (false, false) => panel.child(div().flex_1()).child(section),
+                (false, true) => side_panel.child(section.flex_1().min_h_0()),
+                (true, false) => side_panel.child(section),
+                (false, false) => side_panel.child(div().flex_1()).child(section),
             };
         }
-        PanelWidth::attach(panel, cx, |this| (&mut this.width, this.scale))
+        SidePanelWidth::attach(side_panel, cx, |this| (&mut this.width, this.scale))
     }
 }
 
@@ -426,7 +429,9 @@ impl Render for RepoView {
             .on_action(cx.listener(|this, a: &ToggleView, w, cx| {
                 this.diff.update(cx, |d, cx| d.toggle_view(a, w, cx))
             }))
-            .when(self.panel_open, |d| d.child(self.side_panel(window, cx)))
+            .when(self.side_panel_open, |d| {
+                d.child(self.side_panel(window, cx))
+            })
             .child(
                 div()
                     .flex_1()

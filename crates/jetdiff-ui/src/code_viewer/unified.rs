@@ -1,5 +1,5 @@
-//! The Unified view: one code view where deleted rows sit above the added ones, with old and new
-//! line numbers in the gutter. Drawing, and which row the mouse hits.
+//! The Unified view: one code view where deleted rows sit above the added ones, with a line
+//! number for each side in the gutter. Drawing, and which row the mouse hits.
 
 use std::ops::{Range, RangeInclusive};
 use std::rc::Rc;
@@ -9,7 +9,7 @@ use jetdiff_core::side::Side;
 use jetdiff_viewmodel::{InlineHighlight, UnifiedDiff, UnifiedGeometry};
 
 use super::code_paint::{
-    ShapedText, StripeRects, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
+    HunkMinimapRects, ShapedText, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
     shape_number,
 };
 use super::split_side::CursorRow;
@@ -19,7 +19,7 @@ use crate::theme::UiTheme;
 
 pub struct CachedRow {
     pub text: ShapedText,
-    /// Old and new number. Deleted rows have only old, added rows only new.
+    /// The number on each side. Deleted rows have only Left, added rows only Right.
     pub numbers: [Option<ShapedLine>; 2],
 }
 
@@ -52,7 +52,7 @@ impl UnifiedPainter {
         &self,
         bounds: Bounds<Pixels>,
         cache: &mut RowCache,
-        stripe: &mut StripeRects,
+        hunk_minimap: &mut HunkMinimapRects,
         window: &mut Window,
         cx: &mut App,
     ) -> f32 {
@@ -60,9 +60,9 @@ impl UnifiedPainter {
         let height = f32::from(bounds.size.height);
         let layout = self.diff.layout(self.style.line_height());
         let content_height = layout.content_height();
-        if stripe.track_height != height {
-            let markers = self.diff.stripe_markers(self.style.line_height());
-            *stripe = StripeRects::new(&markers, content_height, height, &self.theme);
+        if hunk_minimap.track_height != height {
+            let marks = self.diff.hunk_minimap_marks(self.style.line_height());
+            *hunk_minimap = HunkMinimapRects::new(&marks, content_height, height, &self.theme);
         }
         let (first, last) = layout.painted_lines(self.scroll_y, height);
         let frame = Frame {
@@ -80,7 +80,7 @@ impl UnifiedPainter {
             frame.paint_cursor_row(window);
             let widest = frame.paint_text(cache, window, cx);
             frame.paint_line_numbers(cache, window, cx);
-            stripe.paint(
+            hunk_minimap.paint(
                 code,
                 top,
                 self.scroll_y,
@@ -262,11 +262,7 @@ impl Frame<'_> {
                     let Some(number) = number else {
                         continue;
                     };
-                    let width = f32::from(number.width);
-                    let x = match side {
-                        Side::Left => self.geom.old_number_x(width),
-                        Side::Right => self.geom.new_number_x(width),
-                    };
+                    let x = self.geom.number_x(side, f32::from(number.width));
                     let _ = number.paint(point(px(x), px(y)), px(line_height), window, cx);
                 }
             }

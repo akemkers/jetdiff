@@ -75,7 +75,7 @@ fn parse_source(paths: &[String]) -> Result<Source, String> {
             .ok_or_else(|| format!("not a PR link: {url}")),
         [dir] if Path::new(dir).is_dir() => Ok(Source::LocalChanges(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
-        [left, right] => Ok(Source::FilePair(left.clone(), right.clone())),
+        [left_side, right_side] => Ok(Source::FilePair(left_side.clone(), right_side.clone())),
         _ => {
             Err("usage: jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]".into())
         }
@@ -96,10 +96,10 @@ pub enum Content {
 
 fn read_source(source: &Source) -> Result<(Content, String), String> {
     let (repo, title) = match source {
-        Source::FilePair(left, right) => {
-            let diff = file_diff(left, right)?;
-            let title = format!("{left} ↔ {right}");
-            let paths = [left.clone(), right.clone()];
+        Source::FilePair(left_side, right_side) => {
+            let diff = file_diff(left_side, right_side)?;
+            let title = format!("{left_side} ↔ {right_side}");
+            let paths = [left_side.clone(), right_side.clone()];
             return Ok((Content::FilePair(Box::new(diff), paths), title));
         }
         Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
@@ -154,12 +154,12 @@ fn with_progress<T>(text: &str, work: impl FnOnce() -> Result<T, String>) -> Res
     out
 }
 
-fn file_diff(left: &str, right: &str) -> Result<FileDiff, String> {
-    let (l, r) = (read(left)?, read(right)?);
-    let mut diff = FileDiff::new(&l, &r, ComparisonPolicy::Default)
+fn file_diff(left_side: &str, right_side: &str) -> Result<FileDiff, String> {
+    let (left_side_text, right_side_text) = (read(left_side)?, read(right_side)?);
+    let mut diff = FileDiff::new(&left_side_text, &right_side_text, ComparisonPolicy::Default)
         .map_err(|_| "the files are too big to diff".to_owned())?;
     // Right first; Left can be a temporary file from git difftool
-    if let Some(lang) = Language::from_path(right).or_else(|| Language::from_path(left)) {
+    if let Some(lang) = Language::from_path(right_side).or_else(|| Language::from_path(left_side)) {
         diff.highlight_syntax(lang);
     }
     Ok(diff)

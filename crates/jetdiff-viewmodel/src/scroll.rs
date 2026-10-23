@@ -636,9 +636,9 @@ mod tests {
         let a = lines("a", 5);
         let b = lines("a", 200);
         let d = diff(&a, &b);
-        let right_max = Folding::none(&d).layout(R, 20.).max_scroll(VP.height);
+        let right_side_max_scroll = Folding::none(&d).layout(R, 20.).max_scroll(VP.height);
         assert_eq!(
-            sync(&d, R, right_max, 0.),
+            sync(&d, R, right_side_max_scroll, 0.),
             Folding::none(&d).layout(L, 20.).max_scroll(VP.height)
         );
         assert_eq!(sync(&d, L, 0., 500.), 0.);

@@ -196,7 +196,7 @@ impl DiffState {
                 f.set_all_open(any_closed)
             }),
             // Owned by the UI. After zoom, `rescale` is called.
-            CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
+            CopyCursorLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
         }
     }
 
@@ -304,7 +304,7 @@ impl DiffState {
     }
 
     /// The cursor's line in the newest version.
-    pub fn location(&self) -> Cursor {
+    pub fn cursor_location(&self) -> Cursor {
         if self.cursor.side == Side::Right {
             self.cursor
         } else {
@@ -372,17 +372,18 @@ impl DiffState {
     }
 
     /// Zoom: the cursor line is kept at the same place in the viewport, measured in lines.
-    pub fn rescale(&mut self, old_line_height: f32, vp: Viewport, x_scale: f32) {
+    pub fn rescale(&mut self, previous_line_height: f32, viewport: Viewport, x_scale: f32) {
         let side = self.cursor.side;
-        let cv = self.cursor_visual(vp) as f32;
-        let offset = cv - self.scroll.y(side) / old_line_height;
-        let y = (cv - offset) * vp.line_height;
-        let y = self.layout(side, vp).clamp_scroll(y, vp.height);
+        let cursor_visual = self.cursor_visual(viewport) as f32;
+        let offset = cursor_visual - self.scroll.y(side) / previous_line_height;
+        let y = (cursor_visual - offset) * viewport.line_height;
+        let y = self.layout(side, viewport).clamp_scroll(y, viewport.height);
         self.master = side;
         self.scroll.y[idx(side)] = y;
-        self.scroll.sync_from(&self.diff, &self.folding, side, vp);
+        self.scroll
+            .sync_from(&self.diff, &self.folding, side, viewport);
         self.scroll.x *= x_scale;
-        self.push_cursor(vp);
+        self.push_cursor(viewport);
     }
 }
 
@@ -575,9 +576,9 @@ mod tests {
     fn cursor_location_is_in_newest_version() {
         let mut s = state("x\nnew1\nnew2\ncommon\n", "x\ncommon\n", false);
         s.click(L, 3);
-        assert_eq!(s.location(), Cursor::new(R, 1));
+        assert_eq!(s.cursor_location(), Cursor::new(R, 1));
         s.click(R, 0);
-        assert_eq!(s.location(), Cursor::new(R, 0));
+        assert_eq!(s.cursor_location(), Cursor::new(R, 0));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! The building blocks Split, Unified and the scrollbar draw with. Only this file knows
 //! the state, the theme and the buffer.
 
-use jetdiff_viewmodel::{FileDiff, HunkKind, Row, Side, StripeMarker, Theme, UnifiedState};
+use jetdiff_viewmodel::{FileDiff, HunkKind, HunkMinimapMark, Row, Side, Theme, UnifiedState};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -65,8 +65,8 @@ impl<'a> Painter<'a> {
         })
     }
 
-    pub(super) fn markers(&self) -> Vec<StripeMarker> {
-        self.state.diff.stripe_markers(1.)
+    pub(super) fn hunk_minimap_marks(&self) -> Vec<HunkMinimapMark> {
+        self.state.diff.hunk_minimap_marks(1.)
     }
 
     pub(super) fn content_height(&self) -> f32 {
@@ -174,7 +174,7 @@ impl<'a> Painter<'a> {
         x: u16,
         y: u16,
         in_thumb: bool,
-        marker: Option<HunkKind>,
+        mark: Option<HunkKind>,
     ) {
         let bg = color(self.theme.editor_bg);
         let cell = &mut self.buf[(x, y)];
@@ -183,10 +183,10 @@ impl<'a> Painter<'a> {
         } else {
             bg
         });
-        match marker {
+        match mark {
             Some(kind) => {
-                let marker_color = brighter(color(self.theme.diff(kind).background));
-                cell.set_char('▐').set_fg(marker_color);
+                let mark_color = brighter(color(self.theme.diff(kind).background));
+                cell.set_char('▐').set_fg(mark_color);
             }
             None => {
                 cell.set_char(' ');

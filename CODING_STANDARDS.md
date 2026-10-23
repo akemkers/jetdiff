@@ -66,7 +66,7 @@ Then the state can be changed in one place. The price is a few methods that most
 - Use the terms in `GLOSSARY.md` in names, comments and UI text. A word under _Avoid_ is not used for the term it is listed under, so `panel` alone is not the side panel, while `SidePanel` is fine. `jetdiff-core` keeps IntelliJ's names, see ADR-0001, and so do IntelliJ names quoted in backticks in comments
 - Use the whole glossary term in types, functions, fields and modules: `HunkMinimapMark`, not `MinimapMark`. A local variable can be short when it is part of the term, like `marks` for hunk minimap marks, but not a cut-down word or a word under _Avoid_
 - `left` and `right` alone mean directions on screen. A side is taken as a `Side`, or written `left_side`/`right_side` when the name must hold it
-- No abbreviations. Use descriptive names: `viewport`, not `vp`, and `anchor_left`, not `al`. This also applies to closure parameters: `|commits|`, not `|c|`. The exceptions are `e` for errors and `i` as a loop counter, which are common in Rust
+- No abbreviations. Use descriptive names: `viewport`, not `vp`, and `anchor_left_side`, not `al`. This also applies to closure parameters: `|commits|`, not `|c|`. The exceptions are `e` for errors and `i` as a loop counter, which are common in Rust
 - The name says what something is or does. `Painter` draws, while `Painted` sounds like something that has already been drawn
 
 ## No magic numbers

@@ -17,7 +17,7 @@ pub fn hsla(c: Rgba) -> Hsla {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiDiffColors {
     pub background: Hsla,
-    pub stripe: Hsla,
+    pub hunk_minimap: Hsla,
     pub ignored: Hsla,
 }
 
@@ -25,7 +25,7 @@ impl From<&DiffColors> for UiDiffColors {
     fn from(c: &DiffColors) -> Self {
         Self {
             background: hsla(c.background),
-            stripe: hsla(c.stripe),
+            hunk_minimap: hsla(c.hunk_minimap),
             ignored: hsla(c.ignored),
         }
     }

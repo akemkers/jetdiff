@@ -1,7 +1,7 @@
 //! The keymap bar with the most important keys, and all the keys in a popup on `?`.
 
 use gpui::{Div, FontWeight, actions, div, prelude::*, px};
-use jetdiff_app::help::{ALL, BAR};
+use jetdiff_app::help::{ALL, KEYMAP_BAR};
 
 use crate::text::FAMILY;
 use crate::theme::UiTheme;
@@ -9,7 +9,7 @@ use crate::theme::UiTheme;
 actions!(jetdiff, [ToggleHelp, HideHelp]);
 
 /// The height of the keymap bar at the bottom.
-pub const BAR_HEIGHT: f32 = 24.;
+pub const KEYMAP_BAR_HEIGHT: f32 = 24.;
 
 /// Sizes in the popup. Gives two columns with sections.
 const KEYS_WIDTH: f32 = 110.;
@@ -21,13 +21,13 @@ pub struct KeyHelp {
 }
 
 impl KeyHelp {
-    pub fn bar(&self) -> Div {
+    pub fn keymap_bar(&self) -> Div {
         let theme = self.theme;
         div()
             .flex()
             .flex_none()
             .flex_wrap()
-            .min_h(px(BAR_HEIGHT))
+            .min_h(px(KEYMAP_BAR_HEIGHT))
             .px(px(10.))
             .py(px(4.))
             .gap_x(px(16.))
@@ -37,7 +37,7 @@ impl KeyHelp {
             .font_family(FAMILY)
             .text_size(px(12.))
             .text_color(theme.line_number)
-            .children(BAR.iter().map(|&(keys, what)| {
+            .children(KEYMAP_BAR.iter().map(|&(keys, what)| {
                 div()
                     .flex()
                     .gap(px(6.))

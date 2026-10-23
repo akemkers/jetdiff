@@ -24,8 +24,8 @@ pub enum Command {
     FoldOpen,
     /// Opens all if any are closed, otherwise closes all.
     ToggleFolds,
-    /// `file:line` for the cursor's line to the clipboard.
-    CopyLocation,
+    /// The cursor location to the clipboard.
+    CopyCursorLocation,
     /// Roll back the hunk on the cursor's line to Left, in the file on disk.
     Rollback,
     ZoomIn,

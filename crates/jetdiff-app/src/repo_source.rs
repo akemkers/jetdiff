@@ -149,7 +149,7 @@ impl RepoSource {
         Show::Diff(Box::new(Shown {
             diff,
             pinned,
-            paths: [file.left_path().to_owned(), file.path.clone()],
+            paths: [file.left_side_path().to_owned(), file.path.clone()],
             can_rollback: self.repo.is_local_changes(),
             same_file,
         }))
@@ -157,13 +157,13 @@ impl RepoSource {
 
     /// Run `rolled_back` afterwards, so the list keeps up.
     pub fn rollback(&mut self, request: &RollbackRequest) -> Option<Result<Show, String>> {
-        let Some((file, Ok([left, _]))) = self.shown.clone() else {
+        let Some((file, Ok([left_side, _]))) = self.shown.clone() else {
             return None;
         };
         Some(
             self.repo
                 .rollback(&file, request.lines.clone(), &request.before)
-                .map(|after| self.show(file, Ok([left, after]))),
+                .map(|after| self.show(file, Ok([left_side, after]))),
         )
     }
 }

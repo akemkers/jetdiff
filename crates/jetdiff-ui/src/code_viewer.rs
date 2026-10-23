@@ -12,9 +12,9 @@ use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::{DiffMode, ScrollState, StripeMarker, Viewport};
+use jetdiff_viewmodel::{DiffMode, HunkMinimapMark, ScrollState, Viewport};
 
-use self::code_paint::StripeRects;
+use self::code_paint::HunkMinimapRects;
 use self::split::SplitPainter;
 use self::split_side::{CursorRow, SideCache};
 use self::unified::{RowCache, UnifiedPainter};
@@ -32,9 +32,9 @@ pub struct Shared {
     /// The widest line that has been drawn, for max horizontal scroll.
     pub widest: Cell<f32>,
     split_lines: RefCell<[SideCache; 2]>,
-    split_stripes: RefCell<[StripeRects; 2]>,
+    split_hunk_minimaps: RefCell<[HunkMinimapRects; 2]>,
     unified_rows: RefCell<RowCache>,
-    unified_stripe: RefCell<StripeRects>,
+    unified_hunk_minimap: RefCell<HunkMinimapRects>,
 }
 
 impl Shared {
@@ -43,9 +43,9 @@ impl Shared {
             bounds: Cell::new(None),
             widest: Cell::new(0.),
             split_lines: RefCell::new(new_side_caches()),
-            split_stripes: RefCell::default(),
+            split_hunk_minimaps: RefCell::default(),
             unified_rows: RefCell::new(RowCache::new(CACHE_CAPACITY)),
-            unified_stripe: RefCell::default(),
+            unified_hunk_minimap: RefCell::default(),
         }
     }
 
@@ -66,9 +66,9 @@ impl Shared {
     }
 
     /// The hunk minimap is recomputed the next time it is drawn.
-    pub fn clear_stripes(&self) {
-        *self.split_stripes.borrow_mut() = Default::default();
-        *self.unified_stripe.borrow_mut() = Default::default();
+    pub fn clear_hunk_minimaps(&self) {
+        *self.split_hunk_minimaps.borrow_mut() = Default::default();
+        *self.unified_hunk_minimap.borrow_mut() = Default::default();
     }
 }
 
@@ -144,7 +144,7 @@ impl Painter {
     /// `shown` is the scroll as it is shown now, in the middle of any animation.
     pub fn new(
         mode: &DiffMode,
-        markers: &Rc<[Vec<StripeMarker>; 2]>,
+        hunk_minimap_marks: &Rc<[Vec<HunkMinimapMark>; 2]>,
         style: TextStyle,
         shown: ScrollState,
         focused: bool,
@@ -174,7 +174,7 @@ impl Painter {
                     folding: state.folding.clone(),
                     theme,
                     style,
-                    markers: markers.clone(),
+                    hunk_minimap_marks: hunk_minimap_marks.clone(),
                     scroll_y: shown.y.map(|y| snap(y, scale)),
                     scroll_x,
                     cursor_rows,
@@ -201,22 +201,22 @@ impl Painter {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let old = shared.bounds.replace(Some(bounds));
-        if old.map(|old| old.size.height) != Some(bounds.size.height) {
+        let previous = shared.bounds.replace(Some(bounds));
+        if previous.map(|previous| previous.size.height) != Some(bounds.size.height) {
             window.refresh();
         }
         let widest = match self {
             Self::Split(painter) => painter.paint(
                 bounds,
                 &mut shared.split_lines.borrow_mut(),
-                &mut shared.split_stripes.borrow_mut(),
+                &mut shared.split_hunk_minimaps.borrow_mut(),
                 window,
                 cx,
             ),
             Self::Unified(painter) => painter.paint(
                 bounds,
                 &mut shared.unified_rows.borrow_mut(),
-                &mut shared.unified_stripe.borrow_mut(),
+                &mut shared.unified_hunk_minimap.borrow_mut(),
                 window,
                 cx,
             ),

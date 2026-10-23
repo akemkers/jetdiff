@@ -32,7 +32,7 @@ Differences from the GPUI view:
 ```mermaid
 graph TD
     app[app: the loop] --> diff[diff_view: DiffView]
-    app --> panel[panel: tree and commits]
+    app --> side_panel[side_panel: tree and commits]
     app --> widgets[widgets: path, keys, notification, help]
     app --> source[jetdiff-app: RepoSource, Watcher]
     app --> backend[backend: sends only the colors that change]

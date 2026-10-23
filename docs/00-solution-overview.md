@@ -67,7 +67,7 @@ jetdiff-ui       GPUI
 jetdiff-tui      the terminal, ratatui
   diff_view      keys, mouse and overlay for the diff
   code_viewer    Split and Unified as rows of cells, without folding
-  panel          the file tree and the commit list
+  side_panel     the file tree and the commit list
   app            the event loop, watcher and reading the repo source in a thread
 
 jetdiff          binary: CLI, the gui and tui features

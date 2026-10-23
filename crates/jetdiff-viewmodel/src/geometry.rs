@@ -42,7 +42,7 @@ pub fn gutter_layout(numbers_width: f32) -> GutterLayout {
 /// transparent and lies over the text (`editor.transparent.scrollbar`).
 pub const SCROLLBAR_THICKNESS: f32 = 18.;
 /// Wide hunk minimap marks start at `minMarkHeight + 2` and are 14px.
-const MARKER_X: (f32, f32) = (4., 18.);
+const HUNK_MINIMAP_X: (f32, f32) = (4., 18.);
 /// The Mac thumb is at most 10px, centered in the 14px: `2 + minMark + 14/2 - w/2`.
 const THUMB_X: (f32, f32) = (6., 16.);
 
@@ -127,8 +127,8 @@ impl SideGeometry {
         }
     }
 
-    pub fn marker_x(&self) -> Range<f32> {
-        self.scrollbar_x(MARKER_X)
+    pub fn hunk_minimap_x(&self) -> Range<f32> {
+        self.scrollbar_x(HUNK_MINIMAP_X)
     }
 
     pub fn thumb_x(&self) -> Range<f32> {
@@ -173,40 +173,41 @@ pub fn side_geometry(
     ]
 }
 
-/// `GAP_BETWEEN_AREAS` between the old and new number column in Unified.
+/// `GAP_BETWEEN_AREAS` between the number columns for Left and Right in Unified.
 const UNIFIED_NUMBER_GAP: f32 = 5.;
 
-/// Unified: one code view without mirroring, with old and new number columns. Both are right-aligned in
-/// their column (`EditorGutterComponentImpl.paintLineNumbers`).
+/// Unified: one code view without mirroring, with a number column for each side. Both are right-aligned
+/// in their column (`EditorGutterComponentImpl.paintLineNumbers`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnifiedGeometry {
     pub code: SideGeometry,
-    /// Right edge of the old column, local in the gutter.
-    old_numbers_end: f32,
+    /// Right edge of the column for Left, local in the gutter.
+    left_side_numbers_end: f32,
 }
 
 impl UnifiedGeometry {
-    /// `calcLineNumberAreaWidth`: the old column has the minimum width, the new one only its largest
-    /// number.
+    /// `calcLineNumberAreaWidth`: the column for Left has the minimum width, the one for Right only its
+    /// largest number.
     pub fn new(diff: &FileDiff, number_char_width: f32, x: f32, width: f32) -> Self {
         let numbers_width = |side: Side| {
             let digits = diff.line_count(side).to_string().len();
             (digits as f32 * number_char_width).round()
         };
-        let old = numbers_width(Side::Left).max(MIN_NUMBERS_WIDTH);
-        let gutter = gutter_layout(old + UNIFIED_NUMBER_GAP + numbers_width(Side::Right));
+        let left_side_width = numbers_width(Side::Left).max(MIN_NUMBERS_WIDTH);
+        let gutter =
+            gutter_layout(left_side_width + UNIFIED_NUMBER_GAP + numbers_width(Side::Right));
         Self {
             code: SideGeometry::new(Side::Right, false, x, width, gutter),
-            old_numbers_end: gutter.numbers.0 + old,
+            left_side_numbers_end: gutter.numbers.0 + left_side_width,
         }
     }
 
-    pub fn old_number_x(&self, text_width: f32) -> f32 {
-        self.code.gutter_x(0.0..self.old_numbers_end).end - text_width
-    }
-
-    pub fn new_number_x(&self, text_width: f32) -> f32 {
-        self.code.number_x(text_width)
+    /// X for a line number of `side`, right-aligned in its column.
+    pub fn number_x(&self, side: Side, text_width: f32) -> f32 {
+        match side {
+            Side::Left => self.code.gutter_x(0.0..self.left_side_numbers_end).end - text_width,
+            Side::Right => self.code.number_x(text_width),
+        }
     }
 }
 
@@ -232,7 +233,7 @@ mod tests {
     };
 
     #[test]
-    fn left_is_mirrored() {
+    fn left_side_is_mirrored() {
         let g = SideGeometry::new(Side::Left, true, 0., 500., G);
         assert_eq!(g.text, 0. ..460.);
         assert_eq!(g.gutter, 460. ..500.);
@@ -241,36 +242,36 @@ mod tests {
         assert_eq!(g.gutter_x(G.separator..G.width), 460. ..463.);
         assert_eq!(g.number_x(99.), 469.);
         assert_eq!(g.scrollbar, 0. ..18.);
-        assert_eq!(g.marker_x(), 0. ..14.);
+        assert_eq!(g.hunk_minimap_x(), 0. ..14.);
         assert_eq!(g.thumb_x(), 2. ..12.);
     }
 
     #[test]
-    fn right_is_unmirrored() {
+    fn right_side_is_unmirrored() {
         let g = SideGeometry::new(Side::Right, false, 524., 500., G);
         assert_eq!(g.gutter, 524. ..564.);
         assert_eq!(g.text, 564. ..1024.);
         assert_eq!(g.gutter_x(G.separator..G.width), 561. ..564.);
         assert_eq!(g.number_x(16.), 538.);
         assert_eq!(g.scrollbar, 1006. ..1024.);
-        assert_eq!(g.marker_x(), 1010. ..1024.);
+        assert_eq!(g.hunk_minimap_x(), 1010. ..1024.);
         assert_eq!(g.thumb_x(), 1012. ..1022.);
     }
 
     #[test]
     fn unified_has_two_number_columns() {
         use crate::ComparisonPolicy;
-        let old: String = (0..9).map(|i| format!("{i}\n")).collect();
-        let new: String = (0..120).map(|i| format!("{i}\n")).collect();
-        let diff = FileDiff::new(&old, &new, ComparisonPolicy::Default).unwrap();
+        let left_side: String = (0..9).map(|i| format!("{i}\n")).collect();
+        let right_side: String = (0..120).map(|i| format!("{i}\n")).collect();
+        let diff = FileDiff::new(&left_side, &right_side, ComparisonPolicy::Default).unwrap();
         // 10 lines gives two digits, 121 gives three. 7px per digit.
         let g = UnifiedGeometry::new(&diff, 7., 100., 800.);
         assert!(!g.code.mirrored);
         assert_eq!(g.code.bounds(), 100. ..900.);
-        // Old column: 8..22, gap 5, new column: 27..48
+        // Left column: 8..22, gap 5, Right column: 27..48
         assert_eq!(g.code.gutter_layout.numbers, (8., 48.));
-        assert_eq!(g.old_number_x(7.), 115.);
-        assert_eq!(g.new_number_x(7.), 141.);
+        assert_eq!(g.number_x(Side::Left, 7.), 115.);
+        assert_eq!(g.number_x(Side::Right, 7.), 141.);
     }
 
     #[test]
@@ -279,6 +280,6 @@ mod tests {
         assert_eq!(g.gutter, 0. ..30.);
         assert!(g.text.is_empty());
         assert!(g.scrollbar.is_empty());
-        assert!(g.marker_x().is_empty());
+        assert!(g.hunk_minimap_x().is_empty());
     }
 }

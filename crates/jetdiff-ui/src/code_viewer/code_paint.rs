@@ -9,7 +9,7 @@ use gpui::{
 };
 use jetdiff_viewmodel::columns::ExpandedLine;
 use jetdiff_viewmodel::model::SyntaxSpan;
-use jetdiff_viewmodel::{InlineHighlight, SideGeometry, StripeMarker, thumb_range};
+use jetdiff_viewmodel::{HunkMinimapMark, InlineHighlight, SideGeometry, thumb_range};
 
 use crate::text::TextStyle;
 use crate::theme::{UiDiffColors, UiTheme};
@@ -220,23 +220,23 @@ pub fn shape_number(
 
 /// Hunk minimap rectangles in the track, merged per pixel. Recomputed when the track height changes.
 #[derive(Debug, Clone, Default)]
-pub struct StripeRects {
+pub struct HunkMinimapRects {
     /// The whole height of the code view.
     pub track_height: f32,
     pub rects: Vec<(f32, f32, Hsla)>,
 }
 
-impl StripeRects {
+impl HunkMinimapRects {
     pub fn new(
-        markers: &[StripeMarker],
+        marks: &[HunkMinimapMark],
         content_height: f32,
         track_height: f32,
         theme: &UiTheme,
     ) -> Self {
         let mut rects: Vec<(f32, f32, Hsla)> = Vec::new();
-        for marker in markers {
-            let (start, end) = marker.track_range(content_height, track_height);
-            let color = theme.diff(marker.kind).stripe;
+        for mark in marks {
+            let (start, end) = mark.track_range(content_height, track_height);
+            let color = theme.diff(mark.kind).hunk_minimap;
             match rects.last_mut() {
                 Some(last) if last.2 == color && start <= last.1 => last.1 = last.1.max(end),
                 _ => rects.push((start, end, color)),
@@ -258,10 +258,13 @@ impl StripeRects {
         theme: &UiTheme,
         window: &mut Window,
     ) {
-        let markers = geom.marker_x();
-        if !markers.is_empty() {
+        let hunk_minimap_x = geom.hunk_minimap_x();
+        if !hunk_minimap_x.is_empty() {
             for &(start, end, color) in &self.rects {
-                window.paint_quad(fill(rect(markers.clone(), top + start, top + end), color));
+                window.paint_quad(fill(
+                    rect(hunk_minimap_x.clone(), top + start, top + end),
+                    color,
+                ));
             }
         }
         let thumb = geom.thumb_x();

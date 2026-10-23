@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use jetdiff_app::{RollbackRequest, location, rollback_request};
+use jetdiff_app::{RollbackRequest, cursor_location, rollback_request};
 use jetdiff_viewmodel::{
     Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, RowLayout, Theme, UnifiedDiff,
     UnifiedState, Viewport,
@@ -188,7 +188,9 @@ impl DiffView {
                     Err(text) => Some(Effect::ShowBrief(text.into())),
                 }
             }
-            Command::CopyLocation => location(self.state.location(), &self.paths).map(Effect::Copy),
+            Command::CopyCursorLocation => {
+                cursor_location(self.state.cursor_location(), &self.paths).map(Effect::Copy)
+            }
             _ => {
                 let viewport = self.viewport()?;
                 self.state.execute(cmd, viewport, self.horizontal());

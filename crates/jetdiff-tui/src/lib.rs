@@ -9,7 +9,7 @@ mod diff_view;
 mod geometry;
 mod icons;
 mod input;
-mod panel;
+mod side_panel;
 mod text;
 mod widgets;
 
@@ -26,7 +26,7 @@ use ratatui::crossterm::terminal::SetTitle;
 use crate::app::App;
 use crate::backend::TermBackend;
 
-/// Rows per notch on the scroll wheel, in the diff and in the panel.
+/// Rows per notch on the scroll wheel, in the diff and in the side panel.
 const WHEEL_ROWS: usize = 3;
 
 pub struct Settings {

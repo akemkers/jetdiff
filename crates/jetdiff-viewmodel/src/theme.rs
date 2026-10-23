@@ -19,16 +19,16 @@ pub struct DiffColors {
     /// Line background and inline highlight, and the fill in the divider.
     pub background: Rgba,
     /// `ERROR_STRIPE_COLOR` in the scrollbar.
-    pub stripe: Rgba,
+    pub hunk_minimap: Rgba,
     /// Background for lines with inline highlight (`TextDiffTypeFactory.getIgnoredBackgroundColor`).
     pub ignored: Rgba,
 }
 
 impl DiffColors {
-    fn new(background: Rgba, stripe: Rgba, editor_bg: Rgba) -> Self {
+    fn new(background: Rgba, hunk_minimap: Rgba, editor_bg: Rgba) -> Self {
         Self {
             background,
-            stripe,
+            hunk_minimap,
             ignored: ignored_color(background, editor_bg),
         }
     }
@@ -84,7 +84,7 @@ pub struct Theme {
     pub scrollbar_thumb: Rgba,
     /// `Tree.selectionBackground`.
     pub tree_selection: Rgba,
-    /// `Tree.selectionInactiveBackground`, when the panel doesn't have focus.
+    /// `Tree.selectionInactiveBackground`, when the side panel doesn't have focus.
     pub tree_selection_inactive: Rgba,
     /// The line and dots in the commit list.
     pub commit_graph: Rgba,
@@ -265,7 +265,7 @@ impl Theme {
             file_added: rgb(GREEN),
             file_deleted: rgb(SURFACE2),
             file_modified: rgb(BLUE),
-            // Green, red and blue with 0.25 for the background and 0.2 for the stripe
+            // Green, red and blue with 0.25 for the background and 0.2 for the hunk minimap
             added: DiffColors::new(rgb(0x404F4B), rgb(0x394545), base),
             deleted: DiffColors::new(rgb(0x53394C), rgb(0x493446), base),
             modified: DiffColors::new(rgb(0x394461), rgb(0x333C57), base),
