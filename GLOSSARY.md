@@ -29,6 +29,10 @@ Added, Deleted, Modified or Renamed. The first three mean the same as for hunk k
 Putting one hunk in Local changes back to how it is in HEAD.
 _Avoid_: revert, discard
 
+**File rollback**:
+Putting a whole changed file in Local changes back to how it is in HEAD, including its path and the index. An Added file is deleted.
+_Avoid_: revert, discard, restore
+
 **Inline highlight**:
 The changed words inside a Modified hunk, marked on each side.
 _Avoid_: word highlight, word diff, fragment
