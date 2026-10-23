@@ -20,7 +20,8 @@ pub enum Overlay {
 }
 
 pub enum Effect {
-    Message(String),
+    /// Shown as a brief info notification.
+    ShowBrief(String),
     Copy(String),
     Rollback(RollbackRequest),
 }
@@ -143,7 +144,7 @@ impl DiffView {
             None => self.state = state(self.state.diff.diff.clone(), self.unified),
         }
         self.clamp_scroll_x();
-        Some(Effect::Message(
+        Some(Effect::ShowBrief(
             if self.unified { "Unified" } else { "Split" }.into(),
         ))
     }
@@ -184,7 +185,7 @@ impl DiffView {
                         self.overlay = Some(Overlay::Confirm(request));
                         None
                     }
-                    Err(text) => Some(Effect::Message(text.into())),
+                    Err(text) => Some(Effect::ShowBrief(text.into())),
                 }
             }
             Command::CopyLocation => location(self.state.location(), &self.paths).map(Effect::Copy),

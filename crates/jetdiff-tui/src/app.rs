@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
-    AppCommand, Applied, Commits, Files, Level, ReadJob, RepoRead, RepoSource, Show, Shown,
+    AppCommand, Applied, Commits, Files, Notification, ReadJob, RepoRead, RepoSource, Show, Shown,
     Watcher, app_command, empty_diff,
 };
 use jetdiff_files::ChangedFile;
@@ -22,7 +22,7 @@ use ratatui::layout::Rect;
 use crate::clipboard;
 use crate::diff_view::{DiffView, Effect, Overlay};
 use crate::input::to_key;
-use crate::message::Message;
+use crate::notification_slot::NotificationSlot;
 use crate::panel::{Click, ListKey, Panel, Section, list_key};
 use crate::widgets;
 use crate::{Settings, Term};
@@ -77,7 +77,7 @@ impl Repository {
 pub struct App {
     theme: Theme,
     diff: DiffView,
-    message: Message,
+    notification_slot: NotificationSlot,
     repository: Option<Repository>,
     focus: Focus,
     panel_area: Rect,
@@ -89,7 +89,7 @@ impl App {
         Self {
             theme: settings.theme,
             diff: DiffView::new(diff, paths, settings.unified),
-            message: Message::default(),
+            notification_slot: NotificationSlot::default(),
             repository: None,
             focus: Focus::Diff,
             panel_area: Rect::default(),
@@ -98,19 +98,21 @@ impl App {
     }
 
     pub fn repo_source(repo: Repo, changed_files: Vec<ChangedFile>, settings: &Settings) -> Self {
-        let mut message = Message::default();
+        let mut notification_slot = NotificationSlot::default();
         let repo_source = RepoSource::new(repo, changed_files);
         let mut commits = None;
         let mut watcher = None;
         let repo = repo_source.repo();
         if repo.is_local_changes() {
             commits = Some(Commits::new(repo.commits().unwrap_or_else(|e| {
-                message.show(e, Level::Warning);
+                notification_slot.show_brief(Notification::warning(e));
                 Vec::new()
             })));
             match Watcher::new(repo.root()) {
                 Ok(started) => watcher = Some(started),
-                Err(e) => message.show(format!("Can't watch for changes: {e}"), Level::Warning),
+                Err(e) => notification_slot.show_brief(Notification::warning(format!(
+                    "Can't watch for changes: {e}"
+                ))),
             }
         }
         let files = Files::new(repo_source.changed_files().clone());
@@ -118,7 +120,7 @@ impl App {
         let selected = repo_source.first();
         let (read_sender, read_receiver) = channel();
         let mut app = Self {
-            message,
+            notification_slot,
             repository: Some(Repository {
                 repo_source,
                 panel,
@@ -171,18 +173,18 @@ impl App {
         match applied {
             Applied::Failed {
                 selected_commit,
-                error,
+                brief,
             } => {
                 if let Some(commits) = &mut repo.panel.commits {
                     commits.set_selected(selected_commit);
                 }
-                self.message.show(error, Level::Warning);
+                self.notification_slot.show_brief(brief);
             }
             Applied::Done {
                 commits,
                 changed_files,
                 file,
-                notice,
+                brief,
             } => {
                 if let Some(list) = &mut repo.panel.commits {
                     list.set_commits(commits);
@@ -191,8 +193,8 @@ impl App {
                     repo.panel.files.set_changed_files(changed_files);
                 }
                 self.select(file);
-                if let Some(notice) = notice {
-                    self.message.show(notice.text, notice.level);
+                if let Some(brief) = brief {
+                    self.notification_slot.show_brief(brief);
                 }
             }
         }
@@ -213,19 +215,19 @@ impl App {
     fn show(&mut self, show: Show) {
         match show {
             Show::Unchanged => {}
-            Show::Empty(notice) => {
-                self.message.pin(Some(notice));
+            Show::Empty { pinned } => {
+                self.notification_slot.pin(Some(pinned));
                 self.diff.set_diff(empty_diff(), Default::default());
             }
             Show::Diff(shown) => {
                 let Shown {
                     diff,
-                    notice,
+                    pinned,
                     paths,
                     can_rollback,
                     same_file,
                 } = *shown;
-                self.message.pin(notice);
+                self.notification_slot.pin(pinned);
                 self.diff.set_can_rollback(can_rollback);
                 if same_file {
                     self.diff.update_diff(diff, paths);
@@ -239,10 +241,13 @@ impl App {
     fn effect(&mut self, effect: Option<Effect>) -> io::Result<()> {
         match effect {
             None => {}
-            Some(Effect::Message(text)) => self.message.show(text, Level::Info),
+            Some(Effect::ShowBrief(text)) => {
+                self.notification_slot.show_brief(Notification::info(text))
+            }
             Some(Effect::Copy(location)) => {
                 clipboard::copy(&location, &mut io::stdout())?;
-                self.message.show(format!("Copied {location}"), Level::Info);
+                self.notification_slot
+                    .show_brief(Notification::info(format!("Copied {location}")));
             }
             Some(Effect::Rollback(request)) => {
                 let Some(repo) = &mut self.repository else {
@@ -255,7 +260,9 @@ impl App {
                         repo.read(job);
                         self.show(show);
                     }
-                    Some(Err(text)) => self.message.show(text, Level::Warning),
+                    Some(Err(text)) => self
+                        .notification_slot
+                        .show_brief(Notification::warning(text)),
                 }
             }
         }
@@ -478,8 +485,8 @@ impl App {
         self.diff.layout(main);
         self.diff.render(focus == Focus::Diff, &theme, buf);
         widgets::key_bar(footer, &theme, buf);
-        if let Some(notice) = self
-            .message
+        if let Some(notification) = self
+            .notification_slot
             .current(Instant::now())
             .filter(|_| main.height > 0)
         {
@@ -488,7 +495,7 @@ impl App {
                 height: 1,
                 ..main
             };
-            widgets::message(notice, row, &theme, buf);
+            widgets::notification(notification, row, &theme, buf);
         }
         match &self.diff.overlay {
             Some(Overlay::Help) => widgets::help(area, &theme, buf),

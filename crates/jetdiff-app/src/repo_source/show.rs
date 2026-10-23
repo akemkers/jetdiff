@@ -6,31 +6,32 @@ use jetdiff_files::ChangedFile;
 use jetdiff_git::Commit;
 use jetdiff_viewmodel::FileDiff;
 
-use crate::content::Notice;
+use crate::notification::Notification;
 
 pub enum Applied {
     Failed {
         selected_commit: Option<String>,
-        error: String,
+        brief: Notification,
     },
     Done {
         commits: Vec<Commit>,
         /// Only when the list has changed.
         changed_files: Option<Rc<[ChangedFile]>>,
         file: Option<usize>,
-        notice: Option<Notice>,
+        /// Only after files changed on disk.
+        brief: Option<Notification>,
     },
 }
 
 pub enum Show {
-    Empty(Notice),
+    Empty { pinned: Notification },
     Unchanged,
     Diff(Box<Shown>),
 }
 
 pub struct Shown {
     pub diff: FileDiff,
-    pub notice: Option<Notice>,
+    pub pinned: Option<Notification>,
     pub paths: [String; 2],
     /// Only Local changes can be written to, not a commit.
     pub can_rollback: bool,

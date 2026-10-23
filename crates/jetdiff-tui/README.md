@@ -33,7 +33,7 @@ Differences from the GPUI view:
 graph TD
     app[app: the loop] --> diff[diff_view: DiffView]
     app --> panel[panel: tree and commits]
-    app --> widgets[widgets: path, keys, message, help]
+    app --> widgets[widgets: path, keys, notification, help]
     app --> source[jetdiff-app: RepoSource, Watcher]
     app --> backend[backend: sends only the colors that change]
     diff --> viewer[code_viewer: Split and Unified]

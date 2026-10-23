@@ -18,7 +18,7 @@ The state around the diff: the changed files in the repo, the file being shown, 
 | The keys in the keymap bar and in the help on `?`                                                     | `help`    |
 | The keys outside the diff: switching files, panels, help, zoom and quit                               | `keys`    |
 | Paths changed in Local changes, collected until it is quiet                                            | `watcher` |
-| The messages and their level (`Notice`, `Level`)                                                       | `content` |
+| A notification and its level (`Notification`, `NotificationLevel`)                                    | `notification` |
 
 ## What the crate doesn't own
 
@@ -44,8 +44,8 @@ let mut selected = repo_source.first();
 
 // The selected file
 match repo_source.load(selected) {
-    Show::Diff(shown) => { /* show shown.diff, pin shown.notice */ }
-    Show::Empty(notice) => { /* empty diff and the message */ }
+    Show::Diff(shown) => { /* show shown.diff, pin shown.pinned */ }
+    Show::Empty { pinned } => { /* empty diff, pin `pinned` */ }
     Show::Unchanged => {}
 }
 
@@ -56,8 +56,8 @@ if let Some(paths) = watcher.take() {
     let job = repo_source.files_changed(paths);   // Send, can run on another thread
     let read = job.run();
     match repo_source.apply(read) {
-        Applied::Done { commits, changed_files, file, notice } => selected = file,
-        Applied::Failed { shown, error } => { /* the commit list shows `shown` */ }
+        Applied::Done { commits, changed_files, file, brief } => selected = file,
+        Applied::Failed { shown, brief } => { /* the commit list shows `shown` */ }
     }
 }
 ```

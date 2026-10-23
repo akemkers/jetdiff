@@ -9,7 +9,8 @@ use jetdiff_files::{ChangedFile, Tree};
 use jetdiff_git::Repo;
 
 use crate::actions::RollbackRequest;
-use crate::content::{Notice, build_diff};
+use crate::content::build_diff;
+use crate::notification::Notification;
 use read::Trigger;
 pub use read::{ReadJob, RepoRead};
 pub use show::{Applied, Show, Shown};
@@ -88,7 +89,7 @@ impl RepoSource {
                 self.commit = self.last_read_commit.clone();
                 return Applied::Failed {
                     selected_commit: self.commit.clone(),
-                    error,
+                    brief: Notification::warning(error),
                 };
             }
         };
@@ -111,23 +112,25 @@ impl RepoSource {
         let file = selected
             .and_then(|path| self.changed_files.iter().position(|file| file.path == path))
             .or_else(|| self.first());
-        let notice = match touched {
+        let brief = match touched {
             0 => None,
-            1 => Some(Notice::info("1 file changed")),
-            n => Some(Notice::info(format!("{n} files changed"))),
+            1 => Some(Notification::info("1 file changed")),
+            n => Some(Notification::info(format!("{n} files changed"))),
         };
         Applied::Done {
             commits,
             changed_files: changed,
             file,
-            notice,
+            brief,
         }
     }
 
     pub fn load(&mut self, file: Option<usize>) -> Show {
         let Some(changed_file) = file.map(|i| self.changed_files[i].clone()) else {
             self.shown = None;
-            return Show::Empty(Notice::info("No changes"));
+            return Show::Empty {
+                pinned: Notification::info("No changes"),
+            };
         };
         let content = self.repo.read(&changed_file);
         self.show(changed_file, content)
@@ -142,10 +145,10 @@ impl RepoSource {
             .shown()
             .is_some_and(|previous| previous.path == file.path);
         self.shown = shown;
-        let (diff, notice) = build_diff(&file, content);
+        let (diff, pinned) = build_diff(&file, content);
         Show::Diff(Box::new(Shown {
             diff,
-            notice,
+            pinned,
             paths: [file.left_path().to_owned(), file.path.clone()],
             can_rollback: self.repo.is_local_changes(),
             same_file,
@@ -228,10 +231,10 @@ mod tests {
         apply(source, job)
     }
 
-    fn notification(applied: Applied) -> Option<Notice> {
+    fn brief(applied: Applied) -> Option<Notification> {
         match applied {
-            Applied::Done { notice, .. } => notice,
-            Applied::Failed { error, .. } => panic!("read failed: {error}"),
+            Applied::Done { brief, .. } => brief,
+            Applied::Failed { brief, .. } => panic!("read failed: {}", brief.text),
         }
     }
 
@@ -267,7 +270,7 @@ mod tests {
         let Applied::Done {
             changed_files,
             file,
-            notice,
+            brief,
             ..
         } = files_changed(&mut source, &["b.rs", "c.rs"])
         else {
@@ -275,7 +278,7 @@ mod tests {
         };
         assert!(changed_files.is_some());
         assert_eq!(path(&source, file), "b.rs");
-        assert_eq!(notice, Some(Notice::info("2 files changed")));
+        assert_eq!(brief, Some(Notification::info("2 files changed")));
         assert!(matches!(source.load(file), Show::Diff(shown) if shown.same_file));
     }
 
@@ -289,14 +292,14 @@ mod tests {
         let mut source = temp_repo.repo_source();
 
         let job = source.select_commit(Some("HEAD".into()));
-        assert_eq!(notification(apply(&mut source, job)), None);
+        assert_eq!(brief(apply(&mut source, job)), None);
         temp_repo.write("a.rs", "a3\n");
         let job = source.select_commit(None);
-        assert_eq!(notification(apply(&mut source, job)), None);
+        assert_eq!(brief(apply(&mut source, job)), None);
         // Local changes selected again, after a file is added on disk
         temp_repo.write("b.rs", "b\n");
         let job = source.select_commit(None);
-        assert_eq!(notification(apply(&mut source, job)), None);
+        assert_eq!(brief(apply(&mut source, job)), None);
     }
 
     #[test]
@@ -320,7 +323,7 @@ mod tests {
         let Applied::Done {
             changed_files,
             file,
-            notice,
+            brief,
             ..
         } = apply(&mut source, job)
         else {
@@ -328,7 +331,7 @@ mod tests {
         };
         assert!(changed_files.is_some());
         assert_eq!(path(&source, file), "b.rs");
-        assert_eq!(notice, None);
+        assert_eq!(brief, None);
     }
 
     #[test]
@@ -350,6 +353,6 @@ mod tests {
             files_changed(&mut source, &["a.rs"]),
             Applied::Done { file: None, .. }
         ));
-        assert!(matches!(source.load(None), Show::Empty(_)));
+        assert!(matches!(source.load(None), Show::Empty { .. }));
     }
 }

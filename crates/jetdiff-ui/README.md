@@ -51,7 +51,7 @@ graph TD
     split --> side[SplitSide x2]
     split --> div[divider]
     fdv --> help[KeyHelp]
-    fdv --> msg[(Message)]
+    fdv --> slot[(NotificationSlot)]
 ```
 
 - `repo_view`: the tree and the commit list on the left, the diff on the right. Runs the read jobs from `jetdiff_app::RepoSource` in the background and applies the result
@@ -64,7 +64,7 @@ graph TD
   - `code_paint`: what both diff modes draw the same way
 - `help`: draws the keymap bar and the popup. The keys are in `jetdiff_app::help`
 - `file_tree`, `commit_list`: the lists in the side panel, over `Files` and `Commits` from `jetdiff-app`
-- `message`: a brief info or pinned warning above the keymap bar
+- `notification_slot`: the pinned notification, with a brief one over it for a while, above the keymap bar
 - `watcher`: polls `jetdiff_app::Watcher` on the GPUI executor
 - `theme`: Catppuccin Mocha and IntelliJ's Islands themes
 

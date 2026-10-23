@@ -5,7 +5,7 @@ use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
     Window, actions, div, prelude::*, px,
 };
-use jetdiff_app::{Applied, ReadJob, RepoSource, Show, Shown, empty_diff};
+use jetdiff_app::{Applied, Notification, ReadJob, RepoSource, Show, Shown, empty_diff};
 use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::metrics::FONT_SIZE;
@@ -16,7 +16,7 @@ use crate::file_header::file_header;
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
-use crate::message::{Level, Message};
+use crate::notification_slot::NotificationSlot;
 use crate::panel_size::{PanelHeight, PanelWidth};
 use crate::settings::Settings;
 use crate::text::FAMILY;
@@ -41,7 +41,7 @@ pub struct RepoView {
     selection: Entity<Selection>,
     files: Entity<FileTree>,
     diff: Entity<FileDiffView>,
-    message: Entity<Message>,
+    notification_slot: Entity<NotificationSlot>,
     /// Only for Local changes.
     commits: Option<Entity<CommitList>>,
     scale: f32,
@@ -63,9 +63,15 @@ impl RepoView {
         let selection = cx.new(|_| Selection(first));
         let files =
             cx.new(|cx| FileTree::new(repo_source.changed_files().clone(), selection.clone(), cx));
-        let message = cx.new(|_| Message::default());
-        let diff =
-            cx.new(|cx| FileDiffView::new(empty_diff(), Default::default(), message.clone(), cx));
+        let notification_slot = cx.new(|_| NotificationSlot::default());
+        let diff = cx.new(|cx| {
+            FileDiffView::new(
+                empty_diff(),
+                Default::default(),
+                notification_slot.clone(),
+                cx,
+            )
+        });
         let mut subscriptions = vec![
             cx.observe(&selection, |this, _, cx| this.load(cx)),
             cx.subscribe(&diff, |this, _, e: &Zoomed, cx| {
@@ -78,7 +84,8 @@ impl RepoView {
         let repo = repo_source.repo();
         if repo.is_local_changes() {
             let list = repo.commits().unwrap_or_else(|e| {
-                message.update(cx, |m, cx| m.show(e, Level::Warning, cx));
+                notification_slot
+                    .update(cx, |slot, cx| slot.show_brief(Notification::warning(e), cx));
                 Vec::new()
             });
             let list = cx.new(|cx| CommitList::new(list, cx));
@@ -90,8 +97,8 @@ impl RepoView {
             match Watcher::new(repo.root(), cx, Self::files_changed) {
                 Ok(w) => watcher = Some(w),
                 Err(e) => {
-                    let text = format!("Can't watch for changes: {e}");
-                    message.update(cx, |m, cx| m.show(text, Level::Warning, cx));
+                    let brief = Notification::warning(format!("Can't watch for changes: {e}"));
+                    notification_slot.update(cx, |slot, cx| slot.show_brief(brief, cx));
                 }
             }
         }
@@ -101,7 +108,7 @@ impl RepoView {
             selection,
             files,
             diff,
-            message,
+            notification_slot,
             commits,
             scale: 1.,
             panel_open: cx.global::<Settings>().side_panel_open,
@@ -136,9 +143,9 @@ impl RepoView {
                 let job = self.repo_source.rolled_back();
                 self.read(job, cx);
             }
-            Some(Err(text)) => self
-                .message
-                .update(cx, |m, cx| m.show(text, Level::Warning, cx)),
+            Some(Err(text)) => self.notification_slot.update(cx, |slot, cx| {
+                slot.show_brief(Notification::warning(text), cx)
+            }),
         }
     }
 
@@ -166,7 +173,7 @@ impl RepoView {
         match applied {
             Applied::Failed {
                 selected_commit,
-                error,
+                brief,
             } => {
                 // The list goes back to the commit that is still selected
                 if let Some(list) = &self.commits {
@@ -174,14 +181,14 @@ impl RepoView {
                         commit_list.set_selected(selected_commit, cx)
                     });
                 }
-                self.message
-                    .update(cx, |m, cx| m.show(error, Level::Warning, cx));
+                self.notification_slot
+                    .update(cx, |slot, cx| slot.show_brief(brief, cx));
             }
             Applied::Done {
                 commits,
                 changed_files,
                 file,
-                notice,
+                brief,
             } => {
                 if let Some(list) = &self.commits {
                     list.update(cx, |commit_list, cx| commit_list.set_commits(commits, cx));
@@ -193,8 +200,9 @@ impl RepoView {
                 }
                 self.selection
                     .update(cx, |selection, cx| selection.set(file, cx));
-                if let Some(n) = notice {
-                    self.message.update(cx, |m, cx| m.show(n.text, n.level, cx));
+                if let Some(brief) = brief {
+                    self.notification_slot
+                        .update(cx, |slot, cx| slot.show_brief(brief, cx));
                 }
             }
         }
@@ -209,21 +217,22 @@ impl RepoView {
     fn show(&mut self, show: Show, cx: &mut Context<Self>) {
         match show {
             Show::Unchanged => return,
-            Show::Empty(notice) => {
-                self.message
-                    .update(cx, |m, cx| m.pin(notice.text, notice.level, cx));
+            Show::Empty { pinned } => {
+                self.notification_slot
+                    .update(cx, |slot, cx| slot.pin(Some(pinned), cx));
                 self.diff
                     .update(cx, |v, cx| v.set_diff(empty_diff(), Default::default(), cx));
             }
             Show::Diff(shown) => {
                 let Shown {
                     diff,
-                    notice,
+                    pinned,
                     paths,
                     can_rollback,
                     same_file,
                 } = *shown;
-                self.message.update(cx, |m, cx| m.pin_notice(notice, cx));
+                self.notification_slot
+                    .update(cx, |slot, cx| slot.pin(pinned, cx));
                 self.diff.update(cx, |v, cx| {
                     v.set_can_rollback(can_rollback);
                     if same_file {

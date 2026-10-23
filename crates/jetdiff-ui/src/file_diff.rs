@@ -5,10 +5,10 @@ use std::rc::Rc;
 
 use gpui::{
     App, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
-    MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent,
-    SharedString, Window, actions, canvas, div, prelude::*, px,
+    MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window,
+    actions, canvas, div, prelude::*, px,
 };
-use jetdiff_app::{RollbackRequest, location, rollback_request};
+use jetdiff_app::{Notification, RollbackRequest, location, rollback_request};
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::metrics::zoomed;
 use jetdiff_viewmodel::{
@@ -19,7 +19,7 @@ use jetdiff_viewmodel::{
 use crate::code_viewer::{self, Hit, Painter, Shared};
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
 use crate::keystroke::to_key;
-use crate::message::{Level, Message};
+use crate::notification_slot::NotificationSlot;
 use crate::rollback_dialog::rollback_dialog;
 use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
@@ -64,22 +64,22 @@ pub struct FileDiffView {
     /// Left and Right path for `y`. Empty when there is no file.
     paths: [String; 2],
     /// Owned by whoever makes the diff, but drawn above the keymap bar here.
-    message: Entity<Message>,
+    notification_slot: Entity<NotificationSlot>,
     shared: Rc<Shared>,
     focus: FocusHandle,
 }
 
 impl FileDiffView {
-    /// One file, with its own messages.
+    /// One file, with its own notification slot.
     pub fn standalone(diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) -> Self {
-        let message = cx.new(|_| Message::default());
-        Self::new(diff, paths, message, cx)
+        let notification_slot = cx.new(|_| NotificationSlot::default());
+        Self::new(diff, paths, notification_slot, cx)
     }
 
     pub(crate) fn new(
         diff: FileDiff,
         paths: [String; 2],
-        message: Entity<Message>,
+        notification_slot: Entity<NotificationSlot>,
         cx: &mut Context<Self>,
     ) -> Self {
         let unified = cx.global::<Settings>().unified;
@@ -97,7 +97,7 @@ impl FileDiffView {
             can_rollback: false,
             overlay: None,
             paths,
-            message,
+            notification_slot,
             shared: Rc::new(Shared::new()),
             focus: cx.focus_handle(),
         }
@@ -161,7 +161,7 @@ impl FileDiffView {
         self.update_markers();
         self.clamp_scroll_x();
         self.scroll.jump(self.mode.scroll());
-        self.show_message(if self.unified { "Unified" } else { "Split" }, cx);
+        self.show_brief(if self.unified { "Unified" } else { "Split" }, cx);
         cx.notify();
     }
 
@@ -236,7 +236,7 @@ impl FileDiffView {
             Command::CopyLocation => {
                 if let Some(location) = location(self.mode.location(), &self.paths) {
                     cx.write_to_clipboard(ClipboardItem::new_string(location.clone()));
-                    self.show_message(format!("Copied {location}"), cx);
+                    self.show_brief(format!("Copied {location}"), cx);
                 }
                 return;
             }
@@ -257,7 +257,7 @@ impl FileDiffView {
         if let (Command::ToggleFolds, true, DiffMode::Split(state)) = (cmd, out.changed, &self.mode)
         {
             let closed = state.folding.visible(Side::Left).next().is_some();
-            self.show_message(
+            self.show_brief(
                 if closed {
                     "Folds closed"
                 } else {
@@ -288,7 +288,7 @@ impl FileDiffView {
                 self.overlay = Some(Overlay::Confirm(Rollback(request)));
                 cx.notify();
             }
-            Err(text) => self.show_message(text, cx),
+            Err(text) => self.show_brief(text, cx),
         }
     }
 
@@ -312,10 +312,10 @@ impl FileDiffView {
         cx.notify();
     }
 
-    fn show_message(&self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
-        let text = text.into();
-        self.message
-            .update(cx, |m, cx| m.show(text, Level::Info, cx));
+    fn show_brief(&self, text: impl Into<String>, cx: &mut Context<Self>) {
+        let brief = Notification::info(text);
+        self.notification_slot
+            .update(cx, |slot, cx| slot.show_brief(brief, cx));
     }
 
     /// `EditorFontSizeAction`: new font size, and the cursor line is kept at the same place.
@@ -540,7 +540,7 @@ impl Render for FileDiffView {
             .relative()
             .flex_none()
             .child(keys.bar())
-            .child(self.message.clone());
+            .child(self.notification_slot.clone());
         let overlay = self.overlay.as_ref().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
             Overlay::Confirm(_) => rollback_dialog(&theme),

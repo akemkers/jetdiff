@@ -43,12 +43,13 @@ jetdiff-git      git CLI: changes for a commit or Local changes, and file conten
 
 jetdiff-app      the state around the diff, still without a GUI. Shared by all UIs
   repo_source    the repo source and the file being shown. Reading it again per trigger, and the selected file
-  content        from git content to FileDiff, with a message when it can't be shown
+  content        from git content to FileDiff, with a pinned notification when it can't be shown
   files          the file tree's rows and cursor
   commits        the commit list's rows, cursor and selection
   actions        rollback and file:line for the cursor's line
   help           the keys in the keymap bar and the help
   keys           the keys outside the diff
+  notification   a notification and its level, Info or Warning
   watcher        changed paths, collected until it is quiet
 
 jetdiff-ui       GPUI
