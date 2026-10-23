@@ -28,10 +28,8 @@ pub struct Config {
     pub theme: Theme,
     #[serde(deserialize_with = "font_size")]
     pub font_size: f32,
-    // The old key, so existing config files still load
-    #[serde(rename = "collapse_unchanged")]
     pub fold_unchanged: bool,
-    #[serde(rename = "view", deserialize_with = "view")]
+    #[serde(rename = "diff_mode", deserialize_with = "diff_mode")]
     pub unified: bool,
     pub side_panel: SidePanel,
     pub terminal: Terminal,
@@ -107,8 +105,8 @@ fn font_size<'de, D: Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
     }
 }
 
-fn view<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
-    match String::deserialize(d)?.as_str() {
+fn diff_mode<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    match String::deserialize(deserializer)?.as_str() {
         "split" => Ok(false),
         "unified" => Ok(true),
         _ => Err(D::Error::custom("must be split or unified")),
@@ -135,7 +133,7 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\ncollapse_unchanged = false\nview = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\n";
+    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\nfold_unchanged = false\ndiff_mode = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\n";
 
     #[test]
     fn template_is_valid() {
@@ -167,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_view_is_an_error() {
+    fn unknown_diff_mode_is_an_error() {
         let err = parse(&OK.replace("unified", "side-by-side")).unwrap_err();
         assert!(err.contains("must be split or unified"), "{err}");
     }

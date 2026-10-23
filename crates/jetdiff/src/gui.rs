@@ -7,7 +7,7 @@ use gpui::{
 use jetdiff_app::{AppCommand, BINDINGS};
 use jetdiff_ui::{
     Assets, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextFile, PrevFile,
-    RepoView, ResetZoom, Settings, ToggleHelp, ToggleSidePanel, ToggleView, UiTheme, ZoomIn,
+    RepoView, ResetZoom, Settings, ToggleDiffMode, ToggleHelp, ToggleSidePanel, UiTheme, ZoomIn,
     ZoomOut, load_font,
 };
 
@@ -58,7 +58,7 @@ fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
         AppCommand::FocusUp => KeyBinding::new(keys, FocusUp, None),
         AppCommand::FocusRight => KeyBinding::new(keys, FocusRight, None),
         AppCommand::ToggleSidePanel => KeyBinding::new(keys, ToggleSidePanel, None),
-        AppCommand::ToggleView => KeyBinding::new(keys, ToggleView, None),
+        AppCommand::ToggleDiffMode => KeyBinding::new(keys, ToggleDiffMode, None),
         AppCommand::NextFile => KeyBinding::new(keys, NextFile, None),
         AppCommand::PrevFile => KeyBinding::new(keys, PrevFile, None),
         AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),

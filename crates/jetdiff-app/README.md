@@ -16,9 +16,10 @@ The state around the diff: the changed files in the repo, the file being shown, 
 | The commit list's rows, cursor and selection, and the age like "3 hours ago"                          | `commits` |
 | Rollback and `file:line` for the cursor's line: what is rolled back, or why it can't be               | `actions` |
 | The keys in the keymap bar and in the help on `?`                                                     | `help`    |
-| The keys outside the diff: switching files, panels, help, zoom and quit                               | `keys`    |
+| The keys outside the diff: switching files, moving focus, the side panel, help, zoom and quit         | `keys`    |
 | Paths changed in Local changes, collected until it is quiet                                            | `watcher` |
 | A notification and its level (`Notification`, `NotificationLevel`)                                    | `notification` |
+| One pinned and one brief notification, and which one shows now (`NotificationSlot`)                  | `notification_slot` |
 
 ## What the crate doesn't own
 

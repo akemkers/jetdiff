@@ -1,4 +1,4 @@
-//! jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]
+//! jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]
 //!
 //! Without arguments, Local changes are shown, on a branch against where it branched off main.
 //! A folder shows Local changes there. With one commit, it is shown against its parent.
@@ -76,9 +76,10 @@ fn parse_source(paths: &[String]) -> Result<Source, String> {
         [dir] if Path::new(dir).is_dir() => Ok(Source::LocalChanges(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
         [left_side, right_side] => Ok(Source::FilePair(left_side.clone(), right_side.clone())),
-        _ => {
-            Err("usage: jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]".into())
-        }
+        _ => Err(
+            "usage: jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]"
+                .into(),
+        ),
     }
 }
 

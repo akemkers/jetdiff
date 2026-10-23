@@ -1,4 +1,4 @@
-//! The Split view: two `SplitSide` with the diff divider between them. Drawing, and where on screen the sides
+//! Split: two `SplitSide` with the diff divider between them. Drawing, and where on screen the sides
 //! and lines are. Added and deleted files are always shown Unified.
 
 use std::rc::Rc;

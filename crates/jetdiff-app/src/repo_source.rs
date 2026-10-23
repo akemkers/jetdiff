@@ -129,7 +129,7 @@ impl RepoSource {
         let Some(changed_file) = file.map(|i| self.changed_files[i].clone()) else {
             self.shown = None;
             return Show::Empty {
-                pinned: Notification::info("No changes"),
+                pinned: Notification::info("No changed files"),
             };
         };
         let content = self.repo.read(&changed_file);

@@ -7,10 +7,10 @@ theme = "catppuccin-mocha"
 font_size = 14
 
 # false shows the whole file, without folding unchanged parts.
-collapse_unchanged = true
+fold_unchanged = true
 
 # split or unified. v switches while the app is running.
-view = "split"
+diff_mode = "split"
 
 [side_panel]
 # true shows the file tree and the commit list at startup. b shows and hides them.

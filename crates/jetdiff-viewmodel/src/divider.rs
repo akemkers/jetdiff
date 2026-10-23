@@ -28,14 +28,14 @@ pub struct Cubic {
 }
 
 impl Cubic {
-    /// `DiffDrawUtil.makeCurve(forward = true)`: from left y1 to right y2.
-    pub fn new(width: f32, y1: f32, y2: f32) -> Self {
+    /// `DiffDrawUtil.makeCurve(forward = true)`: from Left at `left_side_y` to Right at `right_side_y`.
+    pub fn new(width: f32, left_side_y: f32, right_side_y: f32) -> Self {
         let p = |x, y| Point { x, y };
         Self {
-            p0: p(0., y1),
-            p1: p(width * CTRL_PROXIMITY_X, y1),
-            p2: p(width * (1. - CTRL_PROXIMITY_X), y2),
-            p3: p(width, y2),
+            p0: p(0., left_side_y),
+            p1: p(width * CTRL_PROXIMITY_X, left_side_y),
+            p2: p(width * (1. - CTRL_PROXIMITY_X), right_side_y),
+            p3: p(width, right_side_y),
         }
     }
 
@@ -88,15 +88,19 @@ pub fn divider_bands(
             break;
         }
         let side = |s: usize| trapezium_side(&layouts[s], hunk.lines[s].clone(), scroll_y[s]);
-        let (s1, e1) = side(0);
-        let (s2, e2) = side(1);
+        let (left_side_start, left_side_end) = side(0);
+        let (right_side_start, right_side_end) = side(1);
         bands.push(DividerBand {
             hunk: i,
             kind: hunk.kind,
-            top: Cubic::new(width, s1, s2),
-            bottom: Cubic::new(width, e1 + 1., e2 + 1.),
+            top: Cubic::new(width, left_side_start, right_side_start),
+            bottom: Cubic::new(width, left_side_end + 1., right_side_end + 1.),
             // Java: `(start + end) / 2` in int, and a stroke on integer y covers the next half pixel
-            mid: Cubic::new(width, mid_y(s1, e1), mid_y(s2, e2)),
+            mid: Cubic::new(
+                width,
+                mid_y(left_side_start, left_side_end),
+                mid_y(right_side_start, right_side_end),
+            ),
         });
     }
     bands
@@ -123,11 +127,11 @@ pub fn fold_links(
     let painted = [0, 1].map(|i| layouts[i].painted_lines(scroll_y[i], viewport.height));
     let mut result = Vec::new();
     for fold in folding.closed_folds() {
-        let [l1, l2] = fold.lines;
-        if painted[0].0 > l1 + 1 && painted[1].0 > l2 + 1 {
+        let [left_side_line, right_side_line] = fold.lines;
+        if painted[0].0 > left_side_line + 1 && painted[1].0 > right_side_line + 1 {
             continue;
         }
-        if painted[0].1 < l1 && painted[1].1 < l2 {
+        if painted[0].1 < left_side_line && painted[1].1 < right_side_line {
             break;
         }
         let y = [0, 1].map(|i| layouts[i].line_top(fold.lines[i]) - scroll_y[i]);

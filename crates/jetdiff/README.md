@@ -9,7 +9,7 @@ Everything else is libraries that assume nothing about the app around them. That
 ## Usage
 
 ```
-cargo run --release -p jetdiff -- [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]
+cargo run --release -p jetdiff -- [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]
 ```
 
 `gui.rs` and `tui.rs` are behind the features with the same names. `--tui` picks the terminal; otherwise the window is used when `gui` is built in.
@@ -22,6 +22,7 @@ graph LR
     source -- file pair --> fd[FileDiff] --> fdv[FileDiffView]
     source -- folder --> local[Repo::local_changes] --> rv[RepoView]
     source -- commit --> c[Repo::commit] --> rv
+    source -- pull request --> pr[Repo::pull_request] --> rv
 ```
 
 The source is read before the window opens, so errors like an unknown commit are written to the terminal with exit code 1. Errors in the arguments or the config file give exit code 2.

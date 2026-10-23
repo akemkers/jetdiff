@@ -29,8 +29,8 @@ pub const ALL: [(&str, &[Keys]); 4] = [
         &[
             ("Tab Shift-Tab", "next/previous file"),
             ("J K", "next/previous file"),
-            ("C-hjkl", "switch panel"),
-            ("b", "hide panel"),
+            ("C-hjkl", "move focus"),
+            ("b", "toggle side panel"),
         ],
     ),
     ("Folds", &[("o", "open fold"), ("f", "toggle folds")]),

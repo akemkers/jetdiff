@@ -20,7 +20,7 @@ mod text;
 mod theme;
 mod watcher;
 
-pub use file_diff::{FileDiffView, ResetZoom, ToggleView, ZoomIn, ZoomOut};
+pub use file_diff::{FileDiffView, ResetZoom, ToggleDiffMode, ZoomIn, ZoomOut};
 pub use help::{HideHelp, ToggleHelp};
 pub use icons::Assets;
 pub use jetdiff_app::LOCAL_CHANGES;

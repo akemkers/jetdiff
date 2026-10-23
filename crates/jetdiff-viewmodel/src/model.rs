@@ -100,8 +100,12 @@ pub struct FileDiff {
 }
 
 impl FileDiff {
-    pub fn new(text1: &str, text2: &str, policy: ComparisonPolicy) -> Result<Self, DiffTooBig> {
-        let hunks = compare_for_viewer(text1, text2, policy)?
+    pub fn new(
+        left_side_text: &str,
+        right_side_text: &str,
+        policy: ComparisonPolicy,
+    ) -> Result<Self, DiffTooBig> {
+        let hunks = compare_for_viewer(left_side_text, right_side_text, policy)?
             .into_iter()
             .map(|f| Hunk {
                 // `DiffUtil.getLineDiffType`
@@ -112,8 +116,8 @@ impl FileDiff {
             })
             .collect::<Vec<_>>();
         let sides = [
-            SideData::new(text1, &hunks, Side::Left),
-            SideData::new(text2, &hunks, Side::Right),
+            SideData::new(left_side_text, &hunks, Side::Left),
+            SideData::new(right_side_text, &hunks, Side::Right),
         ];
         let mapping = LineMapping::new(&hunks, [sides[0].line_count(), sides[1].line_count()]);
         Ok(Self {

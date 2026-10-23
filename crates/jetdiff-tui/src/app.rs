@@ -61,7 +61,7 @@ impl Repository {
         });
     }
 
-    /// The answer to the last read, if it has arrived. Answers to older reads are dropped.
+    /// The answer to the last read, if it has arrived. Answers to earlier reads are dropped.
     fn latest_read(&mut self) -> Option<ReadAnswer> {
         let mut latest = None;
         while let Ok(answer) = self.read_receiver.try_recv() {
@@ -110,7 +110,7 @@ impl App {
             match Watcher::new(repo.root()) {
                 Ok(started) => watcher = Some(started),
                 Err(e) => app.show_brief(Notification::warning(format!(
-                    "Can't watch for changes: {e}"
+                    "Can't watch for file changes: {e}"
                 ))),
             }
         }
@@ -304,8 +304,8 @@ impl App {
             AppCommand::Quit => self.quit = true,
             AppCommand::ToggleHelp => self.diff.toggle_help(),
             AppCommand::HideHelp => return Ok(self.diff.hide_help()),
-            AppCommand::ToggleView => {
-                let effect = self.diff.toggle_view();
+            AppCommand::ToggleDiffMode => {
+                let effect = self.diff.toggle_diff_mode();
                 self.effect(effect)?;
             }
             AppCommand::ZoomIn | AppCommand::ZoomOut | AppCommand::ResetZoom => {}

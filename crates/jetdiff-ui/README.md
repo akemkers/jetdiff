@@ -31,9 +31,9 @@ Application::new().with_assets(Assets).run(|cx| {
 });
 ```
 
-`Settings` is a GPUI global that all the views read. `font_size` is where zoom starts, `fold_unchanged` folds unchanged parts in new files, and `unified` is the diff mode at startup.
+`Settings` is a GPUI global that all the views read. `font_size` is where zoom starts, `fold_unchanged` closes the folds in each file that is loaded, and `unified` is the diff mode at startup.
 
-The keys go through `KeyParser` in `jetdiff-viewmodel`. Actions like zoom and switching panels (`ZoomIn`, `ToggleView`, `FocusLeft`, `ToggleSidePanel` etc.) are exported, and whoever makes the window binds them to keys.
+The keys go through `KeyParser` in `jetdiff-viewmodel`. Actions like zoom and moving focus (`ZoomIn`, `ToggleDiffMode`, `FocusLeft`, `ToggleSidePanel` etc.) are exported, and whoever makes the window binds them to keys.
 
 ```mermaid
 graph TD
@@ -51,7 +51,7 @@ graph TD
     split --> side[SplitSide x2]
     split --> div[divider]
     fdv --> help[KeyHelp]
-    fdv --> slot[(NotificationSlot)]
+    fdv --> slot[(NotificationSlotView)]
 ```
 
 - `repo_view`: the tree and the commit list on the left, the diff on the right. Runs the read jobs from `jetdiff_app::RepoSource` in the background and applies the result
@@ -60,11 +60,11 @@ graph TD
   - `split`: two `SplitSide` with the divider between them
   - `split_side`: one side in Split: backgrounds, folds, text and line numbers
   - `divider`: draws the diff divider and the fold links
-  - `unified`: one code view with old and new line numbers
+  - `unified`: one code view with a line number column per side
   - `code_paint`: what both diff modes draw the same way
 - `help`: draws the keymap bar and the popup. The keys are in `jetdiff_app::help`
 - `file_tree`, `commit_list`: the lists in the side panel, over `Files` and `Commits` from `jetdiff-app`
-- `notification_slot`: the pinned notification, with a brief one over it for a while, above the keymap bar
+- `notification_slot_view`: the pinned notification, with a brief one over it for a while, above the keymap bar
 - `watcher`: polls `jetdiff_app::Watcher` on the GPUI executor
 - `theme`: Catppuccin Mocha and IntelliJ's Islands themes
 

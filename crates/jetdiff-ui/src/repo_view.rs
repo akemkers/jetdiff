@@ -1,4 +1,4 @@
-//! File tree and diff side by side, with the commit list under the tree. Loads the selected file, and reads
+//! File tree and diff next to each other, with the commit list under the tree. Loads the selected file, and reads
 //! the repo source again when a commit is selected, a hunk is rolled back or files change on disk.
 
 use gpui::{
@@ -11,7 +11,9 @@ use jetdiff_git::Repo;
 use jetdiff_viewmodel::metrics::FONT_SIZE;
 
 use crate::commit_list::{CommitList, SelectCommit};
-use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ToggleView, ZoomIn, ZoomOut, Zoomed};
+use crate::file_diff::{
+    FileDiffView, ResetZoom, Rollback, ToggleDiffMode, ZoomIn, ZoomOut, Zoomed,
+};
 use crate::file_header::file_header;
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp};
@@ -97,7 +99,7 @@ impl RepoView {
             match Watcher::new(repo.root(), cx, Self::files_changed) {
                 Ok(w) => watcher = Some(w),
                 Err(e) => {
-                    let brief = Notification::warning(format!("Can't watch for changes: {e}"));
+                    let brief = Notification::warning(format!("Can't watch for file changes: {e}"));
                     notification_slot.update(cx, |slot, cx| slot.show_brief(brief, cx));
                 }
             }
@@ -134,7 +136,7 @@ impl RepoView {
         }
     }
 
-    /// Updates the diff and the list at once, without waiting for the watcher.
+    /// Shows the file after the rollback and reads the repo source again, without waiting for the watcher.
     fn rollback(&mut self, e: &Rollback, cx: &mut Context<Self>) {
         match self.repo_source.rollback(&e.0) {
             None => {}
@@ -426,8 +428,9 @@ impl Render for RepoView {
             .on_action(cx.listener(|this, a: &HideHelp, w, cx| {
                 this.diff.update(cx, |d, cx| d.hide_help(a, w, cx))
             }))
-            .on_action(cx.listener(|this, a: &ToggleView, w, cx| {
-                this.diff.update(cx, |d, cx| d.toggle_view(a, w, cx))
+            .on_action(cx.listener(|this, action: &ToggleDiffMode, window, cx| {
+                this.diff
+                    .update(cx, |diff, cx| diff.toggle_diff_mode(action, window, cx))
             }))
             .when(self.side_panel_open, |d| {
                 d.child(self.side_panel(window, cx))

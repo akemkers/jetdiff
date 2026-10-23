@@ -25,7 +25,7 @@ use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
 use crate::text::TextStyle;
 
-actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom, ToggleView]);
+actions!(jetdiff, [ZoomIn, ZoomOut, ResetZoom, ToggleDiffMode]);
 
 const SIDES: [Side; 2] = [Side::Left, Side::Right];
 
@@ -144,7 +144,12 @@ impl FileDiffView {
 
     /// `v`: switches between Split and Unified for all files. The cursor stays on the same line and
     /// height.
-    pub(crate) fn toggle_view(&mut self, _: &ToggleView, _: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_diff_mode(
+        &mut self,
+        _: &ToggleDiffMode,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Added and deleted files are always shown Unified, so `v` does nothing there
         if !self.mode.diff().can_split() {
             return;
@@ -392,7 +397,7 @@ impl FileDiffView {
         state.folding.fold_at_line(side, line)
     }
 
-    /// `FoldingModelSupport.MyMouseListener`: hover applies to the fold block on both sides.
+    /// `FoldingModelSupport.MyMouseListener`: hover applies to the fold on both sides.
     fn on_mouse_move(&mut self, ev: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
         let id = self.fold_at(ev.position);
         if let DiffMode::Split(state) = &mut self.mode
@@ -570,7 +575,7 @@ impl Render for FileDiffView {
             .on_action(cx.listener(Self::reset_zoom))
             .on_action(cx.listener(Self::toggle_help))
             .on_action(cx.listener(Self::hide_help))
-            .on_action(cx.listener(Self::toggle_view))
+            .on_action(cx.listener(Self::toggle_diff_mode))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_move(cx.listener(Self::on_mouse_move))

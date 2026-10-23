@@ -1,4 +1,4 @@
-//! The Unified view: one code view where deleted rows sit above the added ones, with a line
+//! Unified: one code view where deleted rows sit above the added ones, with a line
 //! number for each side in the gutter. Drawing, and which row the mouse hits.
 
 use std::ops::{Range, RangeInclusive};

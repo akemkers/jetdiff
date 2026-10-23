@@ -77,13 +77,18 @@ pub fn fold_wave_path(
     path
 }
 
-/// `drawConnectorLine` from the Left fold (y1) to the Right one (y2). y is the top of the line, local
-/// to the divider.
-pub fn fold_link_path(width: f32, y1: f32, y2: f32, line_height: f32) -> Vec<PathSeg> {
+/// `drawConnectorLine` from the Left fold to the Right one. y is the top of the line, local to the
+/// divider. The end points are (x1, y1) and (x2, y2), as in IntelliJ.
+pub fn fold_link_path(
+    width: f32,
+    left_side_y: f32,
+    right_side_y: f32,
+    line_height: f32,
+) -> Vec<PathSeg> {
     let (x1, x2) = (0., width);
     let (s, h) = (STEP, HEIGHT);
     let align = vertical_offset(line_height) + h + AA_GAP;
-    let (y1, y2) = (y1 + align, y2 + align);
+    let (y1, y2) = (left_side_y + align, right_side_y + align);
     let p = |x, y| Point { x, y };
     let quad = |cx, cy, x, y| PathSeg::Quad {
         ctrl: p(cx, cy),

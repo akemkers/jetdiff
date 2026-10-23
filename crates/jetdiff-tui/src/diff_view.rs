@@ -131,7 +131,7 @@ impl DiffView {
         self.clamp_scroll_x();
     }
 
-    pub fn toggle_view(&mut self) -> Option<Effect> {
+    pub fn toggle_diff_mode(&mut self) -> Option<Effect> {
         if !self.state.diff.diff.can_split() {
             return None;
         }
