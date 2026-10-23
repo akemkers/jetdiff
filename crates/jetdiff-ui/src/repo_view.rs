@@ -16,7 +16,7 @@ use crate::file_header::file_header;
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
-use crate::notification_slot::NotificationSlot;
+use crate::notification_slot_view::NotificationSlotView;
 use crate::panel_size::{PanelHeight, PanelWidth};
 use crate::settings::Settings;
 use crate::text::FAMILY;
@@ -41,7 +41,7 @@ pub struct RepoView {
     selection: Entity<Selection>,
     files: Entity<FileTree>,
     diff: Entity<FileDiffView>,
-    notification_slot: Entity<NotificationSlot>,
+    notification_slot: Entity<NotificationSlotView>,
     /// Only for Local changes.
     commits: Option<Entity<CommitList>>,
     scale: f32,
@@ -63,7 +63,7 @@ impl RepoView {
         let selection = cx.new(|_| Selection(first));
         let files =
             cx.new(|cx| FileTree::new(repo_source.changed_files().clone(), selection.clone(), cx));
-        let notification_slot = cx.new(|_| NotificationSlot::default());
+        let notification_slot = cx.new(|_| NotificationSlotView::default());
         let diff = cx.new(|cx| {
             FileDiffView::new(
                 empty_diff(),

@@ -19,7 +19,7 @@ use jetdiff_viewmodel::{
 use crate::code_viewer::{self, Hit, Painter, Shared};
 use crate::help::{BAR_HEIGHT, HideHelp, KeyHelp, ToggleHelp};
 use crate::keystroke::to_key;
-use crate::notification_slot::NotificationSlot;
+use crate::notification_slot_view::NotificationSlotView;
 use crate::rollback_dialog::rollback_dialog;
 use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
@@ -64,7 +64,7 @@ pub struct FileDiffView {
     /// Left and Right path for `y`. Empty when there is no file.
     paths: [String; 2],
     /// Owned by whoever makes the diff, but drawn above the keymap bar here.
-    notification_slot: Entity<NotificationSlot>,
+    notification_slot: Entity<NotificationSlotView>,
     shared: Rc<Shared>,
     focus: FocusHandle,
 }
@@ -72,14 +72,14 @@ pub struct FileDiffView {
 impl FileDiffView {
     /// One file, with its own notification slot.
     pub fn standalone(diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) -> Self {
-        let notification_slot = cx.new(|_| NotificationSlot::default());
+        let notification_slot = cx.new(|_| NotificationSlotView::default());
         Self::new(diff, paths, notification_slot, cx)
     }
 
     pub(crate) fn new(
         diff: FileDiff,
         paths: [String; 2],
-        notification_slot: Entity<NotificationSlot>,
+        notification_slot: Entity<NotificationSlotView>,
         cx: &mut Context<Self>,
     ) -> Self {
         let unified = cx.global::<Settings>().unified;

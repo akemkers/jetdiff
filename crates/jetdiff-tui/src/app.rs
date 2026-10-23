@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
-    AppCommand, Applied, Commits, Files, Notification, ReadJob, RepoRead, RepoSource, Show, Shown,
-    Watcher, app_command, empty_diff,
+    AppCommand, Applied, Commits, Files, Notification, NotificationSlot, ReadJob, RepoRead,
+    RepoSource, Show, Shown, Watcher, app_command, empty_diff,
 };
 use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
@@ -22,7 +22,6 @@ use ratatui::layout::Rect;
 use crate::clipboard;
 use crate::diff_view::{DiffView, Effect, Overlay};
 use crate::input::to_key;
-use crate::notification_slot::NotificationSlot;
 use crate::panel::{Click, ListKey, Panel, Section, list_key};
 use crate::widgets;
 use crate::{Settings, Term};
@@ -98,19 +97,19 @@ impl App {
     }
 
     pub fn repo_source(repo: Repo, changed_files: Vec<ChangedFile>, settings: &Settings) -> Self {
-        let mut notification_slot = NotificationSlot::default();
+        let mut app = Self::file(empty_diff(), Default::default(), settings);
         let repo_source = RepoSource::new(repo, changed_files);
         let mut commits = None;
         let mut watcher = None;
         let repo = repo_source.repo();
         if repo.is_local_changes() {
             commits = Some(Commits::new(repo.commits().unwrap_or_else(|e| {
-                notification_slot.show_brief(Notification::warning(e));
+                app.show_brief(Notification::warning(e));
                 Vec::new()
             })));
             match Watcher::new(repo.root()) {
                 Ok(started) => watcher = Some(started),
-                Err(e) => notification_slot.show_brief(Notification::warning(format!(
+                Err(e) => app.show_brief(Notification::warning(format!(
                     "Can't watch for changes: {e}"
                 ))),
             }
@@ -119,20 +118,16 @@ impl App {
         let panel = Panel::new(files, commits, settings.icons);
         let selected = repo_source.first();
         let (read_sender, read_receiver) = channel();
-        let mut app = Self {
-            notification_slot,
-            repository: Some(Repository {
-                repo_source,
-                panel,
-                selected,
-                panel_open: settings.side_panel_open,
-                watcher,
-                read_sender,
-                read_receiver,
-                generation: 0,
-            }),
-            ..Self::file(empty_diff(), Default::default(), settings)
-        };
+        app.repository = Some(Repository {
+            repo_source,
+            panel,
+            selected,
+            panel_open: settings.side_panel_open,
+            watcher,
+            read_sender,
+            read_receiver,
+            generation: 0,
+        });
         app.select(selected);
         app
     }
@@ -178,7 +173,7 @@ impl App {
                 if let Some(commits) = &mut repo.panel.commits {
                     commits.set_selected(selected_commit);
                 }
-                self.notification_slot.show_brief(brief);
+                self.show_brief(brief);
             }
             Applied::Done {
                 commits,
@@ -194,10 +189,14 @@ impl App {
                 }
                 self.select(file);
                 if let Some(brief) = brief {
-                    self.notification_slot.show_brief(brief);
+                    self.show_brief(brief);
                 }
             }
         }
+    }
+
+    fn show_brief(&mut self, brief: Notification) {
+        self.notification_slot.show_brief(brief, Instant::now());
     }
 
     fn select(&mut self, file: Option<usize>) {
@@ -241,13 +240,10 @@ impl App {
     fn effect(&mut self, effect: Option<Effect>) -> io::Result<()> {
         match effect {
             None => {}
-            Some(Effect::ShowBrief(text)) => {
-                self.notification_slot.show_brief(Notification::info(text))
-            }
+            Some(Effect::ShowBrief(text)) => self.show_brief(Notification::info(text)),
             Some(Effect::Copy(location)) => {
                 clipboard::copy(&location, &mut io::stdout())?;
-                self.notification_slot
-                    .show_brief(Notification::info(format!("Copied {location}")));
+                self.show_brief(Notification::info(format!("Copied {location}")));
             }
             Some(Effect::Rollback(request)) => {
                 let Some(repo) = &mut self.repository else {
@@ -260,9 +256,7 @@ impl App {
                         repo.read(job);
                         self.show(show);
                     }
-                    Some(Err(text)) => self
-                        .notification_slot
-                        .show_brief(Notification::warning(text)),
+                    Some(Err(text)) => self.show_brief(Notification::warning(text)),
                 }
             }
         }

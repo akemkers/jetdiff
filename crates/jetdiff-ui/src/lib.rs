@@ -10,7 +10,7 @@ mod help;
 mod icons;
 mod keystroke;
 mod list;
-mod notification_slot;
+mod notification_slot_view;
 mod panel_size;
 mod repo_view;
 mod rollback_dialog;

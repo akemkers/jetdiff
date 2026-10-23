@@ -7,6 +7,7 @@ pub mod files;
 pub mod help;
 pub mod keys;
 pub mod notification;
+pub mod notification_slot;
 pub mod repo_source;
 pub mod watcher;
 
@@ -16,6 +17,7 @@ pub use content::{build_diff, empty_diff};
 pub use files::{Files, count_label, file_name};
 pub use keys::{AppCommand, BINDINGS, app_command};
 pub use notification::{Notification, NotificationLevel};
+pub use notification_slot::NotificationSlot;
 pub use repo_source::{Applied, ReadJob, RepoRead, RepoSource, Show, Shown};
 pub use watcher::Watcher;
 

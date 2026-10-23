@@ -9,7 +9,6 @@ mod diff_view;
 mod geometry;
 mod icons;
 mod input;
-mod notification_slot;
 mod panel;
 mod text;
 mod widgets;
