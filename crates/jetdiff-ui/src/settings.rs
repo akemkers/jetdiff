@@ -9,7 +9,7 @@ pub struct Settings {
     /// Where zoom starts, and where `ResetZoom` goes back to.
     pub font_size: f32,
     /// New files are shown with unchanged parts folded.
-    pub collapse_unchanged: bool,
+    pub fold_unchanged: bool,
     /// The diff mode at startup. `v` switches.
     pub unified: bool,
     pub side_panel_open: bool,

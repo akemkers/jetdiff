@@ -4,7 +4,7 @@
 use std::ops::{Range, RangeInclusive};
 
 use gpui::{App, Bounds, Pixels, ShapedLine, SharedString, Window, fill, point, px};
-use jetdiff_viewmodel::separator::{stroke_width, wave};
+use jetdiff_viewmodel::fold_paths::{fold_wave_path, stroke_width};
 use jetdiff_viewmodel::{FileDiff, Folding, LineLayout, SideGeometry};
 
 use super::code_paint::{
@@ -47,11 +47,11 @@ pub struct CursorRow {
 
 /// What is visible in the viewport this frame.
 struct Visible {
-    /// Logical lines, also those hidden in a collapsed fold.
+    /// Logical lines, also those hidden in a closed fold.
     logical: RangeInclusive<usize>,
-    /// Visual lines, where a collapsed fold is one line.
+    /// Visual lines, where a closed fold is one line.
     visual: RangeInclusive<usize>,
-    /// The lines that have text and a number. Collapsed folds have neither
+    /// The lines that have text and a number. Closed folds have neither
     /// (`hideLineNumberPredicate`).
     lines: Vec<usize>,
 }
@@ -160,7 +160,7 @@ impl SplitSide<'_> {
         );
     }
 
-    /// `DiffLineSeparatorRenderer`: a wave over the gutter and text, with the phase from the divider.
+    /// `DiffLineSeparatorRenderer`: a fold wave over the gutter and text, with the phase from the divider.
     fn paint_folds(&self, visible: &Visible, window: &mut Window) {
         let geom = self.geom;
         let line_height = self.style.line_height();
@@ -179,10 +179,10 @@ impl SplitSide<'_> {
                 break;
             }
             let y = self.screen_y(layout.visual_line_to_y(fold.visual));
-            let path = wave(geom.bounds(), edge, geom.mirrored, y, line_height);
+            let path = fold_wave_path(geom.bounds(), edge, geom.mirrored, y, line_height);
             let width = stroke_width(hovered == Some(id));
             let to_pixels = |p: jetdiff_viewmodel::Point| point(px(p.x), px(p.y));
-            stroke_path(window, &path, to_pixels, width, self.theme.separator_wave);
+            stroke_path(window, &path, to_pixels, width, self.theme.fold_wave);
         }
     }
 

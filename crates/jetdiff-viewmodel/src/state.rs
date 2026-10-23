@@ -93,7 +93,7 @@ impl DiffState {
         self.diff.line(side, line)
     }
 
-    /// A valid line outside collapsed folds.
+    /// A valid line outside closed folds.
     fn clamp_line(&self, side: Side, line: usize) -> usize {
         let line = line.min(self.diff.line_count(side) - 1);
         self.folding.cursor_after(side, line)
@@ -147,7 +147,7 @@ impl DiffState {
         Outcome::instant()
     }
 
-    /// The end of the line, one character in from the right edge. A collapsed fold has no text.
+    /// The end of the line, one character in from the right edge. A closed fold has no text.
     fn scroll_to_end(&mut self, hx: Horizontal) -> Outcome {
         let c = self.cursor;
         let cells = if self.folding.fold_at_line(c.side, c.line).is_some() {
@@ -190,10 +190,10 @@ impl DiffState {
             NextHunk => self.go_to_hunk(true, vp),
             PreviousHunk => self.go_to_hunk(false, vp),
             FocusSide(side) => self.focus_side(side, vp),
-            FoldOpen => self.change_folding(vp, |s, f| f.expand_at(s.0, s.1)),
+            FoldOpen => self.change_folding(vp, |s, f| f.open_at(s.0, s.1)),
             ToggleFolds => self.change_folding(vp, |_, f| {
                 let any_closed = f.visible(Side::Left).next().is_some();
-                f.expand_all(any_closed)
+                f.set_all_open(any_closed)
             }),
             // Owned by the UI. After zoom, `rescale` is called.
             CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
@@ -268,7 +268,7 @@ impl DiffState {
         Cursor::new(self.cursor.side.other(), self.mirrored_line())
     }
 
-    /// The hunk the cursor is in. `None` on a collapsed fold.
+    /// The hunk the cursor is in. `None` on a closed fold.
     pub fn cursor_hunk(&self) -> Option<usize> {
         let c = self.cursor;
         if self.folding.fold_at_line(c.side, c.line).is_some() {
@@ -602,7 +602,7 @@ mod tests {
     }
 
     #[test]
-    fn j_skips_collapsed_fold() {
+    fn j_skips_closed_fold() {
         let mut s = three_hunks(true);
         // The first fold is 0..6, so line 6
         assert_eq!(s.cursor.line, 0);
@@ -710,7 +710,7 @@ mod tests {
 
     #[test]
     fn rollback_keeps_cursor_and_scroll() {
-        // Close enough that the gap 37..44 is not folded after 40 is rolled back
+        // Close enough that the run 37..44 is not folded after 40 is rolled back
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [36, 40, 44] {

@@ -3,7 +3,7 @@
 A GPU-accelerated diff viewer in Rust + GPUI, modeled on JetBrains. The details are in `research/`:
 
 - `01-diff-algorithm.md` - pipeline, heuristics, word diff
-- `02-rendering.md` - diff divider, colors, gutter, folding waves
+- `02-rendering.md` - diff divider, colors, gutter, fold waves
 - `03-scroll-folding-structure.md` - sync scroll, folding, commit view, tree
 - `04-unified-diff.md` - the Unified viewer: rows, line numbers, colors and switching from Split
 
@@ -95,7 +95,7 @@ The split between `viewmodel`/`app` and `ui` is the most important one. All logi
 
 1. **Diff core.** Port LCS and by_line with golden tests. Then by_word. A small tool that runs IntelliJ's algorithm on the same input and writes JSON gives the expected results.
 2. **One file, JetBrains quality.** Row model, sync scroll, diff divider with the right curve (0.3/0.7), colors, inline highlights, gutter, hunk minimap. This is the milestone everything depends on.
-3. **Folding and navigation.** Collapsed areas with a wave, next/previous hunk with animation.
+3. **Folding and navigation.** Closed folds with a fold wave, next/previous hunk with animation.
 4. **Syntax highlighting.**
 5. **Commit view.** A tree with folders, icons and file status colors, and one file at a time. A commit against its parent and Local changes against HEAD.
 6. **Git difftool and folder against folder.**

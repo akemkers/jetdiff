@@ -1,5 +1,5 @@
 //! Vertical geometry for one side. Everything that goes from line to y goes here, so scroll, divider
-//! and stripe see folding only through visual lines. A collapsed fold is one visual
+//! and stripe see folding only through visual lines. A closed fold is one visual
 //! line of normal height, like `FoldRegion` with a placeholder in `EditorImpl`.
 
 use std::ops::Range;
@@ -13,7 +13,7 @@ pub struct Viewport {
     pub line_height: f32,
 }
 
-/// Collapsed fold: logical lines `lines` are shown as the single visual line `visual`.
+/// Closed fold: logical lines `lines` are shown as the single visual line `visual`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VisualFold {
     pub lines: Range<usize>,
@@ -68,7 +68,7 @@ impl<'a> LineLayout<'a> {
         self.folds
     }
 
-    /// The collapsed fold shown on the visual line.
+    /// The closed fold shown on the visual line.
     pub fn fold_at_visual(&self, visual: usize) -> Option<&'a VisualFold> {
         let i = self.folds.partition_point(|f| f.visual < visual);
         self.folds.get(i).filter(|f| f.visual == visual)
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(LineLayout::new(3, 20.).max_scroll(600.), 0.);
     }
 
-    /// 20 lines, 3..7 and 10..15 collapsed.
+    /// 20 lines, 3..7 and 10..15 closed.
     fn folded() -> Vec<VisualFold> {
         visual_folds([3..7, 10..15])
     }

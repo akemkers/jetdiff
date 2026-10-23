@@ -20,7 +20,7 @@ Application::new().with_assets(Assets).run(|cx| {
     cx.set_global(Settings {
         theme: UiTheme::mocha(),
         font_size: 14.,
-        collapse_unchanged: true,
+        fold_unchanged: true,
         unified: false,
         side_panel_open: false,
     });
@@ -31,7 +31,7 @@ Application::new().with_assets(Assets).run(|cx| {
 });
 ```
 
-`Settings` is a GPUI global that all the views read. `font_size` is where zoom starts, `collapse_unchanged` folds unchanged parts in new files, and `unified` is the diff mode at startup.
+`Settings` is a GPUI global that all the views read. `font_size` is where zoom starts, `fold_unchanged` folds unchanged parts in new files, and `unified` is the diff mode at startup.
 
 The keys go through `KeyParser` in `jetdiff-viewmodel`. Actions like zoom and switching panels (`ZoomIn`, `ToggleView`, `FocusLeft`, `ToggleSidePanel` etc.) are exported, and whoever makes the window binds them to keys.
 

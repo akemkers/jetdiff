@@ -8,7 +8,7 @@ use std::rc::Rc;
 use jetdiff_viewmodel::nav::{next_hunk, previous_hunk, target_for_hunk};
 use jetdiff_viewmodel::{
     Command, ComparisonPolicy, DiffState, FileDiff, Folding, Horizontal, HunkKind, InlineHighlight,
-    PositionKeeper, ScrollState, Side, Viewport, divider_bands, divider_separators, stripe_markers,
+    PositionKeeper, ScrollState, Side, Viewport, divider_bands, fold_links, stripe_markers,
 };
 
 const L: Side = Side::Left;
@@ -277,7 +277,7 @@ fn opening_a_fold_shows_the_whole_run() {
             let side = if fold.lines(L).is_some() { L } else { R };
             let lines = fold.lines(side).unwrap();
             assert_eq!(f.fold_at_line(side, lines.start), Some(id), "{name}");
-            assert!(f.set_expanded(id, true), "{name}");
+            assert!(f.set_open(id, true), "{name}");
             assert!(
                 lines.clone().all(|line| f.cursor_after(side, line) == line),
                 "{name} {lines:?}: still folded"
@@ -294,7 +294,7 @@ fn kotlin_folds() {
     let f = Folding::new(&d);
     let folds: Vec<_> = f.visible(L).map(|(_, v)| v.lines.clone()).collect();
     assert_eq!(hunks[5..7], [[45..46, 42..43], [47..47, 44..45]]);
-    // Only the gap 47..57 is long enough, 4 lines of context on each side
+    // Only the run 47..57 is long enough, 4 lines of context on each side
     assert_eq!(folds, vec![51..53]);
     assert_eq!(f.layout(L, 18.).visual_line_count(), 58);
 }
@@ -309,8 +309,8 @@ fn scroll_and_navigation_with_folds() {
             while y <= layouts[0].max_scroll(VP.height) + 50. {
                 state.scroll_to(&d, &f, L, y, VP);
                 assert!(state.y[1] >= 0. && state.y[1] <= layouts[1].max_scroll(VP.height));
-                for sep in divider_separators(&f, state.y, VP, 24.) {
-                    assert!(!sep.path.is_empty(), "{name}");
+                for link in fold_links(&f, state.y, VP, 24.) {
+                    assert!(!link.path.is_empty(), "{name}");
                 }
                 y += 13.;
             }
@@ -355,17 +355,17 @@ fn fold_operations_stay_within_bounds() {
             let keeper = PositionKeeper::save(&state, &f, cursor_lines, VP);
             match step % 4 {
                 0 => {
-                    f.expand_at(side, line);
+                    f.open_at(side, line);
                 }
                 1 => {
-                    f.expand_all(false);
+                    f.set_all_open(false);
                 }
                 2 => {
-                    f.expand_all(true);
+                    f.set_all_open(true);
                 }
                 _ => {
                     if let Some(id) = f.fold_at_line(side, line) {
-                        f.set_expanded(id, true);
+                        f.set_open(id, true);
                     }
                 }
             }
@@ -387,7 +387,7 @@ fn fold_operations_stay_within_bounds() {
                     "{name}"
                 );
             }
-            divider_separators(&f, state.y, VP, 24.);
+            fold_links(&f, state.y, VP, 24.);
             state.scroll_by(&d, &f, side, 97., VP);
         }
     }

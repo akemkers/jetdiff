@@ -28,7 +28,9 @@ pub struct Config {
     pub theme: Theme,
     #[serde(deserialize_with = "font_size")]
     pub font_size: f32,
-    pub collapse_unchanged: bool,
+    // The old key, so existing config files still load
+    #[serde(rename = "collapse_unchanged")]
+    pub fold_unchanged: bool,
     #[serde(rename = "view", deserialize_with = "view")]
     pub unified: bool,
     pub side_panel: SidePanel,
@@ -140,7 +142,7 @@ mod tests {
         let config = parse(TEMPLATE).unwrap();
         assert_eq!(config.theme, Theme::mocha());
         assert_eq!(config.font_size, 14.);
-        assert!(config.collapse_unchanged);
+        assert!(config.fold_unchanged);
         assert!(!config.unified);
         assert!(!config.side_panel.open);
         assert!(config.terminal.icons);
@@ -158,7 +160,7 @@ mod tests {
         let config = parse(OK).unwrap();
         assert_eq!(config.theme, Theme::dark());
         assert_eq!(config.font_size, 16.);
-        assert!(!config.collapse_unchanged);
+        assert!(!config.fold_unchanged);
         assert!(config.unified);
         assert!(config.side_panel.open);
         assert!(!config.terminal.icons);
@@ -194,7 +196,7 @@ mod tests {
         let config = parse("theme = \"jetbrains-dark\"\n[side_panel]\nopen = true\n").unwrap();
         assert_eq!(config.theme, Theme::dark());
         assert_eq!(config.font_size, 14.);
-        assert!(config.collapse_unchanged);
+        assert!(config.fold_unchanged);
         assert!(config.side_panel.open);
         assert_eq!(parse("").unwrap(), parse(TEMPLATE).unwrap());
     }

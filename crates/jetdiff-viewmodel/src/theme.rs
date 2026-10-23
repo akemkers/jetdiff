@@ -78,8 +78,8 @@ pub struct Theme {
     /// The fill behind the line numbers on the cursor's line. Yellow, since no diff color is yellow.
     pub cursor_row_gutter: Rgba,
     pub indent_guide: Rgba,
-    /// `DIFF_SEPARATOR_WAVE`, the stroke over folded areas.
-    pub separator_wave: Rgba,
+    /// `DIFF_SEPARATOR_WAVE`, for the fold wave and the fold link.
+    pub fold_wave: Rgba,
     /// Gray thumb with alpha, like the macOS scrollbar in IntelliJ.
     pub scrollbar_thumb: Rgba,
     /// `Tree.selectionBackground`.
@@ -117,7 +117,7 @@ impl Theme {
             cursor_row_background: [0xFF, 0xFF, 0xFF, 0x12],
             cursor_row_gutter: rgb(0x8A6D2F),
             indent_guide: rgb(0x323438),
-            separator_wave: rgb(0x555555),
+            fold_wave: rgb(0x555555),
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x2E436E),
             tree_selection_inactive: rgb(0x43454A),
@@ -175,7 +175,7 @@ impl Theme {
             cursor_row_background: [0x2E, 0x6B, 0xE6, 0x1A],
             cursor_row_gutter: rgb(0xF5D98B),
             indent_guide: rgb(0xEBECF0),
-            separator_wave: rgb(0xD0D0D0),
+            fold_wave: rgb(0xD0D0D0),
             scrollbar_thumb: [0x00, 0x00, 0x00, 0x33],
             tree_selection: rgb(0xD5E1FF),
             tree_selection_inactive: rgb(0xDFE1E5),
@@ -252,7 +252,7 @@ impl Theme {
             cursor_row_gutter: rgb(0x8C806E),
             indent_guide: rgb(SURFACE0),
             // Inherited from Darcula
-            separator_wave: rgb(0x555555),
+            fold_wave: rgb(0x555555),
             // Like Islands Dark
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x353748),

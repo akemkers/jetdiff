@@ -489,7 +489,7 @@ fn diff_mode(diff: FileDiff, unified: bool, cx: &App) -> DiffMode {
 
 fn folding(diff: &FileDiff, cx: &App) -> Folding {
     let mut folding = Folding::new(diff);
-    folding.expand_all(!cx.global::<Settings>().collapse_unchanged);
+    folding.set_all_open(!cx.global::<Settings>().fold_unchanged);
     folding
 }
 

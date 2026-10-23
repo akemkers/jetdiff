@@ -276,7 +276,7 @@ impl PositionKeeper {
         }
     }
 
-    /// `cursor_lines` are after the change, moved out of collapsed folds. Left is restored
+    /// `cursor_lines` are after the change, moved out of closed folds. Left is restored
     /// first without sync, since Right is still in the batch. If Right moves, it syncs
     /// Left as in `runBatchOperation`.
     pub fn restore(
@@ -455,7 +455,7 @@ mod tests {
         sync_vertical_scroll(d.mapping(), master, &ml, &sl, master_y, slave_y, VP.height)
     }
 
-    /// Hunks on lines 10, 40 and 90 of 100. Collapsed: folds 0..6, 15..36, 45..86 and
+    /// Hunks on lines 10, 40 and 90 of 100. Closed folds 0..6, 15..36, 45..86 and
     /// 95..101 on both sides.
     fn three_hunks() -> FileDiff {
         let a = lines("a", 100);
@@ -471,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn expand_keeps_cursor_in_place() {
+    fn opening_keeps_cursor_in_place() {
         let d = three_hunks();
         let mut f = folded(&d);
         let mut s = ScrollState::default();
@@ -484,7 +484,7 @@ mod tests {
         let before = screen(&f, &s);
         let keeper = PositionKeeper::save(&s, &f, cursor_lines, VP);
         let id = f.fold_at_line(L, 45).unwrap();
-        f.set_expanded(id, true);
+        f.set_open(id, true);
         keeper.restore(&mut s, &d, &f, cursor_lines, VP);
         // 45..86 opened completely, so 40 more visual lines above the cursor
         assert_eq!(s.y, [1200., 1200.]);
@@ -502,7 +502,7 @@ mod tests {
         let keeper = PositionKeeper::save(&s, &f, cursor_lines, VP);
         // 0..6 opens, so five more visual lines
         let id = f.fold_at_line(R, 0).unwrap();
-        f.set_expanded(id, true);
+        f.set_open(id, true);
         keeper.restore(&mut s, &d, &f, cursor_lines, VP);
         assert_eq!(s.y, [320., 320.]);
         assert_eq!(f.layout(L, 20.).y_to_logical_line(s.y[0]), 36);
@@ -512,21 +512,21 @@ mod tests {
         s.scroll_to(&d, &f, L, 500., VP);
         assert_eq!(f.layout(L, 20.).y_to_logical_line(500.), 45);
         let keeper = PositionKeeper::save(&s, &f, cursor_lines, VP);
-        f.expand_at(L, 45);
+        f.open_at(L, 45);
         keeper.restore(&mut s, &d, &f, cursor_lines, VP);
         assert_eq!(s.y, [500., 500.]);
     }
 
     #[test]
-    fn collapse_moves_cursor_to_the_fold() {
+    fn closing_moves_cursor_to_the_fold() {
         let d = three_hunks();
         let mut f = folded(&d);
-        f.expand_all(true);
+        f.set_all_open(true);
         let mut s = ScrollState::default();
         s.scroll_to(&d, &f, L, 1000., VP);
         let cursor_lines = [60, 60];
         let keeper = PositionKeeper::save(&s, &f, cursor_lines, VP);
-        f.expand_all(false);
+        f.set_all_open(false);
         let cursor_lines = cursor_lines.map(|line| f.cursor_after(L, line));
         assert_eq!(cursor_lines, [45, 45]);
         keeper.restore(&mut s, &d, &f, cursor_lines, VP);
@@ -536,7 +536,7 @@ mod tests {
 
     #[test]
     fn sync_with_different_folds() {
-        // Right has 30 extra lines at 40, so the gaps and folds differ
+        // Right has 30 extra lines at 40, so the runs and folds differ
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         b[10] = "x".into();

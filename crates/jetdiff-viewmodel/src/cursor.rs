@@ -6,7 +6,7 @@ use jetdiff_core::side::Side;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cursor {
     pub side: Side,
-    /// Logical line. On a collapsed fold it is the first line of the fold.
+    /// Logical line. On a closed fold it is the first line of the fold.
     pub line: usize,
 }
 

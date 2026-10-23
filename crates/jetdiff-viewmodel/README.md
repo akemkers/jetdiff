@@ -64,7 +64,7 @@ graph TD
 - `scroll`: the master side scrolls, and the other is computed in the same frame
 - `folding`: unchanged lines are folded, shared by both sides
 - `layout`, `geometry`: vertical and horizontal placement per side, and Unified with two number columns
-- `divider`, `separator`, `stripe`: the diff divider, the wave on folds and the hunk minimap
+- `divider`, `fold_paths`, `stripe`: the diff divider, the fold wave and fold link, and the hunk minimap
 - `keys`, `command`: the keymap and the commands it gives
 - `theme`, `metrics`: colors and line height like IntelliJ
 

@@ -2,10 +2,10 @@
 //! `DividerPolygon.paint`) and `DiffDrawUtil.drawCurveTrapezium`. Coordinates are local to
 //! the divider: x from 0 to the width, y from the top of the sides.
 
+use crate::fold_paths::{PathSeg, fold_link_path};
 use crate::folding::{FoldId, Folding};
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{FileDiff, HunkKind};
-use crate::separator::{PathSeg, connector};
 
 /// `diff.divider.width` in the registry.
 pub const DIVIDER_WIDTH: f32 = 24.;
@@ -102,9 +102,9 @@ pub fn divider_bands(
     bands
 }
 
-/// Fold link between two collapsed folds, stroked with `separator::stroke_width(hovered)`.
+/// Fold link between two closed folds, stroked with `fold_paths::stroke_width(hovered)`.
 #[derive(Debug, Clone, PartialEq)]
-pub struct DividerSeparator {
+pub struct FoldLink {
     pub id: FoldId,
     pub hovered: bool,
     pub path: Vec<PathSeg>,
@@ -112,29 +112,29 @@ pub struct DividerSeparator {
 
 /// `FoldingModelSupport.createVisibleSeparators`: fold links for folds that are painted on at least
 /// one side.
-pub fn divider_separators(
+pub fn fold_links(
     folding: &Folding,
     scroll_y: [f32; 2],
     viewport: Viewport,
     width: f32,
-) -> Vec<DividerSeparator> {
+) -> Vec<FoldLink> {
     let lh = viewport.line_height;
     let layouts = folding.layouts(lh);
     let painted = [0, 1].map(|i| layouts[i].painted_lines(scroll_y[i], viewport.height));
     let mut result = Vec::new();
-    for c in folding.connectors() {
-        let [l1, l2] = c.lines;
+    for fold in folding.closed_folds() {
+        let [l1, l2] = fold.lines;
         if painted[0].0 > l1 + 1 && painted[1].0 > l2 + 1 {
             continue;
         }
         if painted[0].1 < l1 && painted[1].1 < l2 {
             break;
         }
-        let y = [0, 1].map(|i| layouts[i].line_top(c.lines[i]) - scroll_y[i]);
-        result.push(DividerSeparator {
-            id: c.id,
-            hovered: c.hovered,
-            path: connector(width, y[0], y[1], lh),
+        let y = [0, 1].map(|i| layouts[i].line_top(fold.lines[i]) - scroll_y[i]);
+        result.push(FoldLink {
+            id: fold.id,
+            hovered: fold.hovered,
+            path: fold_link_path(width, y[0], y[1], lh),
         });
     }
     result
@@ -284,21 +284,21 @@ mod tests {
         }
         let d = diff(&a, &(b.join("\n") + "\n"));
         let f = Folding::new(&d);
-        let seps = divider_separators(&f, [0., 0.], VP, 24.);
+        let links = fold_links(&f, [0., 0.], VP, 24.);
         // Viewport of 10 visual lines: fold 0 and 1 (visual line 0 and 10)
-        assert_eq!(seps.len(), 2);
-        assert_eq!(seps[0].path[0], PathSeg::Move(Point { x: -0.5, y: 10. }));
-        assert_eq!(seps[1].path[0], PathSeg::Move(Point { x: -0.5, y: 210. }));
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0].path[0], PathSeg::Move(Point { x: -0.5, y: 10. }));
+        assert_eq!(links[1].path[0], PathSeg::Move(Point { x: -0.5, y: 210. }));
         // A partly visible fold is included, a fully hidden one is not
         let ids = |y: f32| -> Vec<usize> {
-            let seps = divider_separators(&f, [y, y], VP, 24.);
-            seps.iter().map(|s| s.id).collect()
+            let links = fold_links(&f, [y, y], VP, 24.);
+            links.iter().map(|link| link.id).collect()
         };
         assert_eq!(ids(10.), [0, 1]);
         assert_eq!(ids(20.), [1]);
         assert_eq!(ids(210.), [1, 2]);
         assert_eq!(ids(230.), [2]);
-        assert!(divider_separators(&Folding::none(&d), [0., 0.], VP, 24.).is_empty());
+        assert!(fold_links(&Folding::none(&d), [0., 0.], VP, 24.).is_empty());
     }
 
     #[test]

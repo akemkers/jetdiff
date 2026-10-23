@@ -25,7 +25,7 @@ pub fn run(content: Content, title: String, config: Config) {
             cx.set_global(Settings {
                 theme: UiTheme::new(&config.theme),
                 font_size: config.font_size,
-                collapse_unchanged: config.collapse_unchanged,
+                fold_unchanged: config.fold_unchanged,
                 unified: config.unified,
                 side_panel_open: config.side_panel.open,
             });
