@@ -11,10 +11,10 @@ pub struct RollbackRequest {
     pub lines: [Range<usize>; 2],
 }
 
-/// `block` is the hunk the cursor is in.
+/// `hunk` is the hunk the cursor is in.
 pub fn rollback_request(
     diff: &FileDiff,
-    block: Option<usize>,
+    hunk: Option<usize>,
     can_rollback: bool,
 ) -> Result<RollbackRequest, &'static str> {
     if !can_rollback {
@@ -23,10 +23,10 @@ pub fn rollback_request(
     if diff.single_side().is_some() {
         return Err("The whole file is added or deleted");
     }
-    let block = block.ok_or("No hunk on this line")?;
+    let hunk = hunk.ok_or("No hunk on this line")?;
     Ok(RollbackRequest {
         before: diff.text(Side::Right).to_owned(),
-        lines: diff.blocks()[block].lines.clone(),
+        lines: diff.hunks()[hunk].lines.clone(),
     })
 }
 

@@ -1,12 +1,12 @@
 //! The building blocks Split, Unified and the scrollbar draw with. Only this file knows
 //! the state, the theme and the buffer.
 
-use jetdiff_viewmodel::{DiffType, FileDiff, Row, Side, StripeMarker, Theme, UnifiedState};
+use jetdiff_viewmodel::{FileDiff, HunkKind, Row, Side, StripeMarker, Theme, UnifiedState};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 
-use super::change::Change;
+use super::hunk_color::HunkColor;
 use super::row_at;
 use crate::color::{color, faded, over};
 use crate::geometry::{self, Columns};
@@ -81,7 +81,7 @@ impl<'a> Painter<'a> {
         fill(area, color(self.theme.editor_bg), self.buf);
     }
 
-    /// The background of the hunk and the text with syntax and inline highlights. `word_type` gives all
+    /// The background of the hunk and the text with syntax and inline highlights. `inline_highlight_kind` gives all
     /// the words the same color; otherwise each word gets its own.
     pub(super) fn line(
         &mut self,
@@ -89,12 +89,12 @@ impl<'a> Painter<'a> {
         y: u16,
         side: Side,
         line: usize,
-        change: Option<Change>,
-        word_type: Option<DiffType>,
+        hunk_color: Option<HunkColor>,
+        inline_highlight_kind: Option<HunkKind>,
     ) {
-        if let Some(change) = change {
-            let colors = self.theme.diff(change.diff_type);
-            let text = if change.ignored {
+        if let Some(hunk_color) = hunk_color {
+            let colors = self.theme.diff(hunk_color.kind);
+            let text = if hunk_color.compared_by_word {
                 colors.ignored
             } else {
                 colors.background
@@ -107,23 +107,23 @@ impl<'a> Painter<'a> {
             text: diff.line(side, line),
             syntax: diff.line_syntax(side, line),
             inline: diff.line_highlight(side, line).inline,
-            inline_type: word_type,
+            inline_highlight_kind,
         };
         let scroll_x = self.state.scroll.x.round() as usize;
         paint_line(&content, scroll_x, columns.text(y), self.theme, self.buf);
     }
 
-    /// Right-aligned to `end`. The default color disappears against the diff background, so changed and
+    /// Right-aligned to `end`. The default color disappears against the diff background, so hunk and
     /// cursor rows get a stronger one.
     pub(super) fn line_number(
         &mut self,
         end: u16,
         y: u16,
         line: usize,
-        change: Option<Change>,
+        hunk_color: Option<HunkColor>,
         marked: bool,
     ) {
-        let number_color = if change.is_some() || marked {
+        let number_color = if hunk_color.is_some() || marked {
             self.theme.line_number_caret_row
         } else {
             self.theme.line_number
@@ -171,7 +171,7 @@ impl<'a> Painter<'a> {
         x: u16,
         y: u16,
         in_thumb: bool,
-        marker: Option<DiffType>,
+        marker: Option<HunkKind>,
     ) {
         let bg = color(self.theme.editor_bg);
         let cell = &mut self.buf[(x, y)];
@@ -181,8 +181,8 @@ impl<'a> Painter<'a> {
             bg
         });
         match marker {
-            Some(diff_type) => {
-                let marker_color = brighter(color(self.theme.diff(diff_type).background));
+            Some(kind) => {
+                let marker_color = brighter(color(self.theme.diff(kind).background));
                 cell.set_char('▐').set_fg(marker_color);
             }
             None => {

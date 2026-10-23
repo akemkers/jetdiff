@@ -105,10 +105,10 @@ impl DiffMode {
     }
 
     /// The hunk the cursor is in, for rollback.
-    pub fn cursor_block(&self) -> Option<usize> {
+    pub fn cursor_hunk(&self) -> Option<usize> {
         match self {
-            Self::Split(state) => state.cursor_block(),
-            Self::Unified(state) => state.cursor_block(),
+            Self::Split(state) => state.cursor_hunk(),
+            Self::Unified(state) => state.cursor_hunk(),
         }
     }
 
@@ -160,7 +160,7 @@ mod tests {
         mode.toggle(folding(), VIEWPORT);
         assert!(mode.is_unified());
         assert_eq!(mode.location(), before);
-        assert_eq!(mode.cursor_block(), Some(0));
+        assert_eq!(mode.cursor_hunk(), Some(0));
 
         mode.toggle(folding(), VIEWPORT);
         assert!(!mode.is_unified());

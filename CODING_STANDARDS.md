@@ -15,7 +15,7 @@ code_viewer/
   split.rs            two sides with the diff divider between
   unified.rs          one line with two line numbers
   scrollbar.rs        thumb and hunk minimap marks
-  hunk.rs             the hunk a row belongs to
+  hunk_color.rs       the hunk a row belongs to and its color
 ```
 
 Group by domain. Don't make files like `utils.rs` or `types.rs`.

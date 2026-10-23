@@ -5,9 +5,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use jetdiff_viewmodel::nav::{next_block, prev_block, target_for_block};
+use jetdiff_viewmodel::nav::{next_hunk, previous_hunk, target_for_hunk};
 use jetdiff_viewmodel::{
-    Command, ComparisonPolicy, DiffState, DiffType, FileDiff, Folding, Horizontal, InlineHighlight,
+    Command, ComparisonPolicy, DiffState, FileDiff, Folding, Horizontal, HunkKind, InlineHighlight,
     PositionKeeper, ScrollState, Side, Viewport, divider_bands, divider_separators, stripe_markers,
 };
 
@@ -41,10 +41,10 @@ fn all() -> Vec<(String, FileDiff)> {
     names.into_iter().map(|n| (n.clone(), load(&n))).collect()
 }
 
-fn h(cols: std::ops::Range<usize>, diff_type: DiffType) -> InlineHighlight {
+fn h(cols: std::ops::Range<usize>, kind: HunkKind) -> InlineHighlight {
     InlineHighlight {
         cols,
-        diff_type,
+        kind,
         past_line_end: false,
     }
 }
@@ -53,13 +53,13 @@ fn h(cols: std::ops::Range<usize>, diff_type: DiffType) -> InlineHighlight {
 fn norwegian_text_gives_byte_columns() {
     let d = load("unicode-norwegian");
     let left0 = d.line_highlight(L, 0);
-    let block = &d.blocks()[left0.block.unwrap()];
-    assert_eq!(block.diff_type, DiffType::Modified);
-    assert!(block.ignored());
-    assert_eq!(left0.inline, [h(22..32, DiffType::Modified)]);
+    let hunk = &d.hunks()[left0.hunk.unwrap()];
+    assert_eq!(hunk.kind, HunkKind::Modified);
+    assert!(hunk.compared_by_word());
+    assert_eq!(left0.inline, [h(22..32, HunkKind::Modified)]);
     assert_eq!(&d.line(L, 0)[22..32], "brødskiva");
     let left1 = d.line_highlight(L, 1);
-    assert_eq!(left1.inline, [h(20..24, DiffType::Modified)]);
+    assert_eq!(left1.inline, [h(20..24, HunkKind::Modified)]);
     assert_eq!(&d.line(L, 1)[20..24], "godt");
     assert_eq!(d.line_highlight(R, 0).inline[0].cols, 22..33);
 }
@@ -69,20 +69,20 @@ fn emoji_with_empty_markers() {
     let d = load("unicode-emoji");
     assert_eq!(
         d.line_highlight(L, 0).inline,
-        [h(8..12, DiffType::Modified)]
+        [h(8..12, HunkKind::Modified)]
     );
     assert_eq!(&d.line(L, 0)[8..12], "🚀");
-    // Empty sides of word fragments become 2px strokes
+    // Empty sides of inline highlights become 2px strokes
     assert_eq!(
         d.line_highlight(L, 1).inline,
-        [h(8..8, DiffType::Inserted), h(11..11, DiffType::Inserted)]
+        [h(8..8, HunkKind::Added), h(11..11, HunkKind::Added)]
     );
     assert_eq!(
         d.line_highlight(R, 1).inline,
-        [h(8..12, DiffType::Inserted), h(15..20, DiffType::Inserted)]
+        [h(8..12, HunkKind::Added), h(15..20, HunkKind::Added)]
     );
     assert_eq!(&d.line(R, 1)[15..20], " done");
-    assert_eq!(d.line_highlight(L, 2).block, None);
+    assert_eq!(d.line_highlight(L, 2).hunk, None);
 }
 
 #[test]
@@ -90,18 +90,18 @@ fn missing_line_break_on_left() {
     let d = load("missing-trailing-newline-left");
     assert_eq!(d.line_count(L), 3);
     assert_eq!(d.line_count(R), 4);
-    let b = &d.blocks()[0];
-    assert_eq!(b.lines, [3..3, 3..4]);
-    assert_eq!(b.diff_type, DiffType::Inserted);
-    // `Some(vec![])`: ignored color, no words
-    assert_eq!(b.inner, Some(vec![]));
+    let hunk = &d.hunks()[0];
+    assert_eq!(hunk.lines, [3..3, 3..4]);
+    assert_eq!(hunk.kind, HunkKind::Added);
+    // `Some(vec![])`: compared by word, no words differ
+    assert_eq!(hunk.inline_highlights, Some(vec![]));
     let right = d.line_highlight(R, 3);
-    assert!(d.blocks()[right.block.unwrap()].ignored());
+    assert!(d.hunks()[right.hunk.unwrap()].compared_by_word());
     assert!(right.inline.is_empty());
     // The hunk is after the last Left line, so the 2px band goes below line 2
     let none = Folding::none(&d);
     let layout = none.layout(L, 18.);
-    assert_eq!(layout.block_band(b.lines(L)), (53., 55.));
+    assert_eq!(layout.hunk_band(hunk.lines(L)), (53., 55.));
     let band = divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.)[0];
     assert_eq!((band.top.p0.y, band.bottom.p0.y), (53., 55.));
     assert_eq!((band.top.p3.y, band.bottom.p3.y), (54., 72.));
@@ -110,20 +110,20 @@ fn missing_line_break_on_left() {
 #[test]
 fn missing_line_break_on_right() {
     let d = load("missing-trailing-newline-right");
-    let b = &d.blocks()[0];
-    assert_eq!(b.lines, [3..4, 3..3]);
-    assert_eq!(b.diff_type, DiffType::Deleted);
+    let hunk = &d.hunks()[0];
+    assert_eq!(hunk.lines, [3..4, 3..3]);
+    assert_eq!(hunk.kind, HunkKind::Deleted);
 }
 
 #[test]
-fn missing_line_break_and_change() {
+fn missing_line_break_on_both_sides() {
     let d = load("missing-trailing-newline-both-changed");
-    assert_eq!(d.blocks()[0].lines, [2..3, 2..3]);
+    assert_eq!(d.hunks()[0].lines, [2..3, 2..3]);
     let left = d.line_highlight(L, 2);
-    assert_eq!(left.inline, [h(9..9, DiffType::Inserted)]);
+    assert_eq!(left.inline, [h(9..9, HunkKind::Added)]);
     let right = d.line_highlight(R, 2);
     // Last line without a line break, so the color stops at the text
-    assert_eq!(right.inline, [h(9..d.line(R, 2).len(), DiffType::Inserted)]);
+    assert_eq!(right.inline, [h(9..d.line(R, 2).len(), HunkKind::Added)]);
     assert_eq!(d.line(R, 2).len(), 17);
 }
 
@@ -131,13 +131,16 @@ fn missing_line_break_and_change() {
 fn highlights_lie_on_char_boundaries() {
     for (name, d) in all() {
         for side in [L, R] {
-            let blocks_lines: Vec<_> = d.blocks().iter().map(|b| b.lines(side)).collect();
+            let hunk_lines: Vec<_> = d.hunks().iter().map(|hunk| hunk.lines(side)).collect();
             for line in 0..d.line_count(side) {
                 let text = d.line(side, line);
                 let hl = d.line_highlight(side, line);
-                let in_block = blocks_lines.iter().any(|r| r.contains(&line));
-                assert_eq!(hl.block.is_some(), in_block, "{name} {side:?} {line}");
-                if hl.block.is_some_and(|b| !d.blocks()[b].ignored()) {
+                let in_hunk = hunk_lines.iter().any(|r| r.contains(&line));
+                assert_eq!(hl.hunk.is_some(), in_hunk, "{name} {side:?} {line}");
+                if hl
+                    .hunk
+                    .is_some_and(|hunk| !d.hunks()[hunk].compared_by_word())
+                {
                     assert!(hl.inline.is_empty(), "{name}: whole line has no words");
                 }
                 for i in hl.inline {
@@ -180,16 +183,16 @@ fn scroll_and_divider_stay_within_bounds() {
 #[test]
 fn navigation_visits_all_hunks() {
     for (name, d) in all() {
-        if d.blocks().is_empty() {
+        if d.hunks().is_empty() {
             continue;
         }
         let f = Folding::none(&d);
         // The start position is the first hunk, as in `InitialScrollPositionSupport`
         let mut seen = vec![0];
-        let mut caret = target_for_block(&d, &f, 0, VP).caret_lines[1];
-        while let Some(block) = next_block(&d, R, caret) {
-            seen.push(block);
-            let t = target_for_block(&d, &f, block, VP);
+        let mut caret = target_for_hunk(&d, &f, 0, VP).caret_lines[1];
+        while let Some(hunk) = next_hunk(&d, R, caret) {
+            seen.push(hunk);
+            let t = target_for_hunk(&d, &f, hunk, VP);
             caret = t.caret_lines[1];
             for (i, side) in [L, R].into_iter().enumerate() {
                 assert!(t.scroll_y[i] >= 0., "{name}");
@@ -199,13 +202,13 @@ fn navigation_visits_all_hunks() {
                 );
             }
         }
-        let expected: Vec<usize> = (0..d.blocks().len()).collect();
+        let expected: Vec<usize> = (0..d.hunks().len()).collect();
         assert_eq!(seen, expected, "{name}");
         // And back again
         let mut back = vec![];
-        while let Some(block) = prev_block(&d, R, caret) {
-            back.push(block);
-            caret = target_for_block(&d, &f, block, VP).caret_lines[1];
+        while let Some(hunk) = previous_hunk(&d, R, caret) {
+            back.push(hunk);
+            caret = target_for_hunk(&d, &f, hunk, VP).caret_lines[1];
         }
         back.reverse();
         assert_eq!(back, expected[..expected.len() - 1], "{name}");
@@ -217,8 +220,8 @@ fn stripe_per_side() {
     let d = load("insert-middle");
     let left = stripe_markers(&d, &Folding::none(&d), L, 18.);
     let right = stripe_markers(&d, &Folding::none(&d), R, 18.);
-    assert_eq!(left.len(), d.blocks().len());
-    assert_eq!(left[0].diff_type, DiffType::Inserted);
+    assert_eq!(left.len(), d.hunks().len());
+    assert_eq!(left[0].kind, HunkKind::Added);
     assert!(left[0].start_y == left[0].end_y);
     assert!(right[0].start_y <= right[0].end_y);
     let content = Folding::none(&d).layout(R, 18.).content_height();
@@ -234,8 +237,8 @@ fn one_fold_per_run_with_four_lines_of_context() {
             let count = d.line_count(side);
             // The runs of unchanged lines per side: before the first hunk, between, and after the last
             let mut bounds = vec![0];
-            for b in d.blocks() {
-                bounds.extend([b.lines[i].start, b.lines[i].end]);
+            for hunk in d.hunks() {
+                bounds.extend([hunk.lines[i].start, hunk.lines[i].end]);
             }
             bounds.push(count);
             let runs: Vec<(usize, usize)> = bounds.chunks(2).map(|c| (c[0], c[1])).collect();
@@ -287,10 +290,10 @@ fn opening_a_fold_shows_the_whole_run() {
 #[test]
 fn kotlin_folds() {
     let d = load("kotlin-realistic-edit");
-    let blocks: Vec<_> = d.blocks().iter().map(|b| b.lines.clone()).collect();
+    let hunks: Vec<_> = d.hunks().iter().map(|hunk| hunk.lines.clone()).collect();
     let f = Folding::new(&d);
     let folds: Vec<_> = f.visible(L).map(|(_, v)| v.lines.clone()).collect();
-    assert_eq!(blocks[5..7], [[45..46, 42..43], [47..47, 44..45]]);
+    assert_eq!(hunks[5..7], [[45..46, 42..43], [47..47, 44..45]]);
     // Only the gap 47..57 is long enough, 4 lines of context on each side
     assert_eq!(folds, vec![51..53]);
     assert_eq!(f.layout(L, 18.).visual_line_count(), 58);
@@ -311,28 +314,28 @@ fn scroll_and_navigation_with_folds() {
                 }
                 y += 13.;
             }
-            if d.blocks().is_empty() {
+            if d.hunks().is_empty() {
                 continue;
             }
-            let mut block = 0;
-            let mut t = target_for_block(&d, &f, block, VP);
+            let mut hunk = 0;
+            let mut t = target_for_hunk(&d, &f, hunk, VP);
             loop {
                 for (i, side) in [L, R].into_iter().enumerate() {
                     let layout = &layouts[i];
-                    let line = d.blocks()[block].lines(side).start;
+                    let line = d.hunks()[hunk].lines(side).start;
                     // Hunks never lie in a fold
                     assert_eq!(f.caret_after(side, line), line, "{name}");
                     assert!(t.scroll_y[i] <= layout.max_scroll(VP.height), "{name}");
                     let top = layout.line_top(line) - t.scroll_y[i];
                     assert!((0. ..VP.height).contains(&top), "{name} {t:?}");
                 }
-                let Some(next) = next_block(&d, R, t.caret_lines[1]) else {
+                let Some(next) = next_hunk(&d, R, t.caret_lines[1]) else {
                     break;
                 };
-                block = next;
-                t = target_for_block(&d, &f, block, VP);
+                hunk = next;
+                t = target_for_hunk(&d, &f, hunk, VP);
             }
-            assert_eq!(block, d.blocks().len() - 1, "{name}");
+            assert_eq!(hunk, d.hunks().len() - 1, "{name}");
         }
     }
 }
@@ -375,7 +378,7 @@ fn fold_operations_stay_within_bounds() {
                 assert_eq!(f.caret_after(s, carets[i]), carets[i], "{name}");
                 assert_eq!(
                     stripe_markers(&d, &f, s, VP.line_height).len(),
-                    d.blocks().len(),
+                    d.hunks().len(),
                     "{name}"
                 );
             }
@@ -426,8 +429,8 @@ fn cursor_stays_valid() {
         GoToBottom,
         HalfPageDown,
         HalfPageUp,
-        NextChange,
-        PrevChange,
+        NextHunk,
+        PreviousHunk,
         FocusSide(L),
         FocusSide(R),
         FoldOpen,

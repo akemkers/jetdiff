@@ -16,12 +16,7 @@ pub(super) fn paint(painter: &mut Painter, x: u16, area: Rect) {
     for row in 0..area.height {
         let in_thumb = thumb.is_some_and(|(start, end)| track.covers(row, start, end));
         let marker = markers.iter().find(|marker| track.shows(row, marker));
-        painter.scrollbar_cell(
-            x,
-            area.y + row,
-            in_thumb,
-            marker.map(|marker| marker.diff_type),
-        );
+        painter.scrollbar_cell(x, area.y + row, in_thumb, marker.map(|marker| marker.kind));
     }
 }
 

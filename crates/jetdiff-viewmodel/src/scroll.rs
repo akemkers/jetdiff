@@ -6,7 +6,7 @@ use jetdiff_core::side::Side;
 
 use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
-use crate::model::{Block, FileDiff, idx};
+use crate::model::{FileDiff, Hunk, idx};
 
 /// `Range` from IntelliJ seen from the master: 1 is the master, 2 is the slave.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,26 +21,26 @@ struct SyncRange {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineMapping {
     bounds: Vec<[usize; 2]>,
-    has_changes: bool,
+    has_hunks: bool,
 }
 
 impl LineMapping {
-    pub fn new(blocks: &[Block], line_counts: [usize; 2]) -> Self {
+    pub fn new(hunks: &[Hunk], line_counts: [usize; 2]) -> Self {
         let mut bounds = vec![[0, 0]];
-        for b in blocks {
-            bounds.push([b.lines[0].start, b.lines[1].start]);
-            bounds.push([b.lines[0].end, b.lines[1].end]);
+        for hunk in hunks {
+            bounds.push([hunk.lines[0].start, hunk.lines[1].start]);
+            bounds.push([hunk.lines[0].end, hunk.lines[1].end]);
         }
         bounds.push(line_counts);
         Self {
             bounds,
-            has_changes: !blocks.is_empty(),
+            has_hunks: !hunks.is_empty(),
         }
     }
 
     /// `BaseSyncScrollable.getRange` with `ScrollHelper.process`: the neighboring boundaries that enclose the line.
     fn range(&self, master: Side, line: usize) -> SyncRange {
-        if !self.has_changes {
+        if !self.has_hunks {
             return id_range(line);
         }
         let (m, s) = (idx(master), idx(master.other()));
@@ -347,10 +347,10 @@ mod tests {
         }
     }
 
-    fn mapping_for(a: &str, b: &str) -> (FileDiff, Vec<Block>) {
+    fn mapping_for(a: &str, b: &str) -> (FileDiff, Vec<Hunk>) {
         let d = diff(a, b);
-        let blocks = d.blocks().to_vec();
-        (d, blocks)
+        let hunks = d.hunks().to_vec();
+        (d, hunks)
     }
 
     #[test]
@@ -363,8 +363,8 @@ mod tests {
             lines("x", 3),
             &lines("a", 10)[lines("a", 4).len()..]
         );
-        let (d, blocks) = mapping_for(&a, &b);
-        assert_eq!(blocks[0].lines, [4..4, 4..7]);
+        let (d, hunks) = mapping_for(&a, &b);
+        assert_eq!(hunks[0].lines, [4..4, 4..7]);
         let m = d.mapping();
         assert_eq!(m.transfer(L, 0), 0);
         assert_eq!(m.transfer(L, 3), 3);
@@ -389,12 +389,12 @@ mod tests {
         let b = "x\ny\nm\nz\n";
         let d = diff(a, b);
         let m = d.mapping();
-        assert_eq!(d.blocks()[0].lines, [0..0, 0..2]);
+        assert_eq!(d.hunks()[0].lines, [0..0, 0..2]);
         assert_eq!(m.transfer(L, 0), 0);
         assert_eq!(m.transfer(R, 0), 0);
         assert_eq!(m.transfer(R, 1), 0);
         assert_eq!(m.transfer(R, 2), 0);
-        assert_eq!(m.transfer(L, 1), d.blocks()[1].lines[1].start);
+        assert_eq!(m.transfer(L, 1), d.hunks()[1].lines[1].start);
         assert_eq!(m.transfer(L, 2), 5);
         assert_eq!(m.transfer(R, 5), 2);
     }
@@ -450,7 +450,7 @@ mod tests {
 
     /// Hunks on lines 10, 40 and 90 of 100. Collapsed: folds 0..6, 15..36, 45..86 and
     /// 95..101 on both sides.
-    fn three_changes() -> FileDiff {
+    fn three_hunks() -> FileDiff {
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [10, 40, 90] {
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn expand_keeps_caret_in_place() {
-        let d = three_changes();
+        let d = three_hunks();
         let mut f = folded(&d);
         let mut s = ScrollState::default();
         s.scroll_to(&d, &f, L, 400., VP);
@@ -486,7 +486,7 @@ mod tests {
 
     #[test]
     fn caret_outside_keeps_top_line() {
-        let d = three_changes();
+        let d = three_hunks();
         let mut f = folded(&d);
         let mut s = ScrollState::default();
         // Visual line 11 is logical 36
@@ -512,7 +512,7 @@ mod tests {
 
     #[test]
     fn collapse_moves_caret_to_the_fold() {
-        let d = three_changes();
+        let d = three_hunks();
         let mut f = folded(&d);
         f.expand_all(true);
         let mut s = ScrollState::default();
@@ -547,13 +547,16 @@ mod tests {
         while y <= ml.max_scroll(VP.height) {
             let slave = sync_folded(&d, &f, L, y, 0.);
             let master_line = ml.y_to_logical_line(y + anchor);
-            let in_block = d.blocks().iter().any(|b| b.lines[0].contains(&master_line));
+            let in_hunk = d
+                .hunks()
+                .iter()
+                .any(|hunk| hunk.lines[0].contains(&master_line));
             let in_fold = ml
                 .folds()
                 .iter()
                 .any(|fold| fold.lines.contains(&master_line));
             let clamped = slave == 0. || slave == sl.max_scroll(VP.height);
-            if !in_block && !in_fold && !clamped {
+            if !in_hunk && !in_fold && !clamped {
                 let slave_line = sl.y_to_logical_line(slave + anchor);
                 assert_eq!(slave_line, d.mapping().transfer(L, master_line), "y={y}");
                 checked += 1;
@@ -583,12 +586,12 @@ mod tests {
             &a[lines("a", 50).len()..]
         );
         let d = diff(&a, &b);
-        assert_eq!(d.blocks()[0].lines, [50..50, 50..60]);
+        assert_eq!(d.hunks()[0].lines, [50..50, 50..60]);
         // Anchor (y+100) above the hunk: the same
         assert_eq!(sync(&d, L, 800., 800.), 800.);
         // Anchor below the hunk: shifted 10 lines
         assert_eq!(sync(&d, L, 1100., 0.), 1300.);
-        // From Right: the anchor inside the inserted hunk hits the boundary on Left
+        // From Right: the anchor inside the added hunk hits the boundary on Left
         assert_eq!(sync(&d, R, 950., 0.), 50. * 20. - 100. + 50. % 20.);
     }
 
@@ -602,7 +605,7 @@ mod tests {
             &a[lines("a", 50).len()..]
         );
         let d = diff(&a, &b);
-        // Master = Right, the anchor (y + 100) goes through the inserted lines 50..60.
+        // Master = Right, the anchor (y + 100) goes through the added lines 50..60.
         // The slave (Left) follows the phase to the middle of the first line and then stands still
         // until the anchor is halfway into the line after the hunk.
         let mut slave = 0.;

@@ -11,7 +11,7 @@ use crate::cursor::Cursor;
 use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{FileDiff, idx};
-use crate::nav::{next_block, prev_block, target_for_block};
+use crate::nav::{next_hunk, previous_hunk, target_for_hunk};
 use crate::scroll::{PositionKeeper, ScrollState};
 use crate::scrolloff;
 
@@ -75,10 +75,10 @@ impl DiffState {
 
     /// `InitialScrollPositionSupport`: the first hunk, with the cursor on Right.
     pub fn init(&mut self, vp: Viewport) {
-        if self.diff.blocks().is_empty() {
+        if self.diff.hunks().is_empty() {
             return;
         }
-        let t = target_for_block(&self.diff, &self.folding, 0, vp);
+        let t = target_for_hunk(&self.diff, &self.folding, 0, vp);
         self.scroll.y = t.scroll_y;
         self.scroll.x = t.scroll_x;
         let side = self.cursor.side;
@@ -187,8 +187,8 @@ impl DiffState {
             }
             HalfPageDown => self.half_page(1, vp),
             HalfPageUp => self.half_page(-1, vp),
-            NextChange => self.change(true, vp),
-            PrevChange => self.change(false, vp),
+            NextHunk => self.go_to_hunk(true, vp),
+            PreviousHunk => self.go_to_hunk(false, vp),
             FocusSide(side) => self.focus_side(side, vp),
             FoldOpen => self.change_folding(vp, |s, f| f.expand_at(s.0, s.1)),
             ToggleFolds => self.change_folding(vp, |_, f| {
@@ -232,17 +232,17 @@ impl DiffState {
 
     /// `n` and `p` use IntelliJ's navigation and landing, so the cursor goes to the start of
     /// the hunk. Scroll is only adjusted if the landing breaks scrolloff.
-    fn change(&mut self, next: bool, vp: Viewport) -> Outcome {
+    fn go_to_hunk(&mut self, next: bool, vp: Viewport) -> Outcome {
         let side = self.cursor.side;
-        let block = if next {
-            next_block(&self.diff, side, self.cursor.line)
+        let hunk = if next {
+            next_hunk(&self.diff, side, self.cursor.line)
         } else {
-            prev_block(&self.diff, side, self.cursor.line)
+            previous_hunk(&self.diff, side, self.cursor.line)
         };
-        let Some(block) = block else {
+        let Some(hunk) = hunk else {
             return Outcome::default();
         };
-        let t = target_for_block(&self.diff, &self.folding, block, vp);
+        let t = target_for_hunk(&self.diff, &self.folding, hunk, vp);
         let line = self.clamp_line(side, t.caret_lines[idx(side)]);
         self.cursor = Cursor::new(side, line);
         self.master = side;
@@ -269,12 +269,12 @@ impl DiffState {
     }
 
     /// The hunk the cursor is in. `None` on a collapsed fold.
-    pub fn cursor_block(&self) -> Option<usize> {
+    pub fn cursor_hunk(&self) -> Option<usize> {
         let c = self.cursor;
         if self.folding.fold_at_line(c.side, c.line).is_some() {
             return None;
         }
-        self.diff.block_at(c.side, c.line)
+        self.diff.hunk_at(c.side, c.line)
     }
 
     /// The same file with new content. Cursor and scroll are kept as far as possible.
@@ -426,7 +426,7 @@ mod tests {
     }
 
     /// Hunks on lines 10, 40 and 90 of 100, one line each.
-    fn three_changes(folds: bool) -> DiffState {
+    fn three_hunks(folds: bool) -> DiffState {
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [10, 40, 90] {
@@ -539,21 +539,21 @@ mod tests {
 
     #[test]
     fn next_and_previous_hunk() {
-        let mut s = three_changes(false);
+        let mut s = three_hunks(false);
         s.init(VP);
         assert_eq!((s.cursor.side, s.cursor.line), (R, 10));
-        let out = run(&mut s, NextChange);
+        let out = run(&mut s, NextHunk);
         assert!(out.animate);
         assert_eq!(s.cursor.line, 40);
         assert_scrolloff(&s);
-        run(&mut s, PrevChange);
+        run(&mut s, PreviousHunk);
         assert_eq!(s.cursor.line, 10);
-        times(&mut s, NextChange, 2);
+        times(&mut s, NextHunk, 2);
         assert_eq!(s.cursor.line, 90);
-        assert!(!run(&mut s, NextChange).changed);
-        times(&mut s, PrevChange, 2);
+        assert!(!run(&mut s, NextHunk).changed);
+        times(&mut s, PreviousHunk, 2);
         assert_eq!(s.cursor.line, 10);
-        assert!(!run(&mut s, PrevChange).changed);
+        assert!(!run(&mut s, PreviousHunk).changed);
     }
 
     #[test]
@@ -563,10 +563,10 @@ mod tests {
             height: 400.,
             line_height: LH,
         };
-        let mut s = three_changes(false);
+        let mut s = three_hunks(false);
         s.init(vp);
-        s.execute(NextChange, vp, NO_X);
-        let t = target_for_block(&s.diff, &s.folding, 1, vp);
+        s.execute(NextHunk, vp, NO_X);
+        let t = target_for_hunk(&s.diff, &s.folding, 1, vp);
         assert_eq!(s.scroll.y, t.scroll_y);
     }
 
@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn j_skips_collapsed_fold() {
-        let mut s = three_changes(true);
+        let mut s = three_hunks(true);
         // The first fold is 0..6, so line 6
         assert_eq!(s.cursor.line, 0);
         run(&mut s, MoveDown);
@@ -622,7 +622,7 @@ mod tests {
 
     #[test]
     fn fold_commands_keep_the_cursor() {
-        let mut s = three_changes(true);
+        let mut s = three_hunks(true);
         s.click(R, 45);
         let y = top(&s);
         let out = run(&mut s, FoldOpen);
@@ -716,19 +716,19 @@ mod tests {
             b[i] = format!("x{i}");
         }
         let mut s = state(&a, &(b.join("\n") + "\n"), true);
-        run(&mut s, NextChange);
-        run(&mut s, NextChange);
+        run(&mut s, NextHunk);
+        run(&mut s, NextHunk);
         assert_eq!(s.cursor, Cursor::new(R, 40));
-        assert_eq!(s.cursor_block(), Some(1));
+        assert_eq!(s.cursor_hunk(), Some(1));
         let y = top(&s);
         let a = s.diff.text(L).to_owned();
         let text = s.diff.text(R).replace("x40\n", "a40\n");
         let diff = FileDiff::new(&a, &text, ComparisonPolicy::Default).unwrap();
         let folding = Rc::new(Folding::new(&diff));
         s.replace_diff(Rc::new(diff), folding, VP);
-        assert_eq!(s.diff.blocks().len(), 2);
+        assert_eq!(s.diff.hunks().len(), 2);
         assert_eq!(s.cursor, Cursor::new(R, 40));
         assert_eq!(top(&s), y);
-        assert_eq!(s.cursor_block(), None);
+        assert_eq!(s.cursor_hunk(), None);
     }
 }

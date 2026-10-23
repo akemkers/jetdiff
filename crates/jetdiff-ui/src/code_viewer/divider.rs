@@ -59,7 +59,7 @@ impl Divider<'_> {
                 self.viewport,
                 DIVIDER_WIDTH,
             ) {
-                let color = self.theme.diff(band.diff_type).background;
+                let color = self.theme.diff(band.kind).background;
 
                 let mut b = PathBuilder::fill();
                 b.move_to(p(band.top.p0));

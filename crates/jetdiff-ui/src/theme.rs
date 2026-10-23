@@ -2,7 +2,7 @@
 
 use gpui::{Font, FontStyle, FontWeight, Hsla};
 use jetdiff_viewmodel::theme::DiffColors;
-use jetdiff_viewmodel::{DiffType, Rgba, SyntaxStyle, Theme, Token};
+use jetdiff_viewmodel::{HunkKind, Rgba, SyntaxStyle, Theme, Token};
 
 pub fn hsla(c: Rgba) -> Hsla {
     gpui::Rgba {
@@ -86,7 +86,7 @@ pub struct UiTheme {
     pub file_added: Hsla,
     pub file_deleted: Hsla,
     pub file_modified: Hsla,
-    inserted: UiDiffColors,
+    added: UiDiffColors,
     deleted: UiDiffColors,
     modified: UiDiffColors,
     syntax: [UiSyntax; Token::ALL.len()],
@@ -114,7 +114,7 @@ impl UiTheme {
             file_added: hsla(theme.file_added),
             file_deleted: hsla(theme.file_deleted),
             file_modified: hsla(theme.file_modified),
-            inserted: (&theme.inserted).into(),
+            added: (&theme.added).into(),
             deleted: (&theme.deleted).into(),
             modified: (&theme.modified).into(),
             syntax: Token::ALL.map(|t| UiSyntax::new(theme.syntax(t))),
@@ -137,11 +137,11 @@ impl UiTheme {
         &self.syntax[token as usize]
     }
 
-    pub fn diff(&self, diff_type: DiffType) -> &UiDiffColors {
-        match diff_type {
-            DiffType::Inserted => &self.inserted,
-            DiffType::Deleted => &self.deleted,
-            DiffType::Modified => &self.modified,
+    pub fn diff(&self, kind: HunkKind) -> &UiDiffColors {
+        match kind {
+            HunkKind::Added => &self.added,
+            HunkKind::Deleted => &self.deleted,
+            HunkKind::Modified => &self.modified,
         }
     }
 }

@@ -150,7 +150,7 @@ impl<'a> LineLayout<'a> {
 
     /// The y interval a hunk covers in the code view. An empty side becomes 2px `[boundary-1, boundary+1)`,
     /// the same band that `DiffLineMarkerRenderer` and `DiffDefaultBorderRenderer` draw.
-    pub fn block_band(&self, lines: Range<usize>) -> (f32, f32) {
+    pub fn hunk_band(&self, lines: Range<usize>) -> (f32, f32) {
         let (y1, y2) = self.marker_range(lines);
         if y2 - y1 <= 2. {
             (y1 - 1., y1 + 1.)
@@ -214,11 +214,11 @@ mod tests {
     }
 
     #[test]
-    fn block_band_gives_2px_for_empty_side() {
+    fn hunk_band_gives_2px_for_empty_side() {
         let l = LineLayout::new(10, 20.);
-        assert_eq!(l.block_band(0..0), (0., 2.));
-        assert_eq!(l.block_band(3..3), (59., 61.));
-        assert_eq!(l.block_band(3..5), (60., 100.));
+        assert_eq!(l.hunk_band(0..0), (0., 2.));
+        assert_eq!(l.hunk_band(3..3), (59., 61.));
+        assert_eq!(l.hunk_band(3..5), (60., 100.));
     }
 
     #[test]

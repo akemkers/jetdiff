@@ -4,7 +4,7 @@ use std::ops::Range;
 
 use jetdiff_viewmodel::columns::ExpandedLine;
 use jetdiff_viewmodel::model::SyntaxSpan;
-use jetdiff_viewmodel::{DiffType, InlineHighlight, Theme};
+use jetdiff_viewmodel::{HunkKind, InlineHighlight, Theme};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -17,7 +17,7 @@ pub struct LineText<'a> {
     pub syntax: &'a [SyntaxSpan],
     pub inline: &'a [InlineHighlight],
     /// Unified colors the words by the row, not by the word.
-    pub inline_type: Option<DiffType>,
+    pub inline_highlight_kind: Option<HunkKind>,
 }
 
 /// `area` is one row with the background from before.
@@ -36,7 +36,7 @@ pub fn paint_line(line: &LineText, scroll_x: usize, area: Rect, theme: &Theme, b
         .map(|h| {
             let bg = color(
                 theme
-                    .diff(line.inline_type.unwrap_or(h.diff_type))
+                    .diff(line.inline_highlight_kind.unwrap_or(h.kind))
                     .background,
             );
             let end = if h.past_line_end {
@@ -150,7 +150,7 @@ mod tests {
             text,
             syntax: &[],
             inline: &[],
-            inline_type: None,
+            inline_highlight_kind: None,
         };
         paint_line(&line, scroll_x, area, &Theme::mocha(), &mut buf);
         row(&buf, 0)
@@ -175,7 +175,7 @@ mod tests {
                 token: Token::Keyword,
             }],
             inline: &[],
-            inline_type: None,
+            inline_highlight_kind: None,
         };
         paint_line(&line, 0, area, &theme, &mut buf);
         let keyword = color(theme.syntax(Token::Keyword).color);

@@ -179,7 +179,7 @@ impl DiffView {
         match cmd {
             Command::Rollback => {
                 let diff = &self.state.diff.diff;
-                match rollback_request(diff, self.state.cursor_block(), self.can_rollback) {
+                match rollback_request(diff, self.state.cursor_hunk(), self.can_rollback) {
                     Ok(request) => {
                         self.overlay = Some(Overlay::Confirm(request));
                         None

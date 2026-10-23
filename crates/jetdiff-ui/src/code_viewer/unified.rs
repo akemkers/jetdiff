@@ -9,7 +9,7 @@ use jetdiff_core::side::Side;
 use jetdiff_viewmodel::{InlineHighlight, UnifiedDiff, UnifiedGeometry};
 
 use super::code_paint::{
-    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_code_background, rect,
+    ShapedText, StripeRects, mask, paint_caret_row, paint_code_background, paint_hunk, rect,
     shape_number,
 };
 use super::split_side::CaretRow;
@@ -76,7 +76,7 @@ impl UnifiedPainter {
 
         let widest = window.with_content_mask(mask(frame.area(code.bounds())), |window| {
             paint_code_background(code, frame.top, frame.bottom, &self.theme, window);
-            frame.paint_changes(window);
+            frame.paint_hunks(window);
             frame.paint_caret_row(window);
             let widest = frame.paint_text(cache, window, cx);
             frame.paint_line_numbers(cache, window, cx);
@@ -104,7 +104,7 @@ impl UnifiedPainter {
             window,
         );
         // The default color disappears against the diff background
-        let color = if row.block.is_some() {
+        let color = if row.hunk.is_some() {
             self.theme.line_number_caret_row
         } else {
             self.theme.line_number
@@ -144,11 +144,11 @@ impl Frame<'_> {
     }
 
     /// The deleted and added part of each hunk get a color each, without blue.
-    fn paint_changes(&self, window: &mut Window) {
+    fn paint_hunks(&self, window: &mut Window) {
         let diff = &self.painter.diff;
         let layout = diff.layout(self.painter.style.line_height());
-        let blocks = diff.diff.blocks();
-        for (index, rows) in diff.block_rows().iter().enumerate() {
+        let hunks = diff.diff.hunks();
+        for (index, rows) in diff.hunk_rows().iter().enumerate() {
             if rows.end <= *self.visible.start() {
                 continue;
             }
@@ -159,16 +159,23 @@ impl Frame<'_> {
                 .iter()
                 .take_while(|row| row.side() == Side::Left)
                 .count();
-            let first_inserted = rows.start + deleted;
-            for part in [rows.start..first_inserted, first_inserted..rows.end] {
+            let first_added = rows.start + deleted;
+            for part in [rows.start..first_added, first_added..rows.end] {
                 if part.is_empty() {
                     continue;
                 }
-                let colors = self.painter.theme.diff(diff.row(part.start).diff_type());
-                let (band_top, band_bottom) = layout.block_band(part);
+                let colors = self.painter.theme.diff(diff.row(part.start).kind());
+                let (band_top, band_bottom) = layout.hunk_band(part);
                 let (top, bottom) = (self.screen_y(band_top), self.screen_y(band_bottom));
-                let ignored = blocks[index].ignored();
-                paint_change(&self.geom.code, top, bottom, colors, ignored, window);
+                let compared_by_word = hunks[index].compared_by_word();
+                paint_hunk(
+                    &self.geom.code,
+                    top,
+                    bottom,
+                    colors,
+                    compared_by_word,
+                    window,
+                );
             }
         }
     }
@@ -207,7 +214,7 @@ impl Frame<'_> {
                     .inline
                     .iter()
                     .map(|highlight| InlineHighlight {
-                        diff_type: row.diff_type(),
+                        kind: row.kind(),
                         ..highlight.clone()
                     })
                     .collect();

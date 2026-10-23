@@ -283,11 +283,7 @@ impl FileDiffView {
     /// Checks that the hunk can be rolled back and opens the dialog. `on_key_down` sends
     /// `Rollback` on Enter.
     fn rollback(&mut self, cx: &mut Context<Self>) {
-        match rollback_request(
-            self.mode.diff(),
-            self.mode.cursor_block(),
-            self.can_rollback,
-        ) {
+        match rollback_request(self.mode.diff(), self.mode.cursor_hunk(), self.can_rollback) {
             Ok(request) => {
                 self.overlay = Some(Overlay::Confirm(Rollback(request)));
                 cx.notify();

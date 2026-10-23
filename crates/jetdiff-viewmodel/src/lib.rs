@@ -34,7 +34,7 @@ pub use jetdiff_syntax::{Language, Token};
 pub use keys::{Key, KeyCode, KeyParser, Parsed};
 pub use layout::{LineLayout, Viewport, VisualFold};
 pub use mode::DiffMode;
-pub use model::{Block, DiffType, FileDiff, InlineHighlight, LineHighlight};
+pub use model::{FileDiff, Hunk, HunkKind, InlineHighlight, LineHighlight};
 pub use scroll::{PositionKeeper, ScrollState};
 pub use separator::PathSeg;
 pub use state::{DiffState, Horizontal, Outcome};

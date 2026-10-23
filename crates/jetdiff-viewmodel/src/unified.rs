@@ -13,7 +13,7 @@ use crate::command::Command;
 use crate::cursor::Cursor;
 use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
-use crate::model::{Block, DiffType, FileDiff, idx};
+use crate::model::{FileDiff, Hunk, HunkKind, idx};
 use crate::nav::target_offsets;
 use crate::scroll::ScrollState;
 use crate::scrolloff;
@@ -28,7 +28,7 @@ pub struct Row {
     /// The line on each side. Deleted is `[Some, None]`, added is `[None, Some]` and unchanged has
     /// both. Added and deleted files have only one side.
     pub lines: [Option<usize>; 2],
-    pub block: Option<usize>,
+    pub hunk: Option<usize>,
 }
 
 impl Row {
@@ -47,10 +47,10 @@ impl Row {
 
     /// Deleted rows get the deleted color and added rows the added color, also at word level. Unified has
     /// no `Modified`.
-    pub fn diff_type(&self) -> DiffType {
+    pub fn kind(&self) -> HunkKind {
         match self.side() {
-            Side::Left => DiffType::Deleted,
-            Side::Right => DiffType::Inserted,
+            Side::Left => HunkKind::Deleted,
+            Side::Right => HunkKind::Added,
         }
     }
 }
@@ -73,7 +73,7 @@ pub struct UnifiedDiff {
     /// row as the line on Right.
     row_of: [Vec<usize>; 2],
     /// The rows of each hunk.
-    block_rows: Vec<Range<usize>>,
+    hunk_rows: Vec<Range<usize>>,
     row_layout: RowLayout,
 }
 
@@ -90,21 +90,21 @@ impl UnifiedDiff {
         let line_counts = [diff.line_count(Side::Left), diff.line_count(Side::Right)];
         let mut rows = Vec::with_capacity(line_counts[0] + line_counts[1]);
         let mut row_of = line_counts.map(|count| vec![0; count]);
-        let mut block_rows = Vec::with_capacity(diff.blocks().len());
-        let mut push = |lines: [Option<usize>; 2], block| {
+        let mut hunk_rows = Vec::with_capacity(diff.hunks().len());
+        let mut push = |lines: [Option<usize>; 2], hunk| {
             for side in [Side::Left, Side::Right] {
                 if let Some(line) = lines[idx(side)] {
                     row_of[idx(side)][line] = rows.len();
                 }
             }
-            rows.push(Row { lines, block });
+            rows.push(Row { lines, hunk });
             rows.len()
         };
 
         let mut next = [0, 0];
         let mut len = 0;
-        for (index, block) in diff.blocks().iter().enumerate() {
-            let [left, right] = &block.lines;
+        for (index, hunk) in diff.hunks().iter().enumerate() {
+            let [left, right] = &hunk.lines;
             for (left, right) in (next[0]..left.start).zip(next[1]..right.start) {
                 len = push([Some(left), Some(right)], None);
             }
@@ -119,12 +119,12 @@ impl UnifiedDiff {
                     }
                 }
                 RowLayout::Split => {
-                    for lines in pair_lines(&diff, block) {
+                    for lines in pair_lines(&diff, hunk) {
                         len = push(lines, Some(index));
                     }
                 }
             }
-            block_rows.push(start..len);
+            hunk_rows.push(start..len);
             next = [left.end, right.end];
         }
         for (left, right) in (next[0]..line_counts[0]).zip(next[1]..line_counts[1]) {
@@ -141,7 +141,7 @@ impl UnifiedDiff {
             diff,
             rows,
             row_of,
-            block_rows,
+            hunk_rows,
             row_layout,
         }
     }
@@ -163,8 +163,8 @@ impl UnifiedDiff {
         lines[line.min(lines.len() - 1)]
     }
 
-    pub fn block_rows(&self) -> &[Range<usize>] {
-        &self.block_rows
+    pub fn hunk_rows(&self) -> &[Range<usize>] {
+        &self.hunk_rows
     }
 
     pub fn text(&self, row: usize) -> &str {
@@ -181,11 +181,11 @@ impl UnifiedDiff {
     pub fn stripe_markers(&self, line_height: f32) -> Vec<StripeMarker> {
         let layout = self.layout(line_height);
         let mut markers = Vec::new();
-        for (rows, block) in self.block_rows.iter().zip(self.diff.blocks()) {
+        for (rows, hunk) in self.hunk_rows.iter().zip(self.diff.hunks()) {
             if self.row_layout == RowLayout::Split {
                 let (start_y, end_y) = marker_y(&layout, rows.clone());
                 markers.push(StripeMarker {
-                    diff_type: block.diff_type,
+                    kind: hunk.kind,
                     start_y,
                     end_y,
                 });
@@ -195,17 +195,17 @@ impl UnifiedDiff {
                 .iter()
                 .take_while(|row| row.side() == Side::Left)
                 .count();
-            let first_inserted = rows.start + deleted;
-            for (part, diff_type) in [
-                (rows.start..first_inserted, DiffType::Deleted),
-                (first_inserted..rows.end, DiffType::Inserted),
+            let first_added = rows.start + deleted;
+            for (part, kind) in [
+                (rows.start..first_added, HunkKind::Deleted),
+                (first_added..rows.end, HunkKind::Added),
             ] {
                 if part.is_empty() {
                     continue;
                 }
                 let (start_y, end_y) = marker_y(&layout, part);
                 markers.push(StripeMarker {
-                    diff_type,
+                    kind,
                     start_y,
                     end_y,
                 });
@@ -217,8 +217,8 @@ impl UnifiedDiff {
 
 /// Lines in a hunk that have unchanged text in common sit on the same row. The rest are paired in
 /// order, and the shorter side gets rows without a line.
-fn pair_lines(diff: &FileDiff, block: &Block) -> Vec<[Option<usize>; 2]> {
-    let [left, right] = &block.lines;
+fn pair_lines(diff: &FileDiff, hunk: &Hunk) -> Vec<[Option<usize>; 2]> {
+    let [left, right] = &hunk.lines;
     let mut rows = Vec::new();
     let zip = |left_lines: Range<usize>,
                right_lines: Range<usize>,
@@ -229,22 +229,22 @@ fn pair_lines(diff: &FileDiff, block: &Block) -> Vec<[Option<usize>; 2]> {
         }
     };
     let mut anchors: Vec<(usize, usize)> = Vec::new();
-    if let Some(inner) = &block.inner {
-        let texts = [Side::Left, Side::Right]
-            .map(|side| &diff.text(side)[block.offsets[idx(side)].clone()]);
+    if let Some(inline_highlights) = &hunk.inline_highlights {
+        let texts =
+            [Side::Left, Side::Right].map(|side| &diff.text(side)[hunk.offsets[idx(side)].clone()]);
         let ends = [texts[0].len(), texts[1].len()];
-        let changed = inner
+        let highlights = inline_highlights
             .iter()
-            .map(|fragment| [fragment.offsets1.clone(), fragment.offsets2.clone()])
+            .map(|highlight| [highlight.offsets1.clone(), highlight.offsets2.clone()])
             .chain([[ends[0]..ends[0], ends[1]..ends[1]]]);
         let mut equal_from = [0, 0];
-        for [left_changed, right_changed] in changed {
+        for [left_highlight, right_highlight] in highlights {
             let equal =
-                (left_changed.start - equal_from[0]).min(right_changed.start - equal_from[1]);
+                (left_highlight.start - equal_from[0]).min(right_highlight.start - equal_from[1]);
             let segment = &texts[0][equal_from[0]..equal_from[0] + equal];
             for (offset, _) in segment.char_indices().filter(|(_, ch)| !ch.is_whitespace()) {
                 let line = |side: Side| {
-                    let from = block.offsets[idx(side)].start + equal_from[idx(side)];
+                    let from = hunk.offsets[idx(side)].start + equal_from[idx(side)];
                     diff.line_of_offset(side, from + offset)
                 };
                 let pair = (line(Side::Left), line(Side::Right));
@@ -254,7 +254,7 @@ fn pair_lines(diff: &FileDiff, block: &Block) -> Vec<[Option<usize>; 2]> {
                     anchors.push(pair);
                 }
             }
-            equal_from = [left_changed.end, right_changed.end];
+            equal_from = [left_highlight.end, right_highlight.end];
         }
     }
     let (mut next_left, mut next_right) = (left.start, right.start);
@@ -334,10 +334,10 @@ impl UnifiedState {
 
     /// The first hunk, like `DiffState::init`.
     pub fn init(&mut self, viewport: Viewport) {
-        if self.diff.block_rows.is_empty() {
+        if self.diff.hunk_rows.is_empty() {
             return;
         }
-        let (row, y) = self.target_for_block(0, viewport);
+        let (row, y) = self.target_for_hunk(0, viewport);
         self.row = row;
         self.scroll = ScrollState { y: [y, y], x: 0. };
     }
@@ -400,8 +400,8 @@ impl UnifiedState {
             GoToBottom => self.go_to_row(self.last_row(), viewport),
             HalfPageDown => self.half_page(1, viewport),
             HalfPageUp => self.half_page(-1, viewport),
-            NextChange => self.change(true, viewport),
-            PrevChange => self.change(false, viewport),
+            NextHunk => self.go_to_hunk(true, viewport),
+            PreviousHunk => self.go_to_hunk(false, viewport),
             // One side and no folding
             FocusSide(_) | FoldOpen | ToggleFolds => Outcome::default(),
             // Owned by the UI, as in Split
@@ -456,8 +456,8 @@ impl UnifiedState {
     }
 
     /// The same landing as Split: the start of the hunk about 1/3 down.
-    fn target_for_block(&self, block: usize, viewport: Viewport) -> (usize, f32) {
-        let rows = self.diff.block_rows[block].clone();
+    fn target_for_hunk(&self, hunk: usize, viewport: Viewport) -> (usize, f32) {
+        let rows = self.diff.hunk_rows[hunk].clone();
         let layout = self.layout(viewport);
         let [y, _] = target_offsets(
             &[layout, layout],
@@ -469,17 +469,17 @@ impl UnifiedState {
     }
 
     /// `n` goes to the first hunk below the cursor, `p` to the last hunk entirely above.
-    fn change(&mut self, next: bool, viewport: Viewport) -> Outcome {
-        let blocks = &self.diff.block_rows;
-        let block = if next {
-            blocks.iter().position(|rows| rows.start > self.row)
+    fn go_to_hunk(&mut self, next: bool, viewport: Viewport) -> Outcome {
+        let hunks = &self.diff.hunk_rows;
+        let hunk = if next {
+            hunks.iter().position(|rows| rows.start > self.row)
         } else {
-            blocks.iter().rposition(|rows| rows.end <= self.row)
+            hunks.iter().rposition(|rows| rows.end <= self.row)
         };
-        let Some(block) = block else {
+        let Some(hunk) = hunk else {
             return Outcome::default();
         };
-        let (row, y) = self.target_for_block(block, viewport);
+        let (row, y) = self.target_for_hunk(hunk, viewport);
         self.row = row;
         self.scroll = ScrollState { y: [y, y], x: 0. };
         let followed = self.follow_y(y, viewport, false);
@@ -490,8 +490,8 @@ impl UnifiedState {
     }
 
     /// The hunk the cursor is in.
-    pub fn cursor_block(&self) -> Option<usize> {
-        self.diff.row(self.row).block
+    pub fn cursor_hunk(&self) -> Option<usize> {
+        self.diff.row(self.row).hunk
     }
 
     /// The cursor's line in the newest version, like `DiffState::location`. A deleted row gives the line

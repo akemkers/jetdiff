@@ -53,8 +53,8 @@ pub struct Folding {
 impl Folding {
     pub fn new(diff: &FileDiff) -> Self {
         let line_counts = line_counts(diff);
-        let changes = diff.blocks().iter().map(|b| b.lines.clone());
-        let folds = build_folds(changes, line_counts)
+        let hunks = diff.hunks().iter().map(|hunk| hunk.lines.clone());
+        let folds = build_folds(hunks, line_counts)
             .into_iter()
             .map(|lines| FoldBlock {
                 lines,
@@ -215,7 +215,7 @@ fn line_counts(diff: &FileDiff) -> [usize; 2] {
 /// `FoldingBuilderBase.build` and `addGroup` with only the first level: one fold per run of
 /// unchanged lines between the hunks, plus before the first and after the last.
 fn build_folds(
-    changes: impl IntoIterator<Item = [Range<usize>; 2]>,
+    hunks: impl IntoIterator<Item = [Range<usize>; 2]>,
     line_counts: [usize; 2],
 ) -> Vec<Regions> {
     let mut folds = Vec::new();
@@ -233,10 +233,10 @@ fn build_folds(
     };
     // `Integer.MIN_VALUE` and `MAX_VALUE`: the first and last fold go all the way to the edge
     let mut last = [i64::MIN; 2];
-    for c in changes {
+    for lines in hunks {
         let starts = last;
-        last = [c[0].end as i64, c[1].end as i64];
-        add(starts, [c[0].start as i64, c[1].start as i64]);
+        last = [lines[0].end as i64, lines[1].end as i64];
+        add(starts, [lines[0].start as i64, lines[1].start as i64]);
     }
     add(last, [i64::MAX; 2]);
     folds
@@ -259,7 +259,7 @@ mod tests {
     }
 
     /// Hunks on lines 10, 40 and 90 of 100.
-    fn three_changes() -> FileDiff {
+    fn three_hunks() -> FileDiff {
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [10, 40, 90] {
@@ -281,7 +281,7 @@ mod tests {
 
     #[test]
     fn one_fold_per_run_with_four_lines_of_context() {
-        let f = Folding::new(&three_changes());
+        let f = Folding::new(&three_hunks());
         let folds: Vec<_> = f.folds().iter().map(|fold| fold.lines.clone()).collect();
         assert_eq!(
             folds,
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn context_off_gives_no_folds() {
-        let d = three_changes();
+        let d = three_hunks();
         let f = Folding::none(&d);
         assert!(f.folds().is_empty());
         assert_eq!(f.layout(L, 10.).visual_line_count(), 101);
@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     fn opening_a_fold_shows_the_whole_run() {
-        let d = three_changes();
+        let d = three_hunks();
         let mut f = Folding::new(&d);
         let id = f.fold_at_line(L, 45).unwrap();
         assert_eq!(id, 2);
@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn expand_and_collapse_all() {
-        let d = three_changes();
+        let d = three_hunks();
         let mut f = Folding::new(&d);
         assert!(f.expand_all(true));
         assert_eq!(f.visible(L).count(), 0);
@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn expand_at_opens_the_fold_containing_the_line() {
-        let d = three_changes();
+        let d = three_hunks();
         let mut f = Folding::new(&d);
         // Inside the fold 45..86, not on its first line
         assert!(f.expand_at(L, 60));
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn caret_in_collapsed_fold_moves_to_start() {
-        let d = three_changes();
+        let d = three_hunks();
         let f = Folding::new(&d);
         assert_eq!(f.caret_after(L, 50), 45);
         assert_eq!(f.caret_after(L, 45), 45);
@@ -386,7 +386,7 @@ mod tests {
             &a[lines("a", 10).len()..]
         );
         let d = diff(&a, &b);
-        assert_eq!(d.blocks()[0].lines, [10..10, 10..30]);
+        assert_eq!(d.hunks()[0].lines, [10..10, 10..30]);
         let mut f = Folding::new(&d);
         let c: Vec<_> = f.connectors().collect();
         assert_eq!(c.len(), 2);
@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn hover_resets_when_fold_disappears() {
-        let d = three_changes();
+        let d = three_hunks();
         let mut f = Folding::new(&d);
         let id = f.fold_at_line(L, 45).unwrap();
         assert!(f.set_hovered(Some(id)));

@@ -55,19 +55,19 @@ pub fn paint_code_background(
 }
 
 /// Diff color for a hunk: full color in the number area. The outermost 3px of the gutter and all
-/// of the text get the ignored color when the hunk is whitespace only.
-pub fn paint_change(
+/// of the text get IntelliJ's ignored color when the hunk was compared by word.
+pub fn paint_hunk(
     geom: &SideGeometry,
     top: f32,
     bottom: f32,
     colors: &UiDiffColors,
-    ignored: bool,
+    compared_by_word: bool,
     window: &mut Window,
 ) {
     let gutter = geom.gutter_layout;
     let separator = geom.gutter_x(gutter.separator..gutter.width);
     let outer = separator.start.min(geom.text.start)..separator.end.max(geom.text.end);
-    let text_color = if ignored {
+    let text_color = if compared_by_word {
         colors.ignored
     } else {
         colors.background
@@ -151,7 +151,7 @@ impl ShapedText {
         window: &mut Window,
     ) {
         for highlight in highlights {
-            let color = theme.diff(highlight.diff_type).background;
+            let color = theme.diff(highlight.kind).background;
             let start_x = text_x + self.x_for_col(highlight.cols.start);
             if highlight.cols.is_empty() && !highlight.past_line_end {
                 // `DiffEmptyHighlighterRenderer`
@@ -231,7 +231,7 @@ impl StripeRects {
         let mut rects: Vec<(f32, f32, Hsla)> = Vec::new();
         for marker in markers {
             let (start, end) = marker.track_range(content_height, track_height);
-            let color = theme.diff(marker.diff_type).stripe;
+            let color = theme.diff(marker.kind).stripe;
             match rects.last_mut() {
                 Some(last) if last.2 == color && start <= last.1 => last.1 = last.1.max(end),
                 _ => rects.push((start, end, color)),

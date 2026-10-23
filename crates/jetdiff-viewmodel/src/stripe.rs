@@ -6,14 +6,14 @@ use jetdiff_core::side::Side;
 
 use crate::folding::Folding;
 use crate::layout::LineLayout;
-use crate::model::{DiffType, FileDiff};
+use crate::model::{FileDiff, HunkKind};
 
 /// `DaemonCodeAnalyzerSettings.myErrorStripeMarkMinHeight`.
 const MIN_MARK_HEIGHT: f32 = 2.;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StripeMarker {
-    pub diff_type: DiffType,
+    pub kind: HunkKind,
     /// Y in the code view, pixels from the top of the document.
     pub start_y: f32,
     pub end_y: f32,
@@ -62,12 +62,12 @@ pub fn stripe_markers(
     line_height: f32,
 ) -> Vec<StripeMarker> {
     let layout = folding.layout(side, line_height);
-    diff.blocks()
+    diff.hunks()
         .iter()
-        .map(|block| {
-            let (start_y, end_y) = marker_y(&layout, block.lines(side));
+        .map(|hunk| {
+            let (start_y, end_y) = marker_y(&layout, hunk.lines(side));
             StripeMarker {
-                diff_type: block.diff_type,
+                kind: hunk.kind,
                 start_y,
                 end_y,
             }
@@ -123,20 +123,20 @@ mod tests {
         let d = diff("a\nb\nc\nd\ne\n", "a\nc\nx\ny\nz\n");
         let left = stripe_markers(&d, &Folding::none(&d), Side::Left, 10.);
         let right = stripe_markers(&d, &Folding::none(&d), Side::Right, 10.);
-        assert_eq!(d.blocks()[0].lines, [1..2, 1..1]);
+        assert_eq!(d.hunks()[0].lines, [1..2, 1..1]);
         assert_eq!((left[0].start_y, left[0].end_y), (10., 10.));
         assert_eq!((right[0].start_y, right[0].end_y), (10., 10.));
-        assert_eq!(d.blocks()[1].lines, [3..5, 2..5]);
+        assert_eq!(d.hunks()[1].lines, [3..5, 2..5]);
         // Right 2..5: top of line 2 to top of line 4
         assert_eq!((right[1].start_y, right[1].end_y), (20., 40.));
-        assert_eq!(right[1].diff_type, DiffType::Modified);
+        assert_eq!(right[1].kind, HunkKind::Modified);
     }
 
     #[test]
     fn empty_range_after_last_line_is_clamped() {
         // Left is missing '\n' at the end; the hunk is on line 3 of 3
         let d = diff("one\ntwo\nthree", "one\ntwo\nthree\n");
-        assert_eq!(d.blocks()[0].lines, [3..3, 3..4]);
+        assert_eq!(d.hunks()[0].lines, [3..3, 3..4]);
         let left = stripe_markers(&d, &Folding::none(&d), Side::Left, 10.);
         assert_eq!((left[0].start_y, left[0].end_y), (20., 20.));
     }
@@ -151,7 +151,7 @@ mod tests {
     #[test]
     fn track_scales_and_has_minimum_height() {
         let m = StripeMarker {
-            diff_type: DiffType::Inserted,
+            kind: HunkKind::Added,
             start_y: 150.,
             end_y: 150.,
         };

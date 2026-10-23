@@ -2,7 +2,7 @@
 //! diff modes are rows from `UnifiedDiff`, and scroll is rounded to whole rows. The panel and the lines
 //! around it are in `panel.rs` and `widgets.rs`.
 
-mod change;
+mod hunk_color;
 mod painter;
 mod scrollbar;
 mod split;

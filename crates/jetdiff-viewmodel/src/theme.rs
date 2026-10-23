@@ -5,7 +5,7 @@
 
 use jetdiff_syntax::Token;
 
-use crate::model::DiffType;
+use crate::model::HunkKind;
 
 /// RGBA, alpha 255 is opaque.
 pub type Rgba = [u8; 4];
@@ -96,7 +96,7 @@ pub struct Theme {
     pub file_added: Rgba,
     pub file_deleted: Rgba,
     pub file_modified: Rgba,
-    pub inserted: DiffColors,
+    pub added: DiffColors,
     pub deleted: DiffColors,
     pub modified: DiffColors,
     /// Indexed with `Token as usize`.
@@ -128,7 +128,7 @@ impl Theme {
             file_added: rgb(0x73BD79),
             file_deleted: rgb(0x6F737A),
             file_modified: rgb(0x70AEFF),
-            inserted: DiffColors::new(rgb(0x294436), rgb(0x447152), bg),
+            added: DiffColors::new(rgb(0x294436), rgb(0x447152), bg),
             deleted: DiffColors::new(rgb(0x484A4A), rgb(0x656E76), bg),
             modified: DiffColors::new(rgb(0x385570), rgb(0x43698D), bg),
             syntax: Token::ALL.map(|t| match t {
@@ -162,7 +162,7 @@ impl Theme {
         }
     }
 
-    /// Islands Light. MODIFIED comes from Light, INSERTED and DELETED from Default.
+    /// Islands Light. `MODIFIED` comes from Light, `INSERTED` and `DELETED` from Default.
     pub fn light() -> Self {
         let bg = rgb(0xFFFFFF);
         let fg = 0x080808;
@@ -186,7 +186,7 @@ impl Theme {
             file_added: rgb(0x067D17),
             file_deleted: rgb(0x6C707E),
             file_modified: rgb(0x0033B3),
-            inserted: DiffColors::new(rgb(0xBEE6BE), rgb(0xAADEAA), bg),
+            added: DiffColors::new(rgb(0xBEE6BE), rgb(0xAADEAA), bg),
             deleted: DiffColors::new(rgb(0xD6D6D6), rgb(0xC8C8C8), bg),
             modified: DiffColors::new(rgb(0xC2D8F2), rgb(0xB6D2F2), bg),
             syntax: Token::ALL.map(|t| match t {
@@ -266,7 +266,7 @@ impl Theme {
             file_deleted: rgb(SURFACE2),
             file_modified: rgb(BLUE),
             // Green, red and blue with 0.25 for the background and 0.2 for the stripe
-            inserted: DiffColors::new(rgb(0x404F4B), rgb(0x394545), base),
+            added: DiffColors::new(rgb(0x404F4B), rgb(0x394545), base),
             deleted: DiffColors::new(rgb(0x53394C), rgb(0x493446), base),
             modified: DiffColors::new(rgb(0x394461), rgb(0x333C57), base),
             syntax: Token::ALL.map(|t| match t {
@@ -297,11 +297,11 @@ impl Theme {
         }
     }
 
-    pub fn diff(&self, diff_type: DiffType) -> &DiffColors {
-        match diff_type {
-            DiffType::Inserted => &self.inserted,
-            DiffType::Deleted => &self.deleted,
-            DiffType::Modified => &self.modified,
+    pub fn diff(&self, kind: HunkKind) -> &DiffColors {
+        match kind {
+            HunkKind::Added => &self.added,
+            HunkKind::Deleted => &self.deleted,
+            HunkKind::Modified => &self.modified,
         }
     }
 
@@ -334,7 +334,7 @@ mod tests {
     #[test]
     fn ignored_in_dark() {
         let t = Theme::dark();
-        assert_eq!(t.inserted.ignored, rgb(0x1F2B26));
+        assert_eq!(t.added.ignored, rgb(0x1F2B26));
         assert_eq!(t.deleted.ignored, rgb(0x2C2D2E));
         assert_eq!(t.modified.ignored, rgb(0x25323E));
     }
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn ignored_in_light() {
         let t = Theme::light();
-        assert_eq!(t.inserted.ignored, rgb(0xE5F5E5));
+        assert_eq!(t.added.ignored, rgb(0xE5F5E5));
         assert_eq!(t.deleted.ignored, rgb(0xEFEFEF));
         assert_eq!(t.modified.ignored, rgb(0xE7EFFA));
     }

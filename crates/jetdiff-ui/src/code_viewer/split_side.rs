@@ -8,7 +8,7 @@ use jetdiff_viewmodel::separator::{stroke_width, wave};
 use jetdiff_viewmodel::{FileDiff, Folding, LineLayout, SideGeometry};
 
 use super::code_paint::{
-    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_code_background, rect,
+    ShapedText, StripeRects, mask, paint_caret_row, paint_code_background, paint_hunk, rect,
     shape_number,
 };
 use super::divider::stroke_path;
@@ -64,7 +64,7 @@ impl SplitSide<'_> {
         let widest = window.with_content_mask(mask(self.area(self.geom.bounds())), |window| {
             let bottom = self.top + self.height;
             paint_code_background(self.geom, self.top, bottom, self.theme, window);
-            self.paint_block_backgrounds(&visible, window);
+            self.paint_hunk_backgrounds(&visible, window);
             // Over the diff backgrounds, otherwise it disappears in hunks
             self.paint_caret_row(&visible, window);
             self.paint_folds(&visible, window);
@@ -118,28 +118,28 @@ impl SplitSide<'_> {
     }
 
     /// Per hunk, not per line, so a large hunk becomes one rectangle.
-    fn paint_block_backgrounds(&self, visible: &Visible, window: &mut Window) {
+    fn paint_hunk_backgrounds(&self, visible: &Visible, window: &mut Window) {
         let geom = self.geom;
         let side = geom.side;
         let layout = self.layout();
         let (first, last) = (*visible.logical.start(), *visible.logical.end());
-        let blocks = self.diff.blocks();
-        let start = blocks.partition_point(|block| block.lines(side).end < first);
+        let hunks = self.diff.hunks();
+        let start = hunks.partition_point(|hunk| hunk.lines(side).end < first);
         let whole = geom.text.start.min(geom.gutter.start)..geom.text.end.max(geom.gutter.end);
 
-        for block in &blocks[start..] {
-            let lines = block.lines(side);
+        for hunk in &hunks[start..] {
+            let lines = hunk.lines(side);
             if lines.start > last + 1 {
                 break;
             }
-            let colors = self.theme.diff(block.diff_type);
-            let (band_top, band_bottom) = layout.block_band(lines.clone());
+            let colors = self.theme.diff(hunk.kind);
+            let (band_top, band_bottom) = layout.hunk_band(lines.clone());
             let (top, bottom) = (self.screen_y(band_top), self.screen_y(band_bottom));
             if lines.is_empty() {
                 window.paint_quad(fill(rect(whole.clone(), top, bottom), colors.background));
                 continue;
             }
-            paint_change(geom, top, bottom, colors, block.ignored(), window);
+            paint_hunk(geom, top, bottom, colors, hunk.compared_by_word(), window);
         }
     }
 
@@ -262,8 +262,8 @@ impl SplitSide<'_> {
             window,
         );
         // The default color disappears against the diff background, especially blue
-        let changed = self.diff.line_highlight(side, line).block.is_some();
-        let color = if changed {
+        let in_hunk = self.diff.line_highlight(side, line).hunk.is_some();
+        let color = if in_hunk {
             self.theme.line_number_caret_row
         } else {
             self.theme.line_number

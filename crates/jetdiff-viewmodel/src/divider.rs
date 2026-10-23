@@ -4,7 +4,7 @@
 
 use crate::folding::{FoldId, Folding};
 use crate::layout::{LineLayout, Viewport};
-use crate::model::{DiffType, FileDiff};
+use crate::model::{FileDiff, HunkKind};
 use crate::separator::{PathSeg, connector};
 
 /// `diff.divider.width` in the registry.
@@ -53,9 +53,9 @@ impl Cubic {
 /// Also draw `mid` with a 1px stroke in the same color, so steep bands are never thinner than 1px.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DividerBand {
-    pub block: usize,
-    /// Full color, also for ignored hunks.
-    pub diff_type: DiffType,
+    pub hunk: usize,
+    /// Full color, also for hunks compared by word.
+    pub kind: HunkKind,
     pub top: Cubic,
     pub bottom: Cubic,
     pub mid: Cubic,
@@ -75,23 +75,24 @@ pub fn divider_bands(
         layouts[1].painted_lines(scroll_y[1], viewport.height),
     ];
 
-    let above =
-        |b: &crate::model::Block| painted[0].0 > b.lines[0].end && painted[1].0 > b.lines[1].end;
+    let above = |hunk: &crate::model::Hunk| {
+        painted[0].0 > hunk.lines[0].end && painted[1].0 > hunk.lines[1].end
+    };
     // `DividerPaintableHandlerImpl.process` skips hunks above the viewport. The ends
     // rise on both sides, so they can be skipped with a binary search.
-    let first = diff.blocks().partition_point(above);
+    let first = diff.hunks().partition_point(above);
     let mut bands = Vec::new();
-    for (i, block) in diff.blocks().iter().enumerate().skip(first) {
-        let [l, r] = &block.lines;
+    for (i, hunk) in diff.hunks().iter().enumerate().skip(first) {
+        let [l, r] = &hunk.lines;
         if painted[0].1 < l.start && painted[1].1 < r.start {
             break;
         }
-        let side = |s: usize| trapezium_side(&layouts[s], block.lines[s].clone(), scroll_y[s]);
+        let side = |s: usize| trapezium_side(&layouts[s], hunk.lines[s].clone(), scroll_y[s]);
         let (s1, e1) = side(0);
         let (s2, e2) = side(1);
         bands.push(DividerBand {
-            block: i,
-            diff_type: block.diff_type,
+            hunk: i,
+            kind: hunk.kind,
             top: Cubic::new(width, s1, s2),
             bottom: Cubic::new(width, e1 + 1., e2 + 1.),
             // Java: `(start + end) / 2` in int, and a stroke on integer y covers the next half pixel
@@ -199,11 +200,11 @@ mod tests {
     fn modified_hunk_with_known_numbers() {
         // Left lines 2..4, Right lines 2..5
         let d = diff("a\nb\nc\nd\ne\n", "a\nb\nx\ny\nz\ne\n");
-        assert_eq!(d.blocks()[0].lines, [2..4, 2..5]);
+        assert_eq!(d.hunks()[0].lines, [2..4, 2..5]);
         let bands = divider_bands(&d, &Folding::none(&d), [0., 10.], VP, 24.);
         assert_eq!(bands.len(), 1);
         let b = bands[0];
-        assert_eq!(b.diff_type, DiffType::Modified);
+        assert_eq!(b.kind, HunkKind::Modified);
         assert_eq!((b.top.p0.y, b.top.p3.y), (40., 30.));
         assert_eq!((b.bottom.p0.y, b.bottom.p3.y), (80., 90.));
         // (40 + 79) / 2 = 59, (30 + 89) / 2 = 59
@@ -213,9 +214,9 @@ mod tests {
     #[test]
     fn empty_side_becomes_2px() {
         let d = diff("a\nb\n", "a\nx\ny\nb\n");
-        assert_eq!(d.blocks()[0].lines, [1..1, 1..3]);
+        assert_eq!(d.hunks()[0].lines, [1..1, 1..3]);
         let b = divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.)[0];
-        assert_eq!(b.diff_type, DiffType::Inserted);
+        assert_eq!(b.kind, HunkKind::Added);
         // Boundary at y=20: [19, 21)
         assert_eq!((b.top.p0.y, b.bottom.p0.y), (19., 21.));
         assert_eq!((b.top.p3.y, b.bottom.p3.y), (20., 60.));
@@ -240,14 +241,17 @@ mod tests {
         }
         let b = b.join("\n") + "\n";
         let d = diff(&a, &b);
-        assert_eq!(d.blocks().len(), 3);
+        assert_eq!(d.hunks().len(), 3);
         // Viewport covers lines 25..35
         let bands = divider_bands(&d, &Folding::none(&d), [500., 500.], VP, 24.);
-        assert_eq!(bands.iter().map(|b| b.block).collect::<Vec<_>>(), vec![1]);
+        assert_eq!(
+            bands.iter().map(|band| band.hunk).collect::<Vec<_>>(),
+            vec![1]
+        );
         // Visible on only one side is enough
         let bands = divider_bands(&d, &Folding::none(&d), [0., 500.], VP, 24.);
         assert_eq!(
-            bands.iter().map(|b| b.block).collect::<Vec<_>>(),
+            bands.iter().map(|band| band.hunk).collect::<Vec<_>>(),
             vec![0, 1]
         );
     }
@@ -259,7 +263,7 @@ mod tests {
             &lines("a", 20),
             &(lines("a", 10) + "x\n" + &lines("a", 20)[lines("a", 11).len()..]),
         );
-        assert_eq!(d.blocks()[0].lines, [10..11, 10..11]);
+        assert_eq!(d.hunks()[0].lines, [10..11, 10..11]);
         assert_eq!(
             divider_bands(&d, &Folding::none(&d), [0., 0.], VP, 24.).len(),
             1
@@ -306,9 +310,12 @@ mod tests {
             b[i] = format!("x{i}");
         }
         let d = diff(&a, &(b.join("\n") + "\n"));
-        assert_eq!(d.blocks().len(), 400);
+        assert_eq!(d.hunks().len(), 400);
         let y = 10_000. * VP.line_height;
         let bands = divider_bands(&d, &Folding::none(&d), [y, y], VP, 24.);
-        assert_eq!(bands.iter().map(|b| b.block).collect::<Vec<_>>(), vec![200]);
+        assert_eq!(
+            bands.iter().map(|band| band.hunk).collect::<Vec<_>>(),
+            vec![200]
+        );
     }
 }

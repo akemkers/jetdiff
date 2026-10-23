@@ -16,8 +16,8 @@ pub enum Command {
     GoToBottom,
     HalfPageDown,
     HalfPageUp,
-    NextChange,
-    PrevChange,
+    NextHunk,
+    PreviousHunk,
     /// Does nothing when only one side is shown, or the side is already active.
     FocusSide(Side),
     /// The fold at the cursor, like `ExpandRegionAction`.
