@@ -2,6 +2,7 @@
 
 use std::ops::Range;
 
+use jetdiff_files::ChangedFile;
 use jetdiff_viewmodel::{Cursor, FileDiff, Side};
 
 use crate::files::Files;
@@ -39,14 +40,18 @@ pub fn rollback_request(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileRollbackRequest {
-    /// An index in the changed files.
-    pub file: usize,
-    path: String,
+    /// The file itself, not its index, so a new read while the dialog is open can't change which
+    /// file is rolled back.
+    file: ChangedFile,
 }
 
 impl FileRollbackRequest {
+    pub fn file(&self) -> &ChangedFile {
+        &self.file
+    }
+
     pub fn question(&self) -> String {
-        format!("Roll back {}?", self.path)
+        format!("Roll back {}?", self.file.path)
     }
 }
 
@@ -62,8 +67,7 @@ pub fn file_rollback_request(
         .file_at_cursor()
         .ok_or("Select a file to roll it back")?;
     Ok(FileRollbackRequest {
-        file,
-        path: files.changed_files()[file].path.clone(),
+        file: files.changed_files()[file].clone(),
     })
 }
 

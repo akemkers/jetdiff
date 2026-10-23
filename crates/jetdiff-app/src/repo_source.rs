@@ -150,7 +150,7 @@ impl RepoSource {
             diff,
             pinned,
             paths: [file.left_side_path().to_owned(), file.path.clone()],
-            can_rollback: self.repo.is_local_changes(),
+            can_rollback: self.can_rollback(),
             same_file,
         }))
     }
@@ -167,13 +167,17 @@ impl RepoSource {
         )
     }
 
-    /// File rollback of `file` in the changed files. Run `rolled_back` afterwards, so the list
-    /// keeps up.
-    pub fn rollback_file(&self, file: usize) -> Result<(), String> {
-        if !self.repo.is_local_changes() {
+    /// Only Local changes can be written to, not a commit.
+    pub fn can_rollback(&self) -> bool {
+        self.repo.is_local_changes()
+    }
+
+    /// Run `rolled_back` afterwards, so the list keeps up.
+    pub fn rollback_file(&self, file: &ChangedFile) -> Result<(), String> {
+        if !self.can_rollback() {
             return Err(ONLY_LOCAL_CHANGES.into());
         }
-        self.repo.rollback_file(&self.changed_files[file])
+        self.repo.rollback_file(file)
     }
 }
 
@@ -381,8 +385,8 @@ mod tests {
 
     /// Rolls back the file at `path` and reads Local changes again, as the UI does.
     fn file_rollback(source: &mut RepoSource, path: &str) -> Applied {
-        let file = position(source, path).unwrap();
-        source.rollback_file(file).unwrap();
+        let file = source.changed_files()[position(source, path).unwrap()].clone();
+        source.rollback_file(&file).unwrap();
         let job = source.rolled_back();
         apply(source, job)
     }
@@ -408,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn file_rollback_of_deleted_file_restores_it() {
+    fn file_rollback_of_deleted_file_brings_it_back() {
         let temp_repo = TempRepo::new("file-rollback-deleted");
         temp_repo.write("a.rs", "a\n");
         temp_repo.git(&["add", "-A"]);
@@ -419,6 +423,7 @@ mod tests {
         file_rollback(&mut source, "a.rs");
         assert_eq!(temp_repo.read("a.rs").as_deref(), Some("a\n"));
         assert_eq!(temp_repo.status(), "");
+        assert!(source.changed_files().is_empty());
     }
 
     #[test]
@@ -482,9 +487,9 @@ mod tests {
         let job = source.select_commit(Some("HEAD".into()));
         apply(&mut source, job);
 
-        let a = position(&source, "a.rs").unwrap();
+        let file = source.changed_files()[position(&source, "a.rs").unwrap()].clone();
         assert_eq!(
-            source.rollback_file(a),
+            source.rollback_file(&file),
             Err("Only Local changes can be rolled back".into())
         );
         assert_eq!(temp_repo.read("a.rs").as_deref(), Some("a\n"));

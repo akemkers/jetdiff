@@ -376,8 +376,7 @@ impl App {
         };
         let plain = !key.ctrl && !key.cmd;
         if section == Section::Files && key.code == KeyCode::Char('r') && plain {
-            let can_rollback = repo.repo_source.repo().is_local_changes();
-            match file_rollback_request(&repo.side_panel.files, can_rollback) {
+            match file_rollback_request(&repo.side_panel.files, repo.repo_source.can_rollback()) {
                 Ok(request) => repo.file_rollback = Some(request),
                 Err(text) => self.show_brief(Notification::warning(text)),
             }
@@ -410,7 +409,7 @@ impl App {
         let Some(repo) = &mut self.repository else {
             return;
         };
-        match repo.repo_source.rollback_file(request.file) {
+        match repo.repo_source.rollback_file(request.file()) {
             Ok(()) => {
                 let job = repo.repo_source.rolled_back();
                 repo.read(job);

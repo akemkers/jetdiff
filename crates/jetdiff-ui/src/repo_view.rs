@@ -86,8 +86,8 @@ impl RepoView {
             cx.subscribe(&files, |this, _, _: &AskFileRollback, cx| {
                 this.ask_file_rollback(cx)
             }),
-            cx.subscribe(&files, |this, _, e: &FileRollback, cx| {
-                this.rollback_file(e, cx)
+            cx.subscribe(&files, |this, _, event: &FileRollback, cx| {
+                this.rollback_file(event, cx)
             }),
         ];
 
@@ -162,7 +162,7 @@ impl RepoView {
 
     /// Opens the dialog in the file tree, or says why the file can't be rolled back.
     fn ask_file_rollback(&mut self, cx: &mut Context<Self>) {
-        let can_rollback = self.repo_source.repo().is_local_changes();
+        let can_rollback = self.repo_source.can_rollback();
         match file_rollback_request(self.files.read(cx).files(), can_rollback) {
             Ok(request) => self.files.update(cx, |file_tree, cx| {
                 file_tree.confirm_file_rollback(request, cx)
@@ -174,8 +174,8 @@ impl RepoView {
     }
 
     /// Reads the repo source again, without waiting for the watcher.
-    fn rollback_file(&mut self, e: &FileRollback, cx: &mut Context<Self>) {
-        match self.repo_source.rollback_file(e.0.file) {
+    fn rollback_file(&mut self, event: &FileRollback, cx: &mut Context<Self>) {
+        match self.repo_source.rollback_file(event.0.file()) {
             Ok(()) => {
                 let job = self.repo_source.rolled_back();
                 self.read(job, cx);
