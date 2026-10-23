@@ -1,8 +1,8 @@
 //! The code in the diff: the visible rows, in Split or Unified, and the scrollbar on the right. Both
-//! diff modes are rows from `UnifiedDiff`, and scroll is rounded to whole rows. The panel and the lines
-//! around it are in `panel.rs` and `widgets.rs`.
+//! diff modes are rows from `UnifiedDiff`, and scroll is rounded to whole rows. The side panel and
+//! the lines around it are in `side_panel.rs` and `widgets.rs`.
 
-mod change;
+mod hunk_color;
 mod painter;
 mod scrollbar;
 mod split;

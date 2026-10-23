@@ -1,5 +1,5 @@
 //! The file tree on the left, as in IntelliJ's commit dialog. A click on a file selects it,
-//! a click on a folder collapses it.
+//! a click on a folder opens or closes it.
 
 use std::rc::Rc;
 
@@ -8,8 +8,8 @@ use gpui::{
     Resource, ScrollStrategy, Subscription, UniformListScrollHandle, Window, div, img, prelude::*,
     px, uniform_list,
 };
-use jetdiff_app::{FileTree, count_label, file_name};
-use jetdiff_changes::{ChangeTree, FileChange, RowKind, Status};
+use jetdiff_app::{Files, count_label, file_name};
+use jetdiff_files::{ChangedFile, FileStatus, RowKind, Tree};
 use jetdiff_viewmodel::columns::display_width;
 
 use crate::icons::{chevron_icon, file_icon, folder_icon};
@@ -22,7 +22,7 @@ use crate::theme::UiTheme;
 const INDENT: f32 = 16.;
 const ICON_SIZE: f32 = 16.;
 
-/// The selected file, an index in the change list. `None` when the list is empty. The tree and ChangesView
+/// The selected file, an index in the changed files. `None` when the list is empty. The tree and RepoView
 /// observe it.
 pub struct Selection(pub Option<usize>);
 
@@ -33,27 +33,27 @@ impl Selection {
     }
 }
 
-pub struct ChangesTree {
-    tree: FileTree,
+pub struct FileTree {
+    files: Files,
     selection: Entity<Selection>,
     scroll: UniformListScrollHandle,
     /// Follows the zoom in the diff, like the whole UI in IntelliJ.
     scale: f32,
-    /// The width the content needs, unscaled. Recomputed when the changes are replaced.
+    /// The width the content needs, unscaled. Recomputed when the changed files are replaced.
     content_width: Option<f32>,
     focus: FocusHandle,
     _selection: Subscription,
 }
 
-impl ChangesTree {
+impl FileTree {
     pub fn new(
-        changes: Rc<[FileChange]>,
+        changed_files: Rc<[ChangedFile]>,
         selection: Entity<Selection>,
         cx: &mut Context<Self>,
     ) -> Self {
         let observe = cx.observe(&selection, |this, _, cx| this.reveal(cx));
         Self {
-            tree: FileTree::new(changes),
+            files: Files::new(changed_files),
             selection,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
@@ -68,8 +68,8 @@ impl ChangesTree {
         cx.notify();
     }
 
-    pub fn set_changes(&mut self, changes: Rc<[FileChange]>, cx: &mut Context<Self>) {
-        self.tree.set_changes(changes);
+    pub fn set_changed_files(&mut self, changed_files: Rc<[ChangedFile]>, cx: &mut Context<Self>) {
+        self.files.set_changed_files(changed_files);
         self.content_width = None;
         cx.notify();
     }
@@ -78,7 +78,7 @@ impl ChangesTree {
         let Some(file) = self.selection.read(cx).0 else {
             return;
         };
-        if let Some(next) = self.tree.next_file(file, forward) {
+        if let Some(next) = self.files.next_file(file, forward) {
             self.selection.update(cx, |s, cx| s.set(Some(next), cx));
         }
     }
@@ -88,14 +88,14 @@ impl ChangesTree {
         let Some(file) = self.selection.read(cx).0 else {
             return;
         };
-        if let Some(row) = self.tree.reveal(file) {
+        if let Some(row) = self.files.reveal(file) {
             self.scroll.scroll_to_item(row, ScrollStrategy::Top);
         }
         cx.notify();
     }
 
-    /// Folders are collapsed or expanded, files are selected.
-    fn open(&mut self, file: Option<usize>, cx: &mut Context<Self>) {
+    /// `None` after a folder row, which opened or closed instead.
+    fn selected(&mut self, file: Option<usize>, cx: &mut Context<Self>) {
         match file {
             Some(file) => self.selection.update(cx, |s, cx| s.set(Some(file), cx)),
             None => cx.notify(),
@@ -106,15 +106,15 @@ impl ChangesTree {
     pub fn content_width(&mut self, window: &Window) -> f32 {
         *self.content_width.get_or_insert_with(|| {
             let char_width = TextStyle::new(TEXT_SIZE, window).char_width;
-            content_width(self.tree.changes(), char_width)
+            content_width(self.files.changed_files(), char_width)
         })
     }
 
-    fn status_color(theme: &UiTheme, status: Status) -> Hsla {
+    fn status_color(theme: &UiTheme, status: FileStatus) -> Hsla {
         match status {
-            Status::Added => theme.file_added,
-            Status::Deleted => theme.file_deleted,
-            Status::Modified | Status::Renamed => theme.file_modified,
+            FileStatus::Added => theme.file_added,
+            FileStatus::Deleted => theme.file_deleted,
+            FileStatus::Modified | FileStatus::Renamed => theme.file_modified,
         }
     }
 
@@ -124,13 +124,13 @@ impl ChangesTree {
         };
         cx.stop_propagation();
         let row = match key {
-            ListKey::Down => self.tree.move_cursor(true),
-            ListKey::Up => self.tree.move_cursor(false),
-            ListKey::Open if !self.tree.rows().is_empty() => {
-                let file = self.tree.open_cursor();
-                return self.open(file, cx);
+            ListKey::Down => self.files.move_cursor(true),
+            ListKey::Up => self.files.move_cursor(false),
+            ListKey::Select if !self.files.rows().is_empty() => {
+                let file = self.files.select_at_cursor();
+                return self.selected(file, cx);
             }
-            ListKey::Open => return,
+            ListKey::Select => return,
         };
         self.scroll.scroll_to_item(row, ScrollStrategy::Top);
         cx.notify();
@@ -143,7 +143,7 @@ impl ChangesTree {
         focused: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let row = &self.tree.rows()[i];
+        let row = &self.files.rows()[i];
         let theme = cx.global::<Settings>().theme;
         let dark = theme.dark;
         let s = |v: f32| px(v * self.scale);
@@ -166,24 +166,21 @@ impl ChangesTree {
             .when_some(
                 row_bg(
                     &theme,
-                    i == self.tree.cursor(),
+                    i == self.files.cursor(),
                     selected.is_some_and(|f| row.kind == RowKind::File(f)),
                     focused,
                 ),
                 |d, bg| d.bg(bg),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                let file = this.tree.open(i);
-                this.open(file, cx)
+                let file = this.files.select(i);
+                this.selected(file, cx)
             }));
         match &row.kind {
             RowKind::Dir {
-                name,
-                count,
-                expanded,
-                ..
+                name, count, open, ..
             } => base
-                .child(icon(chevron_icon(*expanded, dark)))
+                .child(icon(chevron_icon(*open, dark)))
                 .child(icon(folder_icon(dark)))
                 .child(name.clone())
                 .child(
@@ -193,17 +190,17 @@ impl ChangesTree {
                         .child(count_label(*count)),
                 ),
             &RowKind::File(f) => {
-                let change = &self.tree.changes()[f];
-                let name = file_name(&change.path);
+                let file = &self.files.changed_files()[f];
+                let name = file_name(&file.path);
                 // The space where the folders have the arrow, so the icons line up under each other
                 base.child(div().w(s(ICON_SIZE)).flex_none())
-                    .child(icon(file_icon(&change.path, dark)))
+                    .child(icon(file_icon(&file.path, dark)))
                     .child(
                         div()
-                            .text_color(Self::status_color(&theme, change.status))
+                            .text_color(Self::status_color(&theme, file.status))
                             .child(name.to_owned()),
                     )
-                    .when_some(change.renamed_from(), |d, from| {
+                    .when_some(file.renamed_from_label(), |d, from| {
                         d.child(div().pl(s(2.)).text_color(theme.line_number).child(from))
                     })
             }
@@ -211,13 +208,13 @@ impl ChangesTree {
     }
 }
 
-impl Focusable for ChangesTree {
+impl Focusable for FileTree {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
     }
 }
 
-impl Render for ChangesTree {
+impl Render for FileTree {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focused = self.focus.is_focused(window);
         div()
@@ -229,8 +226,8 @@ impl Render for ChangesTree {
             .text_color(cx.global::<Settings>().theme.editor_fg)
             .child(
                 uniform_list(
-                    "changes",
-                    self.tree.rows().len(),
+                    "files",
+                    self.files.rows().len(),
                     cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                         let selected = this.selection.read(cx).0;
                         range
@@ -245,10 +242,10 @@ impl Render for ChangesTree {
 }
 
 /// The width that fits all rows with all folders open, unscaled. The font is monospace.
-fn content_width(changes: &[FileChange], char_width: f32) -> f32 {
+fn content_width(changed_files: &[ChangedFile], char_width: f32) -> f32 {
     let text = |s: &str| display_width(s) as f32 * char_width;
     let icons = 2. * (ICON_SIZE + GAP);
-    ChangeTree::new(changes)
+    Tree::new(changed_files)
         .rows()
         .iter()
         .map(|r| {
@@ -257,9 +254,11 @@ fn content_width(changes: &[FileChange], char_width: f32) -> f32 {
                     icons + text(name) + GAP + 2. + text(&count_label(*count))
                 }
                 &RowKind::File(f) => {
-                    let change = &changes[f];
-                    let from = change.renamed_from().map_or(0., |t| GAP + 2. + text(&t));
-                    icons + text(file_name(&change.path)) + from
+                    let file = &changed_files[f];
+                    let from = file
+                        .renamed_from_label()
+                        .map_or(0., |label| GAP + 2. + text(&label));
+                    icons + text(file_name(&file.path)) + from
                 }
             };
             PAD_LEFT + r.depth as f32 * INDENT + row
@@ -274,16 +273,19 @@ mod tests {
 
     #[test]
     fn width_follows_longest_row() {
-        let change = |path: &str| FileChange {
+        let changed_file = |path: &str| ChangedFile {
             path: path.into(),
-            old_path: None,
-            status: Status::Modified,
+            renamed_from: None,
+            status: FileStatus::Modified,
         };
         // The folder `src` with «1 file» is wider than `a.rs` one level in
         let dir = PAD_LEFT + 2. * (ICON_SIZE + GAP) + 30. + GAP + 2. + 60.;
-        assert_eq!(content_width(&[change("src/a.rs")], 10.), dir + PAD_RIGHT);
+        assert_eq!(
+            content_width(&[changed_file("src/a.rs")], 10.),
+            dir + PAD_RIGHT
+        );
         let file = PAD_LEFT + INDENT + 2. * (ICON_SIZE + GAP) + 200.;
         let long = format!("src/{}.rs", "x".repeat(17));
-        assert_eq!(content_width(&[change(&long)], 10.), file + PAD_RIGHT);
+        assert_eq!(content_width(&[changed_file(&long)], 10.), file + PAD_RIGHT);
     }
 }

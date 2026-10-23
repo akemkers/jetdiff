@@ -43,7 +43,7 @@ impl Watcher {
         let git_dir = root.join(".git");
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let Ok(event) = res else { return };
-            // inotify reports reads, and our own reading would cause a new reload
+            // inotify reports reads, and our own reading would cause a new autoreload
             if event.kind.is_access() {
                 return;
             }

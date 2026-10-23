@@ -12,53 +12,55 @@ use crate::scroll::LineMapping;
 
 /// `TextDiffType` without CONFLICT, which is only used in merge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DiffType {
-    Inserted,
+pub enum HunkKind {
+    Added,
     Deleted,
     Modified,
 }
 
-impl DiffType {
+impl HunkKind {
     /// `DiffUtil.getDiffType(hasDeleted, hasInserted)`.
-    fn from_sides(has_deleted: bool, has_inserted: bool) -> Self {
-        match (has_deleted, has_inserted) {
-            (true, false) => DiffType::Deleted,
-            (false, true) => DiffType::Inserted,
+    fn from_sides(has_deleted: bool, has_added: bool) -> Self {
+        match (has_deleted, has_added) {
+            (true, false) => HunkKind::Deleted,
+            (false, true) => HunkKind::Added,
             // Both empty is logged as an error in IntelliJ and becomes MODIFIED
-            _ => DiffType::Modified,
+            _ => HunkKind::Modified,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Block {
+pub struct Hunk {
     pub lines: [Range<usize>; 2],
     /// Absolute byte offsets for whole lines, as in `LineFragment`.
     pub offsets: [Range<usize>; 2],
-    pub diff_type: DiffType,
-    /// `None` is a whole-line highlight in full color. `Some(vec![])` is the ignored color without words.
-    pub inner: Option<Vec<DiffFragment>>,
+    pub kind: HunkKind,
+    /// `None` when the hunk was not compared by word. `Some(vec![])` was compared by word and
+    /// found no words that differ.
+    pub inline_highlights: Option<Vec<DiffFragment>>,
 }
 
-impl Block {
+impl Hunk {
     pub fn lines(&self, side: Side) -> Range<usize> {
         self.lines[idx(side)].clone()
     }
 
-    /// `SimpleDiffChangeUi.createHighlighter`: `ignored = innerFragments != null`.
-    pub fn ignored(&self) -> bool {
-        self.inner.is_some()
+    /// Such a hunk gets a fainter background, so its inline highlights stand out
+    /// (`SimpleDiffChangeUi.createHighlighter`: `ignored = innerFragments != null`).
+    pub fn compared_by_word(&self) -> bool {
+        self.inline_highlights.is_some()
     }
 }
 
 /// Inline highlight in full color for its own kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InlineHighlight {
-    /// An empty range is an empty side of a word fragment: a 2px vertical stroke at `cols.start`
-    /// (`DiffEmptyHighlighterRenderer`).
+    /// An empty range is the empty side of an inline highlight: a 2px vertical stroke at
+    /// `cols.start` (`DiffEmptyHighlighterRenderer`).
     pub cols: Range<usize>,
-    pub diff_type: DiffType,
-    /// The fragment covers the line break, so the color continues to the right edge of the viewport.
+    pub kind: HunkKind,
+    /// The highlight covers the line break, so the color continues to the right edge of the viewport.
     pub past_line_end: bool,
 }
 
@@ -72,7 +74,7 @@ pub struct SyntaxSpan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LineHighlight<'a> {
     /// The hunk the line is in.
-    pub block: Option<usize>,
+    pub hunk: Option<usize>,
     pub inline: &'a [InlineHighlight],
 }
 
@@ -81,7 +83,7 @@ struct SideData {
     text: String,
     line_offsets: LineOffsets,
     /// Hunk per line, for lookup without searching.
-    line_block: Vec<Option<usize>>,
+    line_hunk: Vec<Option<usize>>,
     /// Inline highlights per line, flat and sorted by line.
     inline: Vec<InlineHighlight>,
     inline_start: Vec<usize>,
@@ -93,51 +95,54 @@ struct SideData {
 #[derive(Debug, Clone)]
 pub struct FileDiff {
     sides: [SideData; 2],
-    blocks: Vec<Block>,
+    hunks: Vec<Hunk>,
     mapping: LineMapping,
 }
 
 impl FileDiff {
-    pub fn new(text1: &str, text2: &str, policy: ComparisonPolicy) -> Result<Self, DiffTooBig> {
-        let fragments = compare_for_viewer(text1, text2, policy)?;
-        let blocks = fragments
+    pub fn new(
+        left_side_text: &str,
+        right_side_text: &str,
+        policy: ComparisonPolicy,
+    ) -> Result<Self, DiffTooBig> {
+        let hunks = compare_for_viewer(left_side_text, right_side_text, policy)?
             .into_iter()
-            .map(|f| Block {
+            .map(|f| Hunk {
                 // `DiffUtil.getLineDiffType`
-                diff_type: DiffType::from_sides(!f.lines1.is_empty(), !f.lines2.is_empty()),
+                kind: HunkKind::from_sides(!f.lines1.is_empty(), !f.lines2.is_empty()),
                 lines: [f.lines1, f.lines2],
                 offsets: [f.offsets1, f.offsets2],
-                inner: f.inner,
+                inline_highlights: f.inner,
             })
             .collect::<Vec<_>>();
         let sides = [
-            SideData::new(text1, &blocks, Side::Left),
-            SideData::new(text2, &blocks, Side::Right),
+            SideData::new(left_side_text, &hunks, Side::Left),
+            SideData::new(right_side_text, &hunks, Side::Right),
         ];
-        let mapping = LineMapping::new(&blocks, [sides[0].line_count(), sides[1].line_count()]);
+        let mapping = LineMapping::new(&hunks, [sides[0].line_count(), sides[1].line_count()]);
         Ok(Self {
             sides,
-            blocks,
+            hunks,
             mapping,
         })
     }
 
-    pub fn blocks(&self) -> &[Block] {
-        &self.blocks
+    pub fn hunks(&self) -> &[Hunk] {
+        &self.hunks
     }
 
     /// The hunk the line is in. Deleted lines exist only on Left and added lines only
     /// on Right. On the other side the line right below where they are missing applies.
-    pub fn block_at(&self, side: Side, line: usize) -> Option<usize> {
+    pub fn hunk_at(&self, side: Side, line: usize) -> Option<usize> {
         self.side(side)
-            .line_block
+            .line_hunk
             .get(line)
             .copied()
             .flatten()
             .or_else(|| {
-                self.blocks
+                self.hunks
                     .iter()
-                    .position(|b| b.lines(side).is_empty() && b.lines(side).start == line)
+                    .position(|hunk| hunk.lines(side).is_empty() && hunk.lines(side).start == line)
             })
     }
 
@@ -194,11 +199,11 @@ impl FileDiff {
 
     pub fn line_highlight(&self, side: Side, line: usize) -> LineHighlight<'_> {
         let s = self.side(side);
-        let Some(&block) = s.line_block.get(line) else {
+        let Some(&hunk) = s.line_hunk.get(line) else {
             return LineHighlight::default();
         };
         LineHighlight {
-            block,
+            hunk,
             inline: &s.inline[s.inline_start[line]..s.inline_start[line + 1]],
         }
     }
@@ -224,27 +229,27 @@ impl FileDiff {
 }
 
 impl SideData {
-    fn new(text: &str, blocks: &[Block], side: Side) -> Self {
+    fn new(text: &str, hunks: &[Hunk], side: Side) -> Self {
         let line_offsets = LineOffsets::new(text);
         let count = line_offsets.line_count();
-        let mut line_block = vec![None; count];
+        let mut line_hunk = vec![None; count];
         let mut per_line: Vec<Vec<InlineHighlight>> = vec![Vec::new(); count];
 
-        for (i, block) in blocks.iter().enumerate() {
-            for line in block.lines(side) {
-                line_block[line] = Some(i);
+        for (i, hunk) in hunks.iter().enumerate() {
+            for line in hunk.lines(side) {
+                line_hunk[line] = Some(i);
             }
-            let base = block.offsets[idx(side)].start;
-            for fragment in block.inner.iter().flatten() {
-                let range = side.select(&fragment.offsets1, &fragment.offsets2);
-                let diff_type = DiffType::from_sides(
-                    !fragment.offsets1.is_empty(),
-                    !fragment.offsets2.is_empty(),
+            let base = hunk.offsets[idx(side)].start;
+            for highlight in hunk.inline_highlights.iter().flatten() {
+                let range = side.select(&highlight.offsets1, &highlight.offsets2);
+                let kind = HunkKind::from_sides(
+                    !highlight.offsets1.is_empty(),
+                    !highlight.offsets2.is_empty(),
                 );
                 split_into_lines(
                     &line_offsets,
                     base + range.start..base + range.end,
-                    diff_type,
+                    kind,
                     &mut per_line,
                 );
             }
@@ -261,7 +266,7 @@ impl SideData {
         Self {
             text: text.to_owned(),
             line_offsets,
-            line_block,
+            line_hunk,
             inline,
             inline_start,
             syntax: Vec::new(),
@@ -316,7 +321,7 @@ impl SideData {
 fn split_into_lines(
     lo: &LineOffsets,
     range: Range<usize>,
-    diff_type: DiffType,
+    kind: HunkKind,
     out: &mut [Vec<InlineHighlight>],
 ) {
     if range.is_empty() {
@@ -325,7 +330,7 @@ fn split_into_lines(
         let col = range.start - lo.line_start(line);
         out[line].push(InlineHighlight {
             cols: col..col,
-            diff_type,
+            kind,
             past_line_end: false,
         });
         return;
@@ -341,7 +346,7 @@ fn split_into_lines(
         }
         highlights.push(InlineHighlight {
             cols,
-            diff_type,
+            kind,
             past_line_end,
         });
     }
@@ -375,23 +380,23 @@ mod tests {
     #[test]
     fn kind_from_empty_sides() {
         let d = diff("a\nb\n", "a\nx\nb\n");
-        assert_eq!(d.blocks()[0].diff_type, DiffType::Inserted);
+        assert_eq!(d.hunks()[0].kind, HunkKind::Added);
         let d = diff("a\nx\nb\n", "a\nb\n");
-        assert_eq!(d.blocks()[0].diff_type, DiffType::Deleted);
+        assert_eq!(d.hunks()[0].kind, HunkKind::Deleted);
         let d = diff("a\nb\n", "a\nc\n");
-        assert_eq!(d.blocks()[0].diff_type, DiffType::Modified);
+        assert_eq!(d.hunks()[0].kind, HunkKind::Modified);
     }
 
     #[test]
     fn hunk_at_line() {
         let d = diff("a\nb\nc\n", "a\nx\nc\n");
-        assert_eq!(d.block_at(Side::Right, 1), Some(0));
-        assert_eq!(d.block_at(Side::Right, 0), None);
+        assert_eq!(d.hunk_at(Side::Right, 1), Some(0));
+        assert_eq!(d.hunk_at(Side::Right, 0), None);
         // Deleted line: empty on Right, hit on the line after
         let d = diff("a\nx\nb\n", "a\nb\n");
-        assert_eq!(d.block_at(Side::Left, 1), Some(0));
-        assert_eq!(d.block_at(Side::Right, 1), Some(0));
-        assert_eq!(d.block_at(Side::Right, 0), None);
+        assert_eq!(d.hunk_at(Side::Left, 1), Some(0));
+        assert_eq!(d.hunk_at(Side::Right, 1), Some(0));
+        assert_eq!(d.hunk_at(Side::Right, 0), None);
     }
 
     #[test]
@@ -441,13 +446,13 @@ mod tests {
     }
 
     #[test]
-    fn fragment_over_line_break_is_split() {
+    fn inline_highlight_over_line_break_is_split() {
         let lo = LineOffsets::new("ab\ncd\nef");
         let mut out = vec![Vec::new(); 3];
-        split_into_lines(&lo, 1..7, DiffType::Modified, &mut out);
+        split_into_lines(&lo, 1..7, HunkKind::Modified, &mut out);
         let h = |cols: Range<usize>, past_line_end| InlineHighlight {
             cols,
-            diff_type: DiffType::Modified,
+            kind: HunkKind::Modified,
             past_line_end,
         };
         assert_eq!(out[0], vec![h(1..2, true)]);
@@ -456,19 +461,19 @@ mod tests {
     }
 
     #[test]
-    fn fragment_starting_on_line_break_is_not_extended() {
+    fn inline_highlight_starting_on_line_break_is_not_extended() {
         let lo = LineOffsets::new("ab\ncd");
         let mut out = vec![Vec::new(); 2];
-        split_into_lines(&lo, 2..4, DiffType::Inserted, &mut out);
+        split_into_lines(&lo, 2..4, HunkKind::Added, &mut out);
         assert!(out[0].is_empty());
         assert_eq!(out[1][0].cols, 0..1);
     }
 
     #[test]
-    fn empty_fragment_after_line_break_lands_on_next_line() {
+    fn empty_inline_highlight_after_line_break_lands_on_next_line() {
         let lo = LineOffsets::new("ab\ncd");
         let mut out = vec![Vec::new(); 2];
-        split_into_lines(&lo, 3..3, DiffType::Deleted, &mut out);
+        split_into_lines(&lo, 3..3, HunkKind::Deleted, &mut out);
         assert!(out[0].is_empty());
         assert_eq!(out[1][0].cols, 0..0);
     }

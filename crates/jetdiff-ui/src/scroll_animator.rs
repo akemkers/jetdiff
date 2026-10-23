@@ -27,7 +27,7 @@ impl ScrollAnimator {
         self.shown = target;
     }
 
-    /// From what is shown to the target. In the middle of an animation the new one starts where the old one is.
+    /// From what is shown to the target. In the middle of an animation the new one starts where the previous one is.
     pub fn animate(&mut self, target: ScrollState) {
         if self.shown == target {
             self.animation = None;

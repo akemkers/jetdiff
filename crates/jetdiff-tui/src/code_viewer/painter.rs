@@ -1,19 +1,19 @@
 //! The building blocks Split, Unified and the scrollbar draw with. Only this file knows
 //! the state, the theme and the buffer.
 
-use jetdiff_viewmodel::{DiffType, FileDiff, Row, Side, StripeMarker, Theme, UnifiedState};
+use jetdiff_viewmodel::{FileDiff, HunkKind, HunkMinimapMark, Row, Side, Theme, UnifiedState};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 
-use super::change::Change;
+use super::hunk_color::HunkColor;
 use super::row_at;
 use crate::color::{color, faded, over};
 use crate::geometry::{self, Columns};
 use crate::text::{LineText, fill, paint_line, tint};
 
 /// The cursor's row when the diff doesn't have focus, as in GPUI.
-const UNFOCUSED_CARET: f32 = 0.4;
+const UNFOCUSED_CURSOR_ROW_OPACITY: f32 = 0.4;
 
 pub(super) struct Painter<'a> {
     state: &'a UnifiedState,
@@ -65,8 +65,8 @@ impl<'a> Painter<'a> {
         })
     }
 
-    pub(super) fn markers(&self) -> Vec<StripeMarker> {
-        self.state.diff.stripe_markers(1.)
+    pub(super) fn hunk_minimap_marks(&self) -> Vec<HunkMinimapMark> {
+        self.state.diff.hunk_minimap_marks(1.)
     }
 
     pub(super) fn content_height(&self) -> f32 {
@@ -81,7 +81,7 @@ impl<'a> Painter<'a> {
         fill(area, color(self.theme.editor_bg), self.buf);
     }
 
-    /// The background of the hunk and the text with syntax and inline highlights. `word_type` gives all
+    /// The background of the hunk and the text with syntax and inline highlights. `inline_highlight_kind` gives all
     /// the words the same color; otherwise each word gets its own.
     pub(super) fn line(
         &mut self,
@@ -89,12 +89,12 @@ impl<'a> Painter<'a> {
         y: u16,
         side: Side,
         line: usize,
-        change: Option<Change>,
-        word_type: Option<DiffType>,
+        hunk_color: Option<HunkColor>,
+        inline_highlight_kind: Option<HunkKind>,
     ) {
-        if let Some(change) = change {
-            let colors = self.theme.diff(change.diff_type);
-            let text = if change.ignored {
+        if let Some(hunk_color) = hunk_color {
+            let colors = self.theme.diff(hunk_color.kind);
+            let text = if hunk_color.compared_by_word {
                 colors.ignored
             } else {
                 colors.background
@@ -107,24 +107,24 @@ impl<'a> Painter<'a> {
             text: diff.line(side, line),
             syntax: diff.line_syntax(side, line),
             inline: diff.line_highlight(side, line).inline,
-            inline_type: word_type,
+            inline_highlight_kind,
         };
         let scroll_x = self.state.scroll.x.round() as usize;
         paint_line(&content, scroll_x, columns.text(y), self.theme, self.buf);
     }
 
-    /// Right-aligned to `end`. The default color disappears against the diff background, so changed and
+    /// Right-aligned to `end`. The default color disappears against the diff background, so hunk and
     /// cursor rows get a stronger one.
     pub(super) fn line_number(
         &mut self,
         end: u16,
         y: u16,
         line: usize,
-        change: Option<Change>,
+        hunk_color: Option<HunkColor>,
         marked: bool,
     ) {
-        let number_color = if change.is_some() || marked {
-            self.theme.line_number_caret_row
+        let number_color = if hunk_color.is_some() || marked {
+            self.theme.cursor_row_line_number
         } else {
             self.theme.line_number
         };
@@ -145,15 +145,18 @@ impl<'a> Painter<'a> {
     }
 
     /// The cursor's row. Fainter when the diff doesn't have focus.
-    pub(super) fn caret(&mut self, columns: &Columns, y: u16) {
-        let highlight = if self.focused {
-            self.theme.row_highlight
+    pub(super) fn cursor_row(&mut self, columns: &Columns, y: u16) {
+        let background = if self.focused {
+            self.theme.cursor_row_background
         } else {
-            faded(self.theme.row_highlight, UNFOCUSED_CARET)
+            faded(
+                self.theme.cursor_row_background,
+                UNFOCUSED_CURSOR_ROW_OPACITY,
+            )
         };
-        tint(columns.text(y), highlight, self.buf);
+        tint(columns.text(y), background, self.buf);
         if self.focused {
-            let style = Style::default().bg(color(self.theme.gutter_highlight));
+            let style = Style::default().bg(color(self.theme.cursor_row_gutter));
             self.buf.set_style(columns.gutter(y), style);
         }
     }
@@ -171,7 +174,7 @@ impl<'a> Painter<'a> {
         x: u16,
         y: u16,
         in_thumb: bool,
-        marker: Option<DiffType>,
+        mark: Option<HunkKind>,
     ) {
         let bg = color(self.theme.editor_bg);
         let cell = &mut self.buf[(x, y)];
@@ -180,10 +183,10 @@ impl<'a> Painter<'a> {
         } else {
             bg
         });
-        match marker {
-            Some(diff_type) => {
-                let marker_color = brighter(color(self.theme.diff(diff_type).background));
-                cell.set_char('▐').set_fg(marker_color);
+        match mark {
+            Some(kind) => {
+                let mark_color = brighter(color(self.theme.diff(kind).background));
+                cell.set_char('▐').set_fg(mark_color);
             }
             None => {
                 cell.set_char(' ');

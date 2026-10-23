@@ -2,7 +2,7 @@
 
 use gpui::{Font, FontStyle, FontWeight, Hsla};
 use jetdiff_viewmodel::theme::DiffColors;
-use jetdiff_viewmodel::{DiffType, Rgba, SyntaxStyle, Theme, Token};
+use jetdiff_viewmodel::{HunkKind, Rgba, SyntaxStyle, Theme, Token};
 
 pub fn hsla(c: Rgba) -> Hsla {
     gpui::Rgba {
@@ -17,7 +17,7 @@ pub fn hsla(c: Rgba) -> Hsla {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiDiffColors {
     pub background: Hsla,
-    pub stripe: Hsla,
+    pub hunk_minimap: Hsla,
     pub ignored: Hsla,
 }
 
@@ -25,7 +25,7 @@ impl From<&DiffColors> for UiDiffColors {
     fn from(c: &DiffColors) -> Self {
         Self {
             background: hsla(c.background),
-            stripe: hsla(c.stripe),
+            hunk_minimap: hsla(c.hunk_minimap),
             ignored: hsla(c.ignored),
         }
     }
@@ -71,22 +71,22 @@ pub struct UiTheme {
     pub editor_bg: Hsla,
     pub editor_fg: Hsla,
     pub line_number: Hsla,
-    pub line_number_caret_row: Hsla,
-    pub row_highlight: Hsla,
-    pub gutter_highlight: Hsla,
+    pub cursor_row_line_number: Hsla,
+    pub cursor_row_background: Hsla,
+    pub cursor_row_gutter: Hsla,
     pub indent_guide: Hsla,
-    pub separator_wave: Hsla,
+    pub fold_wave: Hsla,
     pub scrollbar_thumb: Hsla,
     pub tree_selection: Hsla,
     pub tree_selection_inactive: Hsla,
     pub commit_graph: Hsla,
-    pub message_bg: Hsla,
-    pub warning_bg: Hsla,
-    pub message_fg: Hsla,
+    pub notification_info_background: Hsla,
+    pub notification_warning_background: Hsla,
+    pub notification_foreground: Hsla,
     pub file_added: Hsla,
     pub file_deleted: Hsla,
     pub file_modified: Hsla,
-    inserted: UiDiffColors,
+    added: UiDiffColors,
     deleted: UiDiffColors,
     modified: UiDiffColors,
     syntax: [UiSyntax; Token::ALL.len()],
@@ -99,22 +99,22 @@ impl UiTheme {
             editor_bg: hsla(theme.editor_bg),
             editor_fg: hsla(theme.editor_fg),
             line_number: hsla(theme.line_number),
-            line_number_caret_row: hsla(theme.line_number_caret_row),
-            row_highlight: hsla(theme.row_highlight),
-            gutter_highlight: hsla(theme.gutter_highlight),
+            cursor_row_line_number: hsla(theme.cursor_row_line_number),
+            cursor_row_background: hsla(theme.cursor_row_background),
+            cursor_row_gutter: hsla(theme.cursor_row_gutter),
             indent_guide: hsla(theme.indent_guide),
-            separator_wave: hsla(theme.separator_wave),
+            fold_wave: hsla(theme.fold_wave),
             scrollbar_thumb: hsla(theme.scrollbar_thumb),
             tree_selection: hsla(theme.tree_selection),
             tree_selection_inactive: hsla(theme.tree_selection_inactive),
             commit_graph: hsla(theme.commit_graph),
-            message_bg: hsla(theme.message_bg),
-            warning_bg: hsla(theme.warning_bg),
-            message_fg: hsla(theme.message_fg),
+            notification_info_background: hsla(theme.notification_info_background),
+            notification_warning_background: hsla(theme.notification_warning_background),
+            notification_foreground: hsla(theme.notification_foreground),
             file_added: hsla(theme.file_added),
             file_deleted: hsla(theme.file_deleted),
             file_modified: hsla(theme.file_modified),
-            inserted: (&theme.inserted).into(),
+            added: (&theme.added).into(),
             deleted: (&theme.deleted).into(),
             modified: (&theme.modified).into(),
             syntax: Token::ALL.map(|t| UiSyntax::new(theme.syntax(t))),
@@ -137,11 +137,11 @@ impl UiTheme {
         &self.syntax[token as usize]
     }
 
-    pub fn diff(&self, diff_type: DiffType) -> &UiDiffColors {
-        match diff_type {
-            DiffType::Inserted => &self.inserted,
-            DiffType::Deleted => &self.deleted,
-            DiffType::Modified => &self.modified,
+    pub fn diff(&self, kind: HunkKind) -> &UiDiffColors {
+        match kind {
+            HunkKind::Added => &self.added,
+            HunkKind::Deleted => &self.deleted,
+            HunkKind::Modified => &self.modified,
         }
     }
 }

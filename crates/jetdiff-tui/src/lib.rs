@@ -9,14 +9,13 @@ mod diff_view;
 mod geometry;
 mod icons;
 mod input;
-mod message;
-mod panel;
+mod side_panel;
 mod text;
 mod widgets;
 
 use std::io::{self, BufWriter, Stdout};
 
-use jetdiff_changes::FileChange;
+use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Terminal;
@@ -27,7 +26,7 @@ use ratatui::crossterm::terminal::SetTitle;
 use crate::app::App;
 use crate::backend::TermBackend;
 
-/// Rows per notch on the scroll wheel, in the diff and in the panel.
+/// Rows per notch on the scroll wheel, in the diff and in the side panel.
 const WHEEL_ROWS: usize = 3;
 
 pub struct Settings {
@@ -38,7 +37,7 @@ pub struct Settings {
     pub icons: bool,
 }
 
-pub fn run_file(
+pub fn run_file_pair(
     diff: FileDiff,
     paths: [String; 2],
     title: &str,
@@ -47,13 +46,13 @@ pub fn run_file(
     run(App::file(diff, paths, &settings), title)
 }
 
-pub fn run_changes(
+pub fn run_repo_source(
     repo: Repo,
-    changes: Vec<FileChange>,
+    changed_files: Vec<ChangedFile>,
     title: &str,
     settings: Settings,
 ) -> io::Result<()> {
-    run(App::changes(repo, changes, &settings), title)
+    run(App::repo_source(repo, changed_files, &settings), title)
 }
 
 /// The whole frame in one write, and the terminal shows it only when it is done. Without this

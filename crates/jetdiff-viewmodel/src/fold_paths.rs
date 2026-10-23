@@ -1,4 +1,4 @@
-//! The wave on collapsed folds and the fold link in the divider. Port of `DiffLineSeparatorRenderer`.
+//! The fold wave on closed folds and the fold link in the divider. Port of `DiffLineSeparatorRenderer`.
 //! Paths are plain data that the UI layer strokes with `stroke_width`.
 
 use std::ops::Range;
@@ -40,10 +40,16 @@ const QUARTERS: [(f32, f32, f32); 4] = {
     ]
 };
 
-/// Wave over `x` on the line that starts at `top`. `edge` is the edge toward the divider. The phase
+/// Fold wave over `x` on the line that starts at `top`. `edge` is the edge toward the divider. The phase
 /// is counted from it, so the wave meets the fold link in the middle (`getStartPhase`) and stands still during
 /// horizontal scroll. Mirrored on Left, but the image is symmetric.
-pub fn wave(x: Range<f32>, edge: f32, mirrored: bool, top: f32, line_height: f32) -> Vec<PathSeg> {
+pub fn fold_wave_path(
+    x: Range<f32>,
+    edge: f32,
+    mirrored: bool,
+    top: f32,
+    line_height: f32,
+) -> Vec<PathSeg> {
     let sign = if mirrored { -1. } else { 1. };
     let (d0, d1) = {
         let (a, b) = ((x.start - edge) * sign, (x.end - edge) * sign);
@@ -71,13 +77,18 @@ pub fn wave(x: Range<f32>, edge: f32, mirrored: bool, top: f32, line_height: f32
     path
 }
 
-/// `drawConnectorLine` from the Left fold (y1) to the Right one (y2). y is the top of the line, local
-/// to the divider.
-pub fn connector(width: f32, y1: f32, y2: f32, line_height: f32) -> Vec<PathSeg> {
+/// `drawConnectorLine` from the Left fold to the Right one. y is the top of the line, local to the
+/// divider. The end points are (x1, y1) and (x2, y2), as in IntelliJ.
+pub fn fold_link_path(
+    width: f32,
+    left_side_y: f32,
+    right_side_y: f32,
+    line_height: f32,
+) -> Vec<PathSeg> {
     let (x1, x2) = (0., width);
     let (s, h) = (STEP, HEIGHT);
     let align = vertical_offset(line_height) + h + AA_GAP;
-    let (y1, y2) = (y1 + align, y2 + align);
+    let (y1, y2) = (left_side_y + align, right_side_y + align);
     let p = |x, y| Point { x, y };
     let quad = |cx, cy, x, y| PathSeg::Quad {
         ctrl: p(cx, cy),
@@ -161,8 +172,8 @@ mod tests {
     }
 
     #[test]
-    fn wave_has_period_16_and_3px_amplitude() {
-        let path = wave(100. ..132., 100., false, 0., 18.);
+    fn fold_wave_has_period_16_and_3px_amplitude() {
+        let path = fold_wave_path(100. ..132., 100., false, 0., 18.);
         assert_eq!(path.len(), 9);
         assert_eq!(path[0], PathSeg::Move(Point { x: 100., y: 9. }));
         let ys: Vec<f32> = path.iter().map(|s| end(s).y).collect();
@@ -173,21 +184,21 @@ mod tests {
 
     #[test]
     fn left_side_is_mirrored_around_divider() {
-        let right = wave(100. ..120., 100., false, 0., 18.);
-        let left = wave(80. ..100., 100., true, 0., 18.);
-        assert_eq!(left.len(), right.len());
-        for (l, r) in left.iter().zip(&right) {
-            let (l, r) = (end(l), end(r));
-            assert_eq!(l.y, r.y);
-            assert_eq!(100. - l.x, r.x - 100.);
+        let right_side = fold_wave_path(100. ..120., 100., false, 0., 18.);
+        let left_side = fold_wave_path(80. ..100., 100., true, 0., 18.);
+        assert_eq!(left_side.len(), right_side.len());
+        for (left_side_segment, right_side_segment) in left_side.iter().zip(&right_side) {
+            let (left_side_end, right_side_end) = (end(left_side_segment), end(right_side_segment));
+            assert_eq!(left_side_end.y, right_side_end.y);
+            assert_eq!(100. - left_side_end.x, right_side_end.x - 100.);
         }
     }
 
     #[test]
     fn phase_follows_edge_not_start() {
         // Starts in the middle of a period: the same y as the wave from the edge at the same x
-        let whole = wave(100. ..140., 100., false, 0., 18.);
-        let part = wave(109. ..140., 100., false, 0., 18.);
+        let whole = fold_wave_path(100. ..140., 100., false, 0., 18.);
+        let part = fold_wave_path(109. ..140., 100., false, 0., 18.);
         let at = |path: &[PathSeg], x: f32| path.iter().map(end).find(|p| p.x == x).unwrap().y;
         for x in [112., 116., 120., 136.] {
             assert_eq!(at(&whole, x), at(&part, x));
@@ -198,12 +209,12 @@ mod tests {
     #[test]
     fn fold_link_to_middle_of_wave() {
         // Straight fold link, six half periods
-        let path = connector(24., 10., 10., 18.);
+        let path = fold_link_path(24., 10., 10., 18.);
         assert_eq!(path.len(), 7);
         assert_eq!(path[0], PathSeg::Move(Point { x: -0.5, y: 19. }));
         assert_eq!(end(&path[6]), Point { x: 24., y: 19. });
         // The same y as the wave at the edge
-        assert_eq!(end(&wave(0. ..4., 0., false, 10., 18.)[0]).y, 19.);
+        assert_eq!(end(&fold_wave_path(0. ..4., 0., false, 10., 18.)[0]).y, 19.);
         assert_eq!(
             path[3],
             PathSeg::Quad {
@@ -215,13 +226,13 @@ mod tests {
 
     #[test]
     fn steep_fold_link_is_two_curves() {
-        let down = connector(24., 0., 100., 18.);
+        let down = fold_link_path(24., 0., 100., 18.);
         assert_eq!(down.len(), 3);
         assert!(matches!(down[1], PathSeg::Cubic { .. }));
         assert_eq!(end(&down[2]), Point { x: 24., y: 109. });
-        let up = connector(24., 100., 0., 18.);
+        let up = fold_link_path(24., 100., 0., 18.);
         assert_eq!(end(&up[1]), Point { x: 2., y: 110.5 });
         // A narrow divider falls back to a single quadratic
-        assert_eq!(connector(10., 0., 1., 18.).len(), 2);
+        assert_eq!(fold_link_path(10., 0., 1., 18.).len(), 2);
     }
 }

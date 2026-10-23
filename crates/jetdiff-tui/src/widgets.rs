@@ -1,7 +1,7 @@
-//! The path, the keymap bar, the message, the help and the rollback dialog.
+//! The path, the keymap bar, the notification, the help and the rollback dialog.
 
-use jetdiff_app::help::{ALL, BAR};
-use jetdiff_app::{Level, Notice};
+use jetdiff_app::help::{ALL, KEYMAP_BAR};
+use jetdiff_app::{Notification, NotificationLevel};
 use jetdiff_viewmodel::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -35,11 +35,11 @@ pub fn header(path: &str, area: Rect, theme: &Theme, buf: &mut Buffer) {
     text_row(path, style, area, buf);
 }
 
-pub fn key_bar(area: Rect, theme: &Theme, buf: &mut Buffer) {
+pub fn keymap_bar(area: Rect, theme: &Theme, buf: &mut Buffer) {
     let keys = Style::default().fg(color(theme.editor_fg));
     let what = Style::default().fg(color(theme.line_number));
     let mut spans = vec![Span::raw(" ")];
-    for (key, description) in BAR {
+    for (key, description) in KEYMAP_BAR {
         spans.push(Span::styled(key, keys));
         spans.push(Span::styled(format!(" {description}   "), what));
     }
@@ -48,13 +48,15 @@ pub fn key_bar(area: Rect, theme: &Theme, buf: &mut Buffer) {
     buf.set_line(area.x, area.y, &Line::from(spans), area.width);
 }
 
-pub fn message(notice: &Notice, area: Rect, theme: &Theme, buf: &mut Buffer) {
-    let bg = match notice.level {
-        Level::Info => theme.message_bg,
-        Level::Warning => theme.warning_bg,
+pub fn notification(notification: &Notification, area: Rect, theme: &Theme, buf: &mut Buffer) {
+    let background = match notification.level {
+        NotificationLevel::Info => theme.notification_info_background,
+        NotificationLevel::Warning => theme.notification_warning_background,
     };
-    let style = Style::default().fg(color(theme.message_fg)).bg(color(bg));
-    text_row(&notice.text, style, area, buf);
+    let style = Style::default()
+        .fg(color(theme.notification_foreground))
+        .bg(color(background));
+    text_row(&notification.text, style, area, buf);
 }
 
 /// The lines in a frame in the middle of `area`, with one column of space on the left.

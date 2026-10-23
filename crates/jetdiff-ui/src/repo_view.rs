@@ -1,24 +1,26 @@
-//! File tree and diff side by side, with the commit list under the tree. Fetches the content from git when a
-//! file or commit is selected, and again when Local changes change on disk.
+//! File tree and diff next to each other, with the commit list under the tree. Loads the selected file, and reads
+//! the repo source again when a commit is selected, a hunk is rolled back or files change on disk.
 
 use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
     Window, actions, div, prelude::*, px,
 };
-use jetdiff_app::{Changes, Reloaded, Show, Shown, empty_diff};
-use jetdiff_changes::FileChange;
+use jetdiff_app::{Applied, Notification, ReadJob, RepoSource, Show, Shown, empty_diff};
+use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::metrics::FONT_SIZE;
 
-use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
-use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ToggleView, ZoomIn, ZoomOut, Zoomed};
+use crate::file_diff::{
+    FileDiffView, ResetZoom, Rollback, ToggleDiffMode, ZoomIn, ZoomOut, Zoomed,
+};
 use crate::file_header::file_header;
+use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
-use crate::message::{Level, Message};
-use crate::panel_size::{PanelHeight, PanelWidth};
+use crate::notification_slot_view::NotificationSlotView;
 use crate::settings::Settings;
+use crate::side_panel_size::{SectionHeight, SidePanelWidth};
 use crate::text::FAMILY;
 use crate::watcher::Watcher;
 
@@ -36,35 +38,42 @@ actions!(
     ]
 );
 
-pub struct ChangesView {
-    changes: Changes,
+pub struct RepoView {
+    repo_source: RepoSource,
     selection: Entity<Selection>,
-    tree: Entity<ChangesTree>,
+    files: Entity<FileTree>,
     diff: Entity<FileDiffView>,
-    message: Entity<Message>,
+    notification_slot: Entity<NotificationSlotView>,
     /// Only for Local changes.
     commits: Option<Entity<CommitList>>,
     scale: f32,
-    panel_open: bool,
-    /// The sections in the side panel can be collapsed to just the heading.
+    side_panel_open: bool,
+    /// The sections in the side panel can be closed to just the heading.
     files_open: bool,
     commits_open: bool,
-    width: PanelWidth,
-    commits_height: PanelHeight,
+    width: SidePanelWidth,
+    commits_height: SectionHeight,
     _watcher: Option<Watcher>,
-    _reload: Option<Task<()>>,
+    _read: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
-impl ChangesView {
-    pub fn new(repo: Repo, changes: Vec<FileChange>, cx: &mut Context<Self>) -> Self {
-        let changes = Changes::new(repo, changes);
-        let first = changes.first();
+impl RepoView {
+    pub fn new(repo: Repo, changed_files: Vec<ChangedFile>, cx: &mut Context<Self>) -> Self {
+        let repo_source = RepoSource::new(repo, changed_files);
+        let first = repo_source.first();
         let selection = cx.new(|_| Selection(first));
-        let tree = cx.new(|cx| ChangesTree::new(changes.changes().clone(), selection.clone(), cx));
-        let message = cx.new(|_| Message::default());
-        let diff =
-            cx.new(|cx| FileDiffView::new(empty_diff(), Default::default(), message.clone(), cx));
+        let files =
+            cx.new(|cx| FileTree::new(repo_source.changed_files().clone(), selection.clone(), cx));
+        let notification_slot = cx.new(|_| NotificationSlotView::default());
+        let diff = cx.new(|cx| {
+            FileDiffView::new(
+                empty_diff(),
+                Default::default(),
+                notification_slot.clone(),
+                cx,
+            )
+        });
         let mut subscriptions = vec![
             cx.observe(&selection, |this, _, cx| this.load(cx)),
             cx.subscribe(&diff, |this, _, e: &Zoomed, cx| {
@@ -74,42 +83,43 @@ impl ChangesView {
         ];
 
         let (mut commits, mut watcher) = (None, None);
-        let repo = changes.repo();
-        if repo.is_work_tree() {
+        let repo = repo_source.repo();
+        if repo.is_local_changes() {
             let list = repo.commits().unwrap_or_else(|e| {
-                message.update(cx, |m, cx| m.show(e, Level::Warning, cx));
+                notification_slot
+                    .update(cx, |slot, cx| slot.show_brief(Notification::warning(e), cx));
                 Vec::new()
             });
             let list = cx.new(|cx| CommitList::new(list, cx));
             subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectCommit, cx| {
-                this.changes.select_commit(e.0.clone());
-                this.changed(Vec::new(), cx);
+                let job = this.repo_source.select_commit(e.0.clone());
+                this.read(job, cx);
             }));
             commits = Some(list);
-            match Watcher::new(repo.root(), cx, Self::changed) {
+            match Watcher::new(repo.root(), cx, Self::files_changed) {
                 Ok(w) => watcher = Some(w),
                 Err(e) => {
-                    let text = format!("Can't watch for changes: {e}");
-                    message.update(cx, |m, cx| m.show(text, Level::Warning, cx));
+                    let brief = Notification::warning(format!("Can't watch for file changes: {e}"));
+                    notification_slot.update(cx, |slot, cx| slot.show_brief(brief, cx));
                 }
             }
         }
 
         let mut view = Self {
-            changes,
+            repo_source,
             selection,
-            tree,
+            files,
             diff,
-            message,
+            notification_slot,
             commits,
             scale: 1.,
-            panel_open: cx.global::<Settings>().side_panel_open,
+            side_panel_open: cx.global::<Settings>().side_panel_open,
             files_open: true,
             commits_open: true,
-            width: PanelWidth::default(),
-            commits_height: PanelHeight::default(),
+            width: SidePanelWidth::default(),
+            commits_height: SectionHeight::default(),
             _watcher: watcher,
-            _reload: None,
+            _read: None,
             _subscriptions: subscriptions,
         };
         view.zoomed(cx.global::<Settings>().font_size, cx);
@@ -120,74 +130,88 @@ impl ChangesView {
     fn zoomed(&mut self, font_size: f32, cx: &mut Context<Self>) {
         self.scale = font_size / FONT_SIZE;
         let scale = self.scale;
-        self.tree.update(cx, |t, cx| t.set_scale(scale, cx));
+        self.files.update(cx, |t, cx| t.set_scale(scale, cx));
         if let Some(commits) = &self.commits {
             commits.update(cx, |c, cx| c.set_scale(scale, cx));
         }
     }
 
-    /// Updates the diff and the list at once, without waiting for the watcher.
+    /// Shows the file after the rollback and reads the repo source again, without waiting for the watcher.
     fn rollback(&mut self, e: &Rollback, cx: &mut Context<Self>) {
-        match self.changes.rollback(&e.0) {
+        match self.repo_source.rollback(&e.0) {
             None => {}
             Some(Ok(show)) => {
                 self.show(show, cx);
-                self.changed(Vec::new(), cx);
+                let job = self.repo_source.rolled_back();
+                self.read(job, cx);
             }
-            Some(Err(text)) => self
-                .message
-                .update(cx, |m, cx| m.show(text, Level::Warning, cx)),
+            Some(Err(text)) => self.notification_slot.update(cx, |slot, cx| {
+                slot.show_brief(Notification::warning(text), cx)
+            }),
         }
     }
 
-    /// Git is read in the background. A new change on the way cancels the previous one.
-    fn changed(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
-        let job = self.changes.reload();
-        self._reload = Some(cx.spawn(async move |this, cx| {
-            let loaded = cx
+    fn files_changed(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
+        let job = self.repo_source.files_changed(paths);
+        self.read(job, cx);
+    }
+
+    /// Git is read in the background. A new read cancels the one on the way.
+    fn read(&mut self, job: ReadJob, cx: &mut Context<Self>) {
+        self._read = Some(cx.spawn(async move |this, cx| {
+            let read = cx
                 .background_executor()
                 .spawn(async move { job.run() })
                 .await;
-            this.update(cx, |v, cx| {
-                let reloaded = v.changes.reloaded(loaded, &paths);
-                v.reloaded(reloaded, cx)
+            this.update(cx, |view, cx| {
+                let applied = view.repo_source.apply(read);
+                view.show_applied(applied, cx)
             })
             .ok();
         }));
     }
 
-    fn reloaded(&mut self, reloaded: Reloaded, cx: &mut Context<Self>) {
-        match reloaded {
-            Reloaded::Failed { shown, error } => {
-                // The list should show what is actually shown
+    fn show_applied(&mut self, applied: Applied, cx: &mut Context<Self>) {
+        match applied {
+            Applied::Failed {
+                selected_commit,
+                brief,
+            } => {
+                // The list goes back to the commit that is still selected
                 if let Some(list) = &self.commits {
-                    list.update(cx, |l, cx| l.set_selected(shown, cx));
+                    list.update(cx, |commit_list, cx| {
+                        commit_list.set_selected(selected_commit, cx)
+                    });
                 }
-                self.message
-                    .update(cx, |m, cx| m.show(error, Level::Warning, cx));
+                self.notification_slot
+                    .update(cx, |slot, cx| slot.show_brief(brief, cx));
             }
-            Reloaded::Done {
+            Applied::Done {
                 commits,
-                changes,
+                changed_files,
                 file,
-                notice,
+                brief,
             } => {
                 if let Some(list) = &self.commits {
-                    list.update(cx, |l, cx| l.set_commits(commits, cx));
+                    list.update(cx, |commit_list, cx| commit_list.set_commits(commits, cx));
                 }
-                if let Some(changes) = changes {
-                    self.tree.update(cx, |t, cx| t.set_changes(changes, cx));
+                if let Some(changed_files) = changed_files {
+                    self.files.update(cx, |file_tree, cx| {
+                        file_tree.set_changed_files(changed_files, cx)
+                    });
                 }
-                self.selection.update(cx, |s, cx| s.set(file, cx));
-                if let Some(n) = notice {
-                    self.message.update(cx, |m, cx| m.show(n.text, n.level, cx));
+                self.selection
+                    .update(cx, |selection, cx| selection.set(file, cx));
+                if let Some(brief) = brief {
+                    self.notification_slot
+                        .update(cx, |slot, cx| slot.show_brief(brief, cx));
                 }
             }
         }
     }
 
     fn load(&mut self, cx: &mut Context<Self>) {
-        let show = self.changes.load(self.selection.read(cx).0);
+        let show = self.repo_source.load(self.selection.read(cx).0);
         self.show(show, cx);
     }
 
@@ -195,21 +219,22 @@ impl ChangesView {
     fn show(&mut self, show: Show, cx: &mut Context<Self>) {
         match show {
             Show::Unchanged => return,
-            Show::Empty(notice) => {
-                self.message
-                    .update(cx, |m, cx| m.pin(notice.text, notice.level, cx));
+            Show::Empty { pinned } => {
+                self.notification_slot
+                    .update(cx, |slot, cx| slot.pin(Some(pinned), cx));
                 self.diff
                     .update(cx, |v, cx| v.set_diff(empty_diff(), Default::default(), cx));
             }
             Show::Diff(shown) => {
                 let Shown {
                     diff,
-                    notice,
+                    pinned,
                     paths,
                     can_rollback,
                     same_file,
                 } = *shown;
-                self.message.update(cx, |m, cx| m.pin_notice(notice, cx));
+                self.notification_slot
+                    .update(cx, |slot, cx| slot.pin(pinned, cx));
                 self.diff.update(cx, |v, cx| {
                     v.set_can_rollback(can_rollback);
                     if same_file {
@@ -225,10 +250,10 @@ impl ChangesView {
 
     /// The tree and the commit list, only the ones that are open.
     fn open_panes(&self, cx: &App) -> (Option<FocusHandle>, Option<FocusHandle>) {
-        if !self.panel_open {
+        if !self.side_panel_open {
             return (None, None);
         }
-        let tree = self.files_open.then(|| self.tree.focus_handle(cx));
+        let tree = self.files_open.then(|| self.files.focus_handle(cx));
         let commits = self.commits.as_ref().filter(|_| self.commits_open);
         (tree, commits.map(|c| c.focus_handle(cx)))
     }
@@ -239,8 +264,8 @@ impl ChangesView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.panel_open = !self.panel_open;
-        if !self.panel_open {
+        self.side_panel_open = !self.side_panel_open;
+        if !self.side_panel_open {
             window.focus(&self.diff.focus_handle(cx));
         }
         cx.notify();
@@ -275,7 +300,7 @@ impl ChangesView {
         }
     }
 
-    /// Heading with + or −. A click collapses or expands the section.
+    /// Heading with + or −. A click opens or closes the section.
     fn heading(
         &self,
         title: &'static str,
@@ -300,7 +325,7 @@ impl ChangesView {
                 let open = toggle(this);
                 *open = !*open;
                 // Focus in a closed section goes to the diff
-                let tree = this.tree.focus_handle(cx);
+                let tree = this.files.focus_handle(cx);
                 let commits = this.commits.as_ref().map(|c| c.focus_handle(cx));
                 let hidden = (!this.files_open && tree.is_focused(window))
                     || (!this.commits_open && commits.is_some_and(|c| c.is_focused(window)));
@@ -315,10 +340,10 @@ impl ChangesView {
     fn side_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let viewport = window.viewport_size();
         let unscaled = |v: gpui::Pixels| f32::from(v) / self.scale;
-        let content = self.tree.update(cx, |t, _| t.content_width(window));
+        let content = self.files.update(cx, |t, _| t.content_width(window));
         let width = self.width.resolve(content, unscaled(viewport.width));
         let theme = cx.global::<Settings>().theme;
-        let mut panel = div()
+        let mut side_panel = div()
             .flex_none()
             .w(px(width * self.scale))
             .h_full()
@@ -331,7 +356,7 @@ impl ChangesView {
             .text_size(px(TEXT_SIZE * self.scale))
             .child(self.heading("Files", self.files_open, cx, |this| &mut this.files_open))
             .when(self.files_open, |d| {
-                d.child(div().flex_1().min_h_0().child(self.tree.clone()))
+                d.child(div().flex_1().min_h_0().child(self.files.clone()))
             });
         if let Some(commits) = self.commits.clone() {
             let section = div()
@@ -346,29 +371,32 @@ impl ChangesView {
                     d.child(div().flex_1().min_h_0().child(commits))
                 });
             // When closed, the section moves to the bottom. Without the tree, the commit list takes the rest.
-            panel = match (self.files_open, self.commits_open) {
+            side_panel = match (self.files_open, self.commits_open) {
                 (true, true) => {
                     let height = self.commits_height.resolve(unscaled(viewport.height));
-                    PanelHeight::attach(panel, section.h(px(height * self.scale)), cx, |this| {
-                        (&mut this.commits_height, this.scale)
-                    })
+                    SectionHeight::attach(
+                        side_panel,
+                        section.h(px(height * self.scale)),
+                        cx,
+                        |this| (&mut this.commits_height, this.scale),
+                    )
                 }
-                (false, true) => panel.child(section.flex_1().min_h_0()),
-                (true, false) => panel.child(section),
-                (false, false) => panel.child(div().flex_1()).child(section),
+                (false, true) => side_panel.child(section.flex_1().min_h_0()),
+                (true, false) => side_panel.child(section),
+                (false, false) => side_panel.child(div().flex_1()).child(section),
             };
         }
-        PanelWidth::attach(panel, cx, |this| (&mut this.width, this.scale))
+        SidePanelWidth::attach(side_panel, cx, |this| (&mut this.width, this.scale))
     }
 }
 
-impl Focusable for ChangesView {
+impl Focusable for RepoView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.diff.focus_handle(cx)
     }
 }
 
-impl Render for ChangesView {
+impl Render for RepoView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
@@ -379,10 +407,10 @@ impl Render for ChangesView {
             .on_action(cx.listener(Self::focus_up))
             .on_action(cx.listener(Self::toggle_side_panel))
             .on_action(cx.listener(|this, _: &NextFile, _, cx| {
-                this.tree.update(cx, |t, cx| t.step(true, cx))
+                this.files.update(cx, |t, cx| t.step(true, cx))
             }))
             .on_action(cx.listener(|this, _: &PrevFile, _, cx| {
-                this.tree.update(cx, |t, cx| t.step(false, cx))
+                this.files.update(cx, |t, cx| t.step(false, cx))
             }))
             // Zoom, help and diff mode also work when the tree or the commit list has focus
             .on_action(cx.listener(|this, a: &ZoomIn, w, cx| {
@@ -400,10 +428,13 @@ impl Render for ChangesView {
             .on_action(cx.listener(|this, a: &HideHelp, w, cx| {
                 this.diff.update(cx, |d, cx| d.hide_help(a, w, cx))
             }))
-            .on_action(cx.listener(|this, a: &ToggleView, w, cx| {
-                this.diff.update(cx, |d, cx| d.toggle_view(a, w, cx))
+            .on_action(cx.listener(|this, action: &ToggleDiffMode, window, cx| {
+                this.diff
+                    .update(cx, |diff, cx| diff.toggle_diff_mode(action, window, cx))
             }))
-            .when(self.panel_open, |d| d.child(self.side_panel(window, cx)))
+            .when(self.side_panel_open, |d| {
+                d.child(self.side_panel(window, cx))
+            })
             .child(
                 div()
                     .flex_1()
@@ -411,8 +442,8 @@ impl Render for ChangesView {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .children(self.changes.shown().map(|change| {
-                        file_header(&change.path, self.scale, &cx.global::<Settings>().theme)
+                    .children(self.repo_source.shown().map(|file| {
+                        file_header(&file.path, self.scale, &cx.global::<Settings>().theme)
                     }))
                     .child(div().flex_1().min_h_0().child(self.diff.clone())),
             )

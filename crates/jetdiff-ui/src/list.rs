@@ -13,7 +13,7 @@ pub const GAP: f32 = 4.;
 pub enum ListKey {
     Down,
     Up,
-    Open,
+    Select,
 }
 
 pub fn list_key(ev: &KeyDownEvent) -> Option<ListKey> {
@@ -23,16 +23,16 @@ pub fn list_key(ev: &KeyDownEvent) -> Option<ListKey> {
     match ev.keystroke.key.as_str() {
         "j" | "down" => Some(ListKey::Down),
         "k" | "up" => Some(ListKey::Up),
-        "enter" | "l" => Some(ListKey::Open),
+        "enter" | "l" => Some(ListKey::Select),
         _ => None,
     }
 }
 
 /// The cursor is shown only with focus. The selection is fainter.
-pub fn row_bg(theme: &UiTheme, cursor: bool, open: bool, focused: bool) -> Option<Hsla> {
+pub fn row_bg(theme: &UiTheme, cursor: bool, selected: bool, focused: bool) -> Option<Hsla> {
     if focused && cursor {
         Some(theme.tree_selection)
-    } else if open {
+    } else if selected {
         Some(theme.tree_selection_inactive)
     } else {
         None

@@ -1,15 +1,15 @@
-//! The Split view: two `SplitSide` with the diff divider between them. Drawing, and where on screen the sides
+//! Split: two `SplitSide` with the diff divider between them. Drawing, and where on screen the sides
 //! and lines are. Added and deleted files are always shown Unified.
 
 use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::{FileDiff, Folding, SideGeometry, StripeMarker, Viewport};
+use jetdiff_viewmodel::{FileDiff, Folding, HunkMinimapMark, SideGeometry, Viewport};
 
-use super::code_paint::StripeRects;
+use super::code_paint::HunkMinimapRects;
 use super::divider::Divider;
-use super::split_side::{CaretRow, SideCache, SplitSide};
+use super::split_side::{CursorRow, SideCache, SplitSide};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -21,10 +21,10 @@ pub struct SplitPainter {
     pub folding: Rc<Folding>,
     pub theme: UiTheme,
     pub style: TextStyle,
-    pub markers: Rc<[Vec<StripeMarker>; 2]>,
+    pub hunk_minimap_marks: Rc<[Vec<HunkMinimapMark>; 2]>,
     pub scroll_y: [f32; 2],
     pub scroll_x: f32,
-    pub carets: [CaretRow; 2],
+    pub cursor_rows: [CursorRow; 2],
 }
 
 impl SplitPainter {
@@ -33,7 +33,7 @@ impl SplitPainter {
         &self,
         bounds: Bounds<Pixels>,
         caches: &mut [SideCache; 2],
-        stripes: &mut [StripeRects; 2],
+        hunk_minimaps: &mut [HunkMinimapRects; 2],
         window: &mut Window,
         cx: &mut App,
     ) -> f32 {
@@ -44,10 +44,14 @@ impl SplitPainter {
         let mut widest: f32 = 0.;
         for (index, geom) in geometries.iter().enumerate() {
             let side = SIDES[index];
-            if stripes[index].track_height != height {
+            if hunk_minimaps[index].track_height != height {
                 let content_height = self.folding.layout(side, line_height).content_height();
-                stripes[index] =
-                    StripeRects::new(&self.markers[index], content_height, height, &self.theme);
+                hunk_minimaps[index] = HunkMinimapRects::new(
+                    &self.hunk_minimap_marks[index],
+                    content_height,
+                    height,
+                    &self.theme,
+                );
             }
             let split_side = SplitSide {
                 diff: &self.diff,
@@ -59,8 +63,8 @@ impl SplitPainter {
                 height,
                 scroll_y: self.scroll_y[index],
                 scroll_x: self.scroll_x,
-                caret: self.carets[index],
-                stripe: &stripes[index],
+                cursor_row: self.cursor_rows[index],
+                hunk_minimap: &hunk_minimaps[index],
             };
             widest = widest.max(split_side.paint(&mut caches[index], window, cx));
         }

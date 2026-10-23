@@ -89,26 +89,26 @@ impl DiffMode {
         }
     }
 
-    pub fn rescale(&mut self, old_line_height: f32, viewport: Viewport, x_scale: f32) {
+    pub fn rescale(&mut self, previous_line_height: f32, viewport: Viewport, x_scale: f32) {
         match self {
-            Self::Split(state) => state.rescale(old_line_height, viewport, x_scale),
-            Self::Unified(state) => state.rescale(old_line_height, viewport, x_scale),
+            Self::Split(state) => state.rescale(previous_line_height, viewport, x_scale),
+            Self::Unified(state) => state.rescale(previous_line_height, viewport, x_scale),
         }
     }
 
     /// The cursor's line in the newest version, for `y`.
-    pub fn location(&self) -> Cursor {
+    pub fn cursor_location(&self) -> Cursor {
         match self {
-            Self::Split(state) => state.location(),
-            Self::Unified(state) => state.location(),
+            Self::Split(state) => state.cursor_location(),
+            Self::Unified(state) => state.cursor_location(),
         }
     }
 
     /// The hunk the cursor is in, for rollback.
-    pub fn cursor_block(&self) -> Option<usize> {
+    pub fn cursor_hunk(&self) -> Option<usize> {
         match self {
-            Self::Split(state) => state.cursor_block(),
-            Self::Unified(state) => state.cursor_block(),
+            Self::Split(state) => state.cursor_hunk(),
+            Self::Unified(state) => state.cursor_hunk(),
         }
     }
 
@@ -149,31 +149,36 @@ mod tests {
 
     #[test]
     fn switch_back_and_forth() {
-        let old: String = (0..100).map(|i| format!("a{i}\n")).collect();
-        let new = old.replace("a50\n", "x\n");
-        let diff = Rc::new(FileDiff::new(&old, &new, ComparisonPolicy::Default).unwrap());
+        let left_side: String = (0..100).map(|i| format!("a{i}\n")).collect();
+        let right_side = left_side.replace("a50\n", "x\n");
+        let diff =
+            Rc::new(FileDiff::new(&left_side, &right_side, ComparisonPolicy::Default).unwrap());
         let folding = || Rc::new(Folding::none(&diff));
         let mut mode = DiffMode::new(diff.clone(), folding(), false);
         mode.init(VIEWPORT);
-        let before = mode.location();
+        let before = mode.cursor_location();
 
         mode.toggle(folding(), VIEWPORT);
         assert!(mode.is_unified());
-        assert_eq!(mode.location(), before);
-        assert_eq!(mode.cursor_block(), Some(0));
+        assert_eq!(mode.cursor_location(), before);
+        assert_eq!(mode.cursor_hunk(), Some(0));
 
         mode.toggle(folding(), VIEWPORT);
         assert!(!mode.is_unified());
-        assert_eq!(mode.location(), Cursor::new(Side::Right, 50));
+        assert_eq!(mode.cursor_location(), Cursor::new(Side::Right, 50));
     }
 
     #[test]
     fn added_and_deleted_files_are_shown_unified() {
-        let diff = |old: &str, new: &str| {
-            Rc::new(FileDiff::new(old, new, ComparisonPolicy::Default).unwrap())
+        let diff = |left_side: &str, right_side: &str| {
+            Rc::new(FileDiff::new(left_side, right_side, ComparisonPolicy::Default).unwrap())
         };
-        let new_file = diff("", "a\n");
-        let mode = DiffMode::new(new_file.clone(), Rc::new(Folding::none(&new_file)), false);
+        let added_file = diff("", "a\n");
+        let mode = DiffMode::new(
+            added_file.clone(),
+            Rc::new(Folding::none(&added_file)),
+            false,
+        );
         assert!(mode.is_unified());
 
         let changed = diff("a\nb\n", "a\nc\n");

@@ -1,11 +1,11 @@
 //! The diff divider between the sides. The geometry comes ready from `divider_bands` and
-//! `divider_separators`, local to the divider with the same y axis as the sides.
+//! `fold_links`, local to the divider with the same y axis as the sides.
 
 use gpui::{Bounds, ContentMask, Hsla, PathBuilder, Pixels, Window, fill, point, px, size};
 use jetdiff_viewmodel::divider::DIVIDER_WIDTH;
-use jetdiff_viewmodel::separator::stroke_width;
+use jetdiff_viewmodel::fold_paths::stroke_width;
 use jetdiff_viewmodel::{
-    Cubic, FileDiff, Folding, PathSeg, Point, Viewport, divider_bands, divider_separators,
+    Cubic, FileDiff, Folding, PathSeg, Point, Viewport, divider_bands, fold_links,
 };
 
 use crate::theme::UiTheme;
@@ -59,7 +59,7 @@ impl Divider<'_> {
                 self.viewport,
                 DIVIDER_WIDTH,
             ) {
-                let color = self.theme.diff(band.diff_type).background;
+                let color = self.theme.diff(band.kind).background;
 
                 let mut b = PathBuilder::fill();
                 b.move_to(p(band.top.p0));
@@ -79,11 +79,10 @@ impl Divider<'_> {
                     window.paint_path(path, color);
                 }
             }
-            let seps =
-                divider_separators(self.folding, self.scroll_y, self.viewport, DIVIDER_WIDTH);
-            for sep in seps {
-                let width = stroke_width(sep.hovered);
-                stroke_path(window, &sep.path, p, width, self.theme.separator_wave);
+            let links = fold_links(self.folding, self.scroll_y, self.viewport, DIVIDER_WIDTH);
+            for link in links {
+                let width = stroke_width(link.hovered);
+                stroke_path(window, &link.path, p, width, self.theme.fold_wave);
             }
         });
     }

@@ -1,63 +1,39 @@
 //! From git content to `FileDiff`.
 
-use jetdiff_changes::{FileChange, Status};
+use jetdiff_files::{ChangedFile, FileStatus};
 use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Level {
-    Info,
-    Warning,
-}
+use crate::notification::Notification;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Notice {
-    pub text: String,
-    pub level: Level,
-}
-
-impl Notice {
-    pub fn info(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
-            level: Level::Info,
-        }
-    }
-
-    pub fn warning(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
-            level: Level::Warning,
-        }
-    }
-}
-
+/// The notification is pinned, since it is about the file being shown.
 pub fn build_diff(
-    change: &FileChange,
+    file: &ChangedFile,
     content: Result<[String; 2], String>,
-) -> (FileDiff, Option<Notice>) {
+) -> (FileDiff, Option<Notification>) {
     match content {
-        Err(e) => (empty_diff(), Some(Notice::warning(e))),
+        Err(e) => (empty_diff(), Some(Notification::warning(e))),
         Ok([l, r]) if l.contains('\0') || r.contains('\0') => (
             empty_diff(),
-            Some(Notice::warning("Binary file can't be shown")),
+            Some(Notification::warning("Binary file can't be shown")),
         ),
         Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
             Ok(mut diff) => {
-                let lang = Language::from_path(&change.path)
-                    .or_else(|| Language::from_path(change.left_path()));
+                let lang = Language::from_path(&file.path)
+                    .or_else(|| Language::from_path(file.left_side_path()));
                 if let Some(lang) = lang {
                     diff.highlight_syntax(lang);
                 }
                 // When moved, or with only the file mode changed, the diff would otherwise be empty without explanation
-                let identical = l == r && !matches!(change.status, Status::Added | Status::Deleted);
+                let identical =
+                    l == r && !matches!(file.status, FileStatus::Added | FileStatus::Deleted);
                 (
                     diff,
-                    identical.then(|| Notice::info("The content is identical")),
+                    identical.then(|| Notification::info("The content is identical")),
                 )
             }
             Err(_) => (
                 empty_diff(),
-                Some(Notice::warning("The file is too big to show")),
+                Some(Notification::warning("The file is too big to show")),
             ),
         },
     }
@@ -71,36 +47,39 @@ pub fn empty_diff() -> FileDiff {
 mod tests {
     use super::*;
 
-    fn change(path: &str, status: Status) -> FileChange {
-        FileChange {
+    fn changed_file(path: &str, status: FileStatus) -> ChangedFile {
+        ChangedFile {
             path: path.into(),
-            old_path: None,
+            renamed_from: None,
             status,
         }
     }
 
-    fn notice(change: &FileChange, content: Result<[String; 2], String>) -> Option<Notice> {
-        build_diff(change, content).1
+    fn pinned(file: &ChangedFile, content: Result<[String; 2], String>) -> Option<Notification> {
+        build_diff(file, content).1
     }
 
     #[test]
-    fn message_when_diff_cannot_be_shown() {
-        let m = change("a.rs", Status::Modified);
+    fn pinned_notification_when_diff_cannot_be_shown() {
+        let m = changed_file("a.rs", FileStatus::Modified);
         let text = |l: &str, r: &str| Ok([l.to_owned(), r.to_owned()]);
-        assert_eq!(notice(&m, text("a\n", "b\n")), None);
+        assert_eq!(pinned(&m, text("a\n", "b\n")), None);
         assert_eq!(
-            notice(&m, text("a\n", "a\n")),
-            Some(Notice::info("The content is identical"))
+            pinned(&m, text("a\n", "a\n")),
+            Some(Notification::info("The content is identical"))
         );
         assert_eq!(
-            notice(&m, text("a\0", "b")),
-            Some(Notice::warning("Binary file can't be shown"))
+            pinned(&m, text("a\0", "b")),
+            Some(Notification::warning("Binary file can't be shown"))
         );
         assert_eq!(
-            notice(&m, Err("gone".into())),
-            Some(Notice::warning("gone"))
+            pinned(&m, Err("gone".into())),
+            Some(Notification::warning("gone"))
         );
         // An empty added file is not «identical»
-        assert_eq!(notice(&change("a.rs", Status::Added), text("", "")), None);
+        assert_eq!(
+            pinned(&changed_file("a.rs", FileStatus::Added), text("", "")),
+            None
+        );
     }
 }

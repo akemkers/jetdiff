@@ -1,5 +1,5 @@
-//! The Unified view: one code view where deleted rows sit above the added ones, with old and new
-//! line numbers in the gutter. Drawing, and which row the mouse hits.
+//! Unified: one code view where deleted rows sit above the added ones, with a line
+//! number for each side in the gutter. Drawing, and which row the mouse hits.
 
 use std::ops::{Range, RangeInclusive};
 use std::rc::Rc;
@@ -9,17 +9,17 @@ use jetdiff_core::side::Side;
 use jetdiff_viewmodel::{InlineHighlight, UnifiedDiff, UnifiedGeometry};
 
 use super::code_paint::{
-    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_code_background, rect,
+    HunkMinimapRects, ShapedText, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
     shape_number,
 };
-use super::split_side::CaretRow;
+use super::split_side::CursorRow;
 use crate::cache::LineCache;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
 pub struct CachedRow {
     pub text: ShapedText,
-    /// Old and new number. Deleted rows have only old, added rows only new.
+    /// The number on each side. Deleted rows have only Left, added rows only Right.
     pub numbers: [Option<ShapedLine>; 2],
 }
 
@@ -33,7 +33,7 @@ pub struct UnifiedPainter {
     pub scroll_y: f32,
     pub scroll_x: f32,
     /// `line` is the row.
-    pub caret: CaretRow,
+    pub cursor_row: CursorRow,
 }
 
 /// The geometry and the rows that are visible in this frame.
@@ -52,7 +52,7 @@ impl UnifiedPainter {
         &self,
         bounds: Bounds<Pixels>,
         cache: &mut RowCache,
-        stripe: &mut StripeRects,
+        hunk_minimap: &mut HunkMinimapRects,
         window: &mut Window,
         cx: &mut App,
     ) -> f32 {
@@ -60,9 +60,9 @@ impl UnifiedPainter {
         let height = f32::from(bounds.size.height);
         let layout = self.diff.layout(self.style.line_height());
         let content_height = layout.content_height();
-        if stripe.track_height != height {
-            let markers = self.diff.stripe_markers(self.style.line_height());
-            *stripe = StripeRects::new(&markers, content_height, height, &self.theme);
+        if hunk_minimap.track_height != height {
+            let marks = self.diff.hunk_minimap_marks(self.style.line_height());
+            *hunk_minimap = HunkMinimapRects::new(&marks, content_height, height, &self.theme);
         }
         let (first, last) = layout.painted_lines(self.scroll_y, height);
         let frame = Frame {
@@ -76,11 +76,11 @@ impl UnifiedPainter {
 
         let widest = window.with_content_mask(mask(frame.area(code.bounds())), |window| {
             paint_code_background(code, frame.top, frame.bottom, &self.theme, window);
-            frame.paint_changes(window);
-            frame.paint_caret_row(window);
+            frame.paint_hunks(window);
+            frame.paint_cursor_row(window);
             let widest = frame.paint_text(cache, window, cx);
             frame.paint_line_numbers(cache, window, cx);
-            stripe.paint(
+            hunk_minimap.paint(
                 code,
                 top,
                 self.scroll_y,
@@ -104,8 +104,8 @@ impl UnifiedPainter {
             window,
         );
         // The default color disappears against the diff background
-        let color = if row.block.is_some() {
-            self.theme.line_number_caret_row
+        let color = if row.hunk.is_some() {
+            self.theme.cursor_row_line_number
         } else {
             self.theme.line_number
         };
@@ -144,11 +144,11 @@ impl Frame<'_> {
     }
 
     /// The deleted and added part of each hunk get a color each, without blue.
-    fn paint_changes(&self, window: &mut Window) {
+    fn paint_hunks(&self, window: &mut Window) {
         let diff = &self.painter.diff;
         let layout = diff.layout(self.painter.style.line_height());
-        let blocks = diff.diff.blocks();
-        for (index, rows) in diff.block_rows().iter().enumerate() {
+        let hunks = diff.diff.hunks();
+        for (index, rows) in diff.hunk_rows().iter().enumerate() {
             if rows.end <= *self.visible.start() {
                 continue;
             }
@@ -159,29 +159,43 @@ impl Frame<'_> {
                 .iter()
                 .take_while(|row| row.side() == Side::Left)
                 .count();
-            let first_inserted = rows.start + deleted;
-            for part in [rows.start..first_inserted, first_inserted..rows.end] {
+            let first_added = rows.start + deleted;
+            for part in [rows.start..first_added, first_added..rows.end] {
                 if part.is_empty() {
                     continue;
                 }
-                let colors = self.painter.theme.diff(diff.row(part.start).diff_type());
-                let (band_top, band_bottom) = layout.block_band(part);
+                let colors = self.painter.theme.diff(diff.row(part.start).kind());
+                let (band_top, band_bottom) = layout.hunk_band(part);
                 let (top, bottom) = (self.screen_y(band_top), self.screen_y(band_bottom));
-                let ignored = blocks[index].ignored();
-                paint_change(&self.geom.code, top, bottom, colors, ignored, window);
+                let compared_by_word = hunks[index].compared_by_word();
+                paint_hunk(
+                    &self.geom.code,
+                    top,
+                    bottom,
+                    colors,
+                    compared_by_word,
+                    window,
+                );
             }
         }
     }
 
-    fn paint_caret_row(&self, window: &mut Window) {
-        let caret = self.painter.caret;
-        if !self.visible.contains(&caret.line) {
+    fn paint_cursor_row(&self, window: &mut Window) {
+        let cursor_row = self.painter.cursor_row;
+        if !self.visible.contains(&cursor_row.line) {
             return;
         }
-        let top = self.row_top(caret.line);
+        let top = self.row_top(cursor_row.line);
         let bottom = top + self.painter.style.line_height();
         let theme = &self.painter.theme;
-        paint_caret_row(&self.geom.code, top, bottom, caret.active, theme, window);
+        paint_cursor_row(
+            &self.geom.code,
+            top,
+            bottom,
+            cursor_row.active,
+            theme,
+            window,
+        );
     }
 
     /// Inline highlights and text, clipped so the text doesn't flow into the gutter on sideways scroll.
@@ -207,7 +221,7 @@ impl Frame<'_> {
                     .inline
                     .iter()
                     .map(|highlight| InlineHighlight {
-                        diff_type: row.diff_type(),
+                        kind: row.kind(),
                         ..highlight.clone()
                     })
                     .collect();
@@ -234,11 +248,11 @@ impl Frame<'_> {
         window.with_content_mask(mask(self.area(self.geom.code.gutter.clone())), |window| {
             for row_index in self.visible.clone() {
                 let y = self.row_top(row_index) + painter.style.number_dy;
-                let caret_numbers;
-                let numbers = if row_index == painter.caret.line {
-                    let color = painter.theme.line_number_caret_row;
-                    caret_numbers = painter.shape_numbers(row_index, color, window);
-                    &caret_numbers
+                let cursor_numbers;
+                let numbers = if row_index == painter.cursor_row.line {
+                    let color = painter.theme.cursor_row_line_number;
+                    cursor_numbers = painter.shape_numbers(row_index, color, window);
+                    &cursor_numbers
                 } else {
                     &cache
                         .get_or_insert_with(row_index, || painter.shape(row_index, window))
@@ -248,11 +262,7 @@ impl Frame<'_> {
                     let Some(number) = number else {
                         continue;
                     };
-                    let width = f32::from(number.width);
-                    let x = match side {
-                        Side::Left => self.geom.old_number_x(width),
-                        Side::Right => self.geom.new_number_x(width),
-                    };
+                    let x = self.geom.number_x(side, f32::from(number.width));
                     let _ = number.paint(point(px(x), px(y)), px(line_height), window, cx);
                 }
             }

@@ -1,4 +1,4 @@
-//! jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]
+//! jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]
 //!
 //! Without arguments, Local changes are shown, on a branch against where it branched off main.
 //! A folder shows Local changes there. With one commit, it is shown against its parent.
@@ -26,10 +26,10 @@ use jetdiff_git::{PullRequest, Repo};
 use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
 
 enum Source {
-    WorkTree(PathBuf),
+    LocalChanges(PathBuf),
     Commit(String),
     PullRequest(PullRequest),
-    Files(String, String),
+    FilePair(String, String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,16 +69,17 @@ fn frontend(tui: bool) -> Result<Frontend, String> {
 
 fn parse_source(paths: &[String]) -> Result<Source, String> {
     match paths {
-        [] => Ok(Source::WorkTree(".".into())),
+        [] => Ok(Source::LocalChanges(".".into())),
         [url] if url.starts_with("https://") => PullRequest::parse(url)
             .map(Source::PullRequest)
             .ok_or_else(|| format!("not a PR link: {url}")),
-        [dir] if Path::new(dir).is_dir() => Ok(Source::WorkTree(dir.into())),
+        [dir] if Path::new(dir).is_dir() => Ok(Source::LocalChanges(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
-        [left, right] => Ok(Source::Files(left.clone(), right.clone())),
-        _ => {
-            Err("usage: jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]".into())
-        }
+        [left_side, right_side] => Ok(Source::FilePair(left_side.clone(), right_side.clone())),
+        _ => Err(
+            "usage: jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]"
+                .into(),
+        ),
     }
 }
 
@@ -90,17 +91,17 @@ fn read(path: &str) -> Result<String, String> {
 
 /// What the window should show, ready before the app starts so errors can be written to the terminal.
 pub enum Content {
-    File(Box<FileDiff>, [String; 2]),
-    Changes(Repo, Vec<jetdiff_changes::FileChange>),
+    FilePair(Box<FileDiff>, [String; 2]),
+    Repo(Repo, Vec<jetdiff_files::ChangedFile>),
 }
 
-fn load(source: &Source) -> Result<(Content, String), String> {
+fn read_source(source: &Source) -> Result<(Content, String), String> {
     let (repo, title) = match source {
-        Source::Files(left, right) => {
-            let diff = file_diff(left, right)?;
-            let title = format!("{left} ↔ {right}");
-            let paths = [left.clone(), right.clone()];
-            return Ok((Content::File(Box::new(diff), paths), title));
+        Source::FilePair(left_side, right_side) => {
+            let diff = file_diff(left_side, right_side)?;
+            let title = format!("{left_side} ↔ {right_side}");
+            let paths = [left_side.clone(), right_side.clone()];
+            return Ok((Content::FilePair(Box::new(diff), paths), title));
         }
         Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
         Source::PullRequest(pr) => {
@@ -108,12 +109,12 @@ fn load(source: &Source) -> Result<(Content, String), String> {
             let repo = with_progress(&text, || Repo::pull_request(Path::new("."), pr))?;
             (repo, format!("PR #{}", pr.number))
         }
-        Source::WorkTree(dir) => (Repo::work_tree(dir)?, LOCAL_CHANGES.to_owned()),
+        Source::LocalChanges(dir) => (Repo::local_changes(dir)?, LOCAL_CHANGES.to_owned()),
     };
     // Several windows open at the same time must be told apart in the title
     let title = format!("{}: {title}", repo.name());
-    let changes = repo.changes()?;
-    Ok((Content::Changes(repo, changes), title))
+    let changed_files = repo.changed_files()?;
+    Ok((Content::Repo(repo, changed_files), title))
 }
 
 /// Shows that `work` is working, with a spinner and time in a terminal.
@@ -154,12 +155,12 @@ fn with_progress<T>(text: &str, work: impl FnOnce() -> Result<T, String>) -> Res
     out
 }
 
-fn file_diff(left: &str, right: &str) -> Result<FileDiff, String> {
-    let (l, r) = (read(left)?, read(right)?);
-    let mut diff = FileDiff::new(&l, &r, ComparisonPolicy::Default)
+fn file_diff(left_side: &str, right_side: &str) -> Result<FileDiff, String> {
+    let (left_side_text, right_side_text) = (read(left_side)?, read(right_side)?);
+    let mut diff = FileDiff::new(&left_side_text, &right_side_text, ComparisonPolicy::Default)
         .map_err(|_| "the files are too big to diff".to_owned())?;
     // Right first; Left can be a temporary file from git difftool
-    if let Some(lang) = Language::from_path(right).or_else(|| Language::from_path(left)) {
+    if let Some(lang) = Language::from_path(right_side).or_else(|| Language::from_path(left_side)) {
         diff.highlight_syntax(lang);
     }
     Ok(diff)
@@ -173,7 +174,7 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let (content, title) = match load(&source) {
+    let (content, title) = match read_source(&source) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{e}");

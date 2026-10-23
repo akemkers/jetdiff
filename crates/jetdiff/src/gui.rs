@@ -6,9 +6,9 @@ use gpui::{
 };
 use jetdiff_app::{AppCommand, BINDINGS};
 use jetdiff_ui::{
-    Assets, ChangesView, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp,
-    NextFile, PrevFile, ResetZoom, Settings, ToggleHelp, ToggleSidePanel, ToggleView, UiTheme,
-    ZoomIn, ZoomOut, load_font,
+    Assets, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextFile, PrevFile,
+    RepoView, ResetZoom, Settings, ToggleDiffMode, ToggleHelp, ToggleSidePanel, UiTheme, ZoomIn,
+    ZoomOut, load_font,
 };
 
 use crate::Content;
@@ -25,16 +25,16 @@ pub fn run(content: Content, title: String, config: Config) {
             cx.set_global(Settings {
                 theme: UiTheme::new(&config.theme),
                 font_size: config.font_size,
-                collapse_unchanged: config.collapse_unchanged,
+                fold_unchanged: config.fold_unchanged,
                 unified: config.unified,
                 side_panel_open: config.side_panel.open,
             });
             match content {
-                Content::File(diff, paths) => open(cx, title, move |cx| {
+                Content::FilePair(diff, paths) => open(cx, title, move |cx| {
                     FileDiffView::standalone(*diff, paths, cx)
                 }),
-                Content::Changes(repo, changes) => {
-                    open(cx, title, move |cx| ChangesView::new(repo, changes, cx))
+                Content::Repo(repo, changed_files) => {
+                    open(cx, title, move |cx| RepoView::new(repo, changed_files, cx))
                 }
             }
             cx.on_window_closed(|cx| cx.quit()).detach();
@@ -58,7 +58,7 @@ fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
         AppCommand::FocusUp => KeyBinding::new(keys, FocusUp, None),
         AppCommand::FocusRight => KeyBinding::new(keys, FocusRight, None),
         AppCommand::ToggleSidePanel => KeyBinding::new(keys, ToggleSidePanel, None),
-        AppCommand::ToggleView => KeyBinding::new(keys, ToggleView, None),
+        AppCommand::ToggleDiffMode => KeyBinding::new(keys, ToggleDiffMode, None),
         AppCommand::NextFile => KeyBinding::new(keys, NextFile, None),
         AppCommand::PrevFile => KeyBinding::new(keys, PrevFile, None),
         AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),

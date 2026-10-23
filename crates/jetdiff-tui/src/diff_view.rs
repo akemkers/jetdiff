@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use jetdiff_app::{RollbackRequest, location, rollback_request};
+use jetdiff_app::{RollbackRequest, cursor_location, rollback_request};
 use jetdiff_viewmodel::{
     Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, RowLayout, Theme, UnifiedDiff,
     UnifiedState, Viewport,
@@ -20,7 +20,8 @@ pub enum Overlay {
 }
 
 pub enum Effect {
-    Message(String),
+    /// Shown as a brief info notification.
+    ShowBrief(String),
     Copy(String),
     Rollback(RollbackRequest),
 }
@@ -130,7 +131,7 @@ impl DiffView {
         self.clamp_scroll_x();
     }
 
-    pub fn toggle_view(&mut self) -> Option<Effect> {
+    pub fn toggle_diff_mode(&mut self) -> Option<Effect> {
         if !self.state.diff.diff.can_split() {
             return None;
         }
@@ -143,7 +144,7 @@ impl DiffView {
             None => self.state = state(self.state.diff.diff.clone(), self.unified),
         }
         self.clamp_scroll_x();
-        Some(Effect::Message(
+        Some(Effect::ShowBrief(
             if self.unified { "Unified" } else { "Split" }.into(),
         ))
     }
@@ -179,15 +180,17 @@ impl DiffView {
         match cmd {
             Command::Rollback => {
                 let diff = &self.state.diff.diff;
-                match rollback_request(diff, self.state.cursor_block(), self.can_rollback) {
+                match rollback_request(diff, self.state.cursor_hunk(), self.can_rollback) {
                     Ok(request) => {
                         self.overlay = Some(Overlay::Confirm(request));
                         None
                     }
-                    Err(text) => Some(Effect::Message(text.into())),
+                    Err(text) => Some(Effect::ShowBrief(text.into())),
                 }
             }
-            Command::CopyLocation => location(self.state.location(), &self.paths).map(Effect::Copy),
+            Command::CopyCursorLocation => {
+                cursor_location(self.state.cursor_location(), &self.paths).map(Effect::Copy)
+            }
             _ => {
                 let viewport = self.viewport()?;
                 self.state.execute(cmd, viewport, self.horizontal());

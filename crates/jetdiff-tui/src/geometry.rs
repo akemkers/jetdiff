@@ -63,32 +63,50 @@ pub struct Aligned {
 
 pub fn aligned(diff: &FileDiff, area: Rect) -> Aligned {
     let (area, scrollbar) = without_scrollbar(area);
-    let left = area.width.saturating_sub(1) / 2;
-    let divider = area.x + left;
-    let right_x = (divider + 1).min(area.right());
+    let left_side_width = area.width.saturating_sub(1) / 2;
+    let divider = area.x + left_side_width;
+    let right_side_x = (divider + 1).min(area.right());
     Aligned {
         sides: [
-            Columns::new(area.x, left, digits(diff, Side::Left)),
-            Columns::new(right_x, area.right() - right_x, digits(diff, Side::Right)),
+            Columns::new(area.x, left_side_width, digits(diff, Side::Left)),
+            Columns::new(
+                right_side_x,
+                area.right() - right_side_x,
+                digits(diff, Side::Right),
+            ),
         ],
         divider,
         scrollbar,
     }
 }
 
-/// Old and new number in the gutter.
+/// A number column for each side in the gutter.
 pub struct Unified {
     pub columns: Columns,
-    pub old_end: u16,
+    left_side_number_end: u16,
     pub scrollbar: u16,
+}
+
+impl Unified {
+    /// Where the line numbers of `side` end.
+    pub fn number_end(&self, side: Side) -> u16 {
+        match side {
+            Side::Left => self.left_side_number_end,
+            Side::Right => self.columns.number_end(),
+        }
+    }
 }
 
 pub fn unified(diff: &FileDiff, area: Rect) -> Unified {
     let (area, scrollbar) = without_scrollbar(area);
-    let old = digits(diff, Side::Left);
-    let columns = Columns::new(area.x, area.width, old + 1 + digits(diff, Side::Right));
+    let left_side_digits = digits(diff, Side::Left);
+    let columns = Columns::new(
+        area.x,
+        area.width,
+        left_side_digits + 1 + digits(diff, Side::Right),
+    );
     Unified {
-        old_end: columns.gutter.start + 1 + old,
+        left_side_number_end: columns.gutter.start + 1 + left_side_digits,
         columns,
         scrollbar,
     }
@@ -116,9 +134,9 @@ mod tests {
             (22..27, 27..43)
         );
         assert_eq!(a.scrollbar, 43);
-        let right = &a.sides[1];
-        assert_eq!(number(8, right.number_end()), (25, "9".into()));
-        assert_eq!(number(119, right.number_end()), (23, "120".into()));
+        let right_side = &a.sides[1];
+        assert_eq!(number(8, right_side.number_end()), (25, "9".into()));
+        assert_eq!(number(119, right_side.number_end()), (23, "120".into()));
     }
 
     #[test]
@@ -127,7 +145,7 @@ mod tests {
         let u = unified(&diff, Rect::new(0, 0, 40, 10));
         // " 1 10 " before the text
         assert_eq!(u.columns.gutter, 0..6);
-        assert_eq!(number(0, u.old_end), (1, "1".into()));
-        assert_eq!(number(9, u.columns.number_end()), (3, "10".into()));
+        assert_eq!(number(0, u.number_end(Side::Left)), (1, "1".into()));
+        assert_eq!(number(9, u.number_end(Side::Right)), (3, "10".into()));
     }
 }

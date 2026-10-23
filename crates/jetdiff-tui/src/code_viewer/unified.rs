@@ -1,8 +1,9 @@
-//! One line per row, with old and new line number in the gutter. The words get the row's color.
+//! One line per row, with a line number for each side in the gutter. The words get the row's color.
 
+use jetdiff_viewmodel::Side;
 use ratatui::layout::Rect;
 
-use super::change::Change;
+use super::hunk_color::HunkColor;
 use super::painter::Painter;
 use crate::geometry;
 
@@ -10,19 +11,26 @@ use crate::geometry;
 pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
     let cells = geometry::unified(painter.diff(), area);
     let columns = &cells.columns;
-    let number_ends = [cells.old_end, columns.number_end()];
+    let number_ends = [Side::Left, Side::Right].map(|side| cells.number_end(side));
     for visible in painter.visible_rows(area) {
         let (y, row) = (visible.y, visible.row);
-        let change = Change::of_row(painter.diff(), row);
-        let word_type = Some(row.diff_type());
-        painter.line(columns, y, row.side(), row.line(), change, word_type);
+        let hunk_color = HunkColor::of_row(painter.diff(), row);
+        let inline_highlight_kind = Some(row.kind());
+        painter.line(
+            columns,
+            y,
+            row.side(),
+            row.line(),
+            hunk_color,
+            inline_highlight_kind,
+        );
         for (line, end) in row.lines.into_iter().zip(number_ends) {
             if let Some(line) = line {
-                painter.line_number(end, y, line, change, visible.marked);
+                painter.line_number(end, y, line, hunk_color, visible.marked);
             }
         }
         if visible.marked {
-            painter.caret(columns, y);
+            painter.cursor_row(columns, y);
         }
     }
     cells.scrollbar

@@ -2,8 +2,8 @@
 
 A GPU-accelerated diff viewer in Rust + GPUI, modeled on JetBrains. The details are in `research/`:
 
-- `01-diff-algorithm.md` - pipeline, heuristics, word diff
-- `02-rendering.md` - diff divider, colors, gutter, folding waves
+- `01-diff-algorithm.md` - pipeline, heuristics, comparing by word
+- `02-rendering.md` - diff divider, colors, gutter, fold waves
 - `03-scroll-folding-structure.md` - sync scroll, folding, commit view, tree
 - `04-unified-diff.md` - the Unified viewer: rows, line numbers, colors and switching from Split
 
@@ -20,7 +20,7 @@ A GPU-accelerated diff viewer in Rust + GPUI, modeled on JetBrains. The details 
 jetdiff-core     pure logic, no GUI. Tested with golden tests.
   lcs            Myers + Reindexer + patience fallback (port from IntelliJ)
   by_line        whitespace-blind match, two-step smart diff, ChunkOptimizer
-  by_word        tokenizer, inner fragments, LineFragmentSplitter
+  by_word        tokenizer, inner DiffFragments, LineFragmentSplitter
 
 jetdiff-syntax   tree-sitter with our own queries; tokens correspond to IntelliJ's DEFAULT_*
 
@@ -36,19 +36,23 @@ jetdiff-viewmodel
   geometry       gutter, text and scrollbar per side, and Unified with two number columns
   keys           key sequences to commands
 
-jetdiff-changes  FileChange { path, old_path, status } and the tree model: folders first,
-                 merged single-child folders, expanded state
+jetdiff-files    ChangedFile { path, renamed_from, status } and the tree model: folders first,
+                 merged single-child folders, open and closed folders
 
-jetdiff-git      git CLI: changes for a commit or Local changes, and file content
+jetdiff-git      git CLI: changed files for Local changes, a commit or a pull request,
+                 file content and commits
 
 jetdiff-app      the state around the diff, still without a GUI. Shared by all UIs
-  changes        repo, commit and the file being shown. Reload and the selected file afterwards
-  content        from git content to FileDiff, with a message when it can't be shown
+  repo_source    the repo source and the file being shown. Reading it again per trigger, and the selected file
+  content        from git content to FileDiff, with a pinned notification when it can't be shown
   files          the file tree's rows and cursor
   commits        the commit list's rows, cursor and selection
   actions        rollback and file:line for the cursor's line
   help           the keys in the keymap bar and the help
   keys           the keys outside the diff
+  notification   a notification and its level, Info or Warning
+  notification_slot
+                 one pinned and one brief notification, shared by the GPUI view and the terminal
   watcher        changed paths, collected until it is quiet
 
 jetdiff-ui       GPUI
@@ -56,18 +60,20 @@ jetdiff-ui       GPUI
     split        two sides + divider, and mouse hits
     split_side   one side in Split: backgrounds, folds, text and line numbers
     divider      bezier diff divider and fold links
-    unified      one code view with old and new number, and mouse hits
+    unified      one code view with a line number column per side, and mouse hits
     code_paint   what both draw the same: text, inline highlights, hunk minimap
   file_diff      keys, mouse, zoom and scroll animation for the diff
-  changes_tree   the file tree with icons and file status colors
-  changes_view   the tree + one file, like the commit dialog in IntelliJ
+  file_tree      the file tree with icons and file status colors
+  notification_slot_view
+                 the notification slot, repainted when the brief notification is gone
+  repo_view      the tree + one file, like the commit dialog in IntelliJ
   theme          color table from JetBrains (light and dark)
 
 jetdiff-tui      the terminal, ratatui
   diff_view      keys, mouse and overlay for the diff
   code_viewer    Split and Unified as rows of cells, without folding
-  panel          the file tree and the commit list
-  app            the event loop, watcher and reload in a thread
+  side_panel     the file tree and the commit list
+  app            the event loop, watcher and reading the repo source in a thread
 
 jetdiff          binary: CLI, the gui and tui features
 ```
@@ -82,7 +88,7 @@ The split between `viewmodel`/`app` and `ui` is the most important one. All logi
 |---|---|---|
 | Diff core | Port IntelliJ's Myers core (about 650 lines) | Gives the same result as JetBrains, and golden tests against IntelliJ. `imara-diff` can be an alternative behind a trait |
 | Offsets | UTF-8 bytes | IntelliJ uses UTF-16; we convert in the golden tests |
-| Side by side | Not aligned, with a diff divider | The diff divider is the point. A 1/3 anchor and whole-line steps in empty hunks prevent stutter |
+| Split | Not aligned, with a diff divider | The diff divider is the point. A 1/3 anchor and whole-line steps in empty hunks prevent stutter |
 | Unified | Rows that point into `FileDiff`, no folding | Syntax and inline highlights are reused. Added and deleted files are always shown Unified, so Split never has to show one side alone |
 | Commit view | Tree + one file | Like the commit dialog in IntelliJ. Keeps the diff divider and sync scroll |
 | Git | The `git` CLI | Same result as `git diff`, with the user's config and rename detection |
@@ -94,7 +100,7 @@ The split between `viewmodel`/`app` and `ui` is the most important one. All logi
 
 1. **Diff core.** Port LCS and by_line with golden tests. Then by_word. A small tool that runs IntelliJ's algorithm on the same input and writes JSON gives the expected results.
 2. **One file, JetBrains quality.** Row model, sync scroll, diff divider with the right curve (0.3/0.7), colors, inline highlights, gutter, hunk minimap. This is the milestone everything depends on.
-3. **Folding and navigation.** Collapsed areas with a wave, next/previous hunk with animation.
+3. **Folding and navigation.** Closed folds with a fold wave, next/previous hunk with animation.
 4. **Syntax highlighting.**
 5. **Commit view.** A tree with folders, icons and file status colors, and one file at a time. A commit against its parent and Local changes against HEAD.
 6. **Git difftool and folder against folder.**

@@ -23,11 +23,11 @@ fixtures/<case>/expected.json  generated, don't edit by hand
 }
 ```
 
-- `lines`: line diff without inner fragments (`compareLines`).
-- `words`: with inner fragments at word level (`compareLinesInner`, WORDS).
-- `viewer`: what the side-by-side viewer shows in the default mode (BY_WORD), after `processBlocks`.
+- `lines`: line diff without `inner` fragments (`compareLines`).
+- `words`: with `inner` fragments at word level (`compareLinesInner`, WORDS).
+- `viewer`: what the viewer shows in Split, in the default mode (BY_WORD), after `processBlocks`.
 
-A fragment:
+A `LineFragment`:
 
 ```json
 { "l1": [0, 2], "l2": [0, 3], "o1": [0, 40], "o2": [0, 55], "inner": null }
@@ -35,6 +35,6 @@ A fragment:
 
 - `l1`/`l2`: lines, half-open intervals, 0-based.
 - `o1`/`o2`: offsets in the whole text, UTF-8 bytes, half-open.
-- `inner`: `null` means a whole-line highlight. `[]` means changed, but nothing visible under the policy. Otherwise a list of `{ "o1": [s, e], "o2": [s, e] }` with offsets relative to the fragment's start, UTF-8 bytes.
+- `inner`: `null` means a whole-line highlight. `[]` means changed, but nothing visible under the policy. Otherwise a list of `{ "o1": [s, e], "o2": [s, e] }` with offsets relative to the start of the `LineFragment`, UTF-8 bytes.
 
 To regenerate: `tools/golden/gen.sh`.

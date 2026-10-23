@@ -13,12 +13,12 @@ const NO_HORIZONTAL: Horizontal = Horizontal {
     max_x: 0.,
 };
 
-fn file_diff(old: &str, new: &str) -> Rc<FileDiff> {
-    Rc::new(FileDiff::new(old, new, ComparisonPolicy::Default).unwrap())
+fn file_diff(left_side: &str, right_side: &str) -> Rc<FileDiff> {
+    Rc::new(FileDiff::new(left_side, right_side, ComparisonPolicy::Default).unwrap())
 }
 
-fn unified(old: &str, new: &str) -> UnifiedDiff {
-    UnifiedDiff::new(file_diff(old, new))
+fn unified(left_side: &str, right_side: &str) -> UnifiedDiff {
+    UnifiedDiff::new(file_diff(left_side, right_side))
 }
 
 fn lines(diff: &UnifiedDiff) -> Vec<[Option<usize>; 2]> {
@@ -30,13 +30,13 @@ fn numbered(prefix: &str, count: usize) -> String {
 }
 
 /// Hunks on lines 10, 40 and 90 of 100, one line each.
-fn three_changes() -> Rc<FileDiff> {
-    let old = numbered("a", 100);
-    let mut new: Vec<String> = old.lines().map(str::to_owned).collect();
+fn three_hunks() -> Rc<FileDiff> {
+    let left_side = numbered("a", 100);
+    let mut right_side: Vec<String> = left_side.lines().map(str::to_owned).collect();
     for i in [10, 40, 90] {
-        new[i] = format!("x{i}");
+        right_side[i] = format!("x{i}");
     }
-    file_diff(&old, &(new.join("\n") + "\n"))
+    file_diff(&left_side, &(right_side.join("\n") + "\n"))
 }
 
 fn state(diff: Rc<FileDiff>) -> UnifiedState {
@@ -62,12 +62,12 @@ fn deleted_above_added() {
             [Some(3), Some(3)],
         ]
     );
-    assert_eq!(diff.block_rows().len(), 1);
-    assert_eq!(diff.block_rows()[0], 1..3);
+    assert_eq!(diff.hunk_rows().len(), 1);
+    assert_eq!(diff.hunk_rows()[0], 1..3);
     assert_eq!(diff.text(1), "b");
     assert_eq!(diff.text(2), "B");
-    assert_eq!(diff.row(1).diff_type(), DiffType::Deleted);
-    assert_eq!(diff.row(2).diff_type(), DiffType::Inserted);
+    assert_eq!(diff.row(1).kind(), HunkKind::Deleted);
+    assert_eq!(diff.row(2).kind(), HunkKind::Added);
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn line_to_row() {
 }
 
 #[test]
-fn added_file_has_only_new_numbers() {
+fn added_file_has_only_right_side_numbers() {
     let diff = unified("", "a\nb\n");
     assert!(diff.rows().iter().all(|row| row.lines[0].is_none()));
     assert_eq!(diff.row_count(), 3);
@@ -93,35 +93,35 @@ fn added_file_has_only_new_numbers() {
 #[test]
 fn modified_hunk_gives_two_marks() {
     let diff = unified("a\nb\nc\n", "a\nB\nc\n");
-    let markers = diff.stripe_markers(LINE_HEIGHT);
-    let types: Vec<_> = markers.iter().map(|marker| marker.diff_type).collect();
-    assert_eq!(types, [DiffType::Deleted, DiffType::Inserted]);
-    assert_eq!(markers[0].start_y, 10.);
-    assert_eq!(markers[1].start_y, 20.);
+    let marks = diff.hunk_minimap_marks(LINE_HEIGHT);
+    let types: Vec<_> = marks.iter().map(|mark| mark.kind).collect();
+    assert_eq!(types, [HunkKind::Deleted, HunkKind::Added]);
+    assert_eq!(marks[0].start_y, 10.);
+    assert_eq!(marks[1].start_y, 20.);
 }
 
 #[test]
 fn opens_on_first_hunk() {
-    let state = state(three_changes());
+    let state = state(three_hunks());
     // Line 10 deleted and added: row 10 and 11
     assert_eq!(state.row, 10);
-    assert_eq!(state.cursor_block(), Some(0));
+    assert_eq!(state.cursor_hunk(), Some(0));
 }
 
 #[test]
 fn n_and_p_land_on_start_of_hunk() {
-    let mut state = state(three_changes());
-    assert!(run(&mut state, Command::NextChange).animate);
+    let mut state = state(three_hunks());
+    assert!(run(&mut state, Command::NextHunk).animate);
     // Row 40 for the deleted one, plus the row for added line 10
     assert_eq!(state.row, 41);
-    run(&mut state, Command::NextChange);
+    run(&mut state, Command::NextHunk);
     assert_eq!(state.row, 92);
-    assert!(!run(&mut state, Command::NextChange).changed);
-    run(&mut state, Command::PrevChange);
+    assert!(!run(&mut state, Command::NextHunk).changed);
+    run(&mut state, Command::PreviousHunk);
     assert_eq!(state.row, 41);
     // Inside the hunk, p goes to the previous hunk, not the start of this one
     run(&mut state, Command::MoveDown);
-    run(&mut state, Command::PrevChange);
+    run(&mut state, Command::PreviousHunk);
     assert_eq!(state.row, 10);
 }
 
@@ -142,18 +142,18 @@ fn j_k_and_g_keep_scrolloff() {
 }
 
 #[test]
-fn deleted_row_gives_line_below_on_right() {
-    let mut state = state(three_changes());
-    assert_eq!(state.location(), Cursor::new(Side::Right, 10));
+fn deleted_row_gives_line_below_on_right_side() {
+    let mut state = state(three_hunks());
+    assert_eq!(state.cursor_location(), Cursor::new(Side::Right, 10));
     run(&mut state, Command::MoveDown);
-    assert_eq!(state.location(), Cursor::new(Side::Right, 10));
+    assert_eq!(state.cursor_location(), Cursor::new(Side::Right, 10));
     run(&mut state, Command::MoveDown);
-    assert_eq!(state.location(), Cursor::new(Side::Right, 11));
+    assert_eq!(state.cursor_location(), Cursor::new(Side::Right, 11));
 }
 
 #[test]
 fn switching_keeps_line_and_height() {
-    let diff = three_changes();
+    let diff = three_hunks();
     let mut split = DiffState::new(diff.clone(), Rc::new(Folding::none(&diff)));
     split.init(VIEWPORT);
     for _ in 0..35 {
@@ -174,7 +174,7 @@ fn switching_keeps_line_and_height() {
 
 #[test]
 fn deleted_row_gives_left_side_in_split() {
-    let diff = three_changes();
+    let diff = three_hunks();
     let state = state(diff.clone());
     let split = state.to_split(Rc::new(Folding::none(&diff)), VIEWPORT);
     assert_eq!(split.cursor, Cursor::new(Side::Left, 10));
@@ -195,15 +195,15 @@ fn wheel_pushes_the_cursor() {
 
 #[test]
 fn new_text_keeps_the_line() {
-    let mut state = state(three_changes());
-    run(&mut state, Command::NextChange);
+    let mut state = state(three_hunks());
+    run(&mut state, Command::NextHunk);
     run(&mut state, Command::MoveDown);
-    assert_eq!(state.location(), Cursor::new(Side::Right, 40));
+    assert_eq!(state.cursor_location(), Cursor::new(Side::Right, 40));
     // The hunk on line 10 is gone, so the rows move
-    let old = numbered("a", 100);
-    let new = old.replace("a40\n", "x40\n");
-    state.replace_diff(file_diff(&old, &new), VIEWPORT);
-    assert_eq!(state.location(), Cursor::new(Side::Right, 40));
+    let left_side = numbered("a", 100);
+    let right_side = left_side.replace("a40\n", "x40\n");
+    state.replace_diff(file_diff(&left_side, &right_side), VIEWPORT);
+    assert_eq!(state.cursor_location(), Cursor::new(Side::Right, 40));
 }
 
 #[test]
@@ -217,7 +217,7 @@ fn split_places_lines_in_pairs() {
     assert_eq!(rows[2], [Some(2), None]);
     assert_eq!(rows[3], [Some(3), Some(2)]);
     assert_eq!(rows[4], [None, Some(3)]);
-    assert_eq!(diff.block_rows(), [1..3, 4..5]);
+    assert_eq!(diff.hunk_rows(), [1..3, 4..5]);
     assert_eq!(diff.row_of(Side::Right, 2), 3);
 }
 
@@ -236,9 +236,9 @@ fn realign_keeps_the_line() {
 
 #[test]
 fn split_pairs_lines_with_common_text() {
-    let old = "a\nuse x::{\n    A,\n};\nuse app::{Keys, B};\nz\n";
-    let new = "a\nuse app::C;\nz\n";
-    let diff = UnifiedDiff::with_layout(file_diff(old, new), RowLayout::Split);
+    let left_side = "a\nuse x::{\n    A,\n};\nuse app::{Keys, B};\nz\n";
+    let right_side = "a\nuse app::C;\nz\n";
+    let diff = UnifiedDiff::with_layout(file_diff(left_side, right_side), RowLayout::Split);
     let rows = lines(&diff);
     // `use x::{ A, };` is gone, `use app::` sits against `use app::`
     assert_eq!(rows[1], [Some(1), None]);

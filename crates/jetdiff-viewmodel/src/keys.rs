@@ -101,8 +101,8 @@ fn command(key: Key) -> Option<Command> {
         KeyCode::Char(c) if key.ctrl => match c {
             'd' => HalfPageDown,
             'u' => HalfPageUp,
-            'n' => NextChange,
-            'p' => PrevChange,
+            'n' => NextHunk,
+            'p' => PreviousHunk,
             _ => return None,
         },
         KeyCode::Char(c) => match c {
@@ -114,11 +114,11 @@ fn command(key: Key) -> Option<Command> {
             'l' => ScrollRight,
             'd' => HalfPageDown,
             'u' => HalfPageUp,
-            'n' => NextChange,
-            'p' => PrevChange,
+            'n' => NextHunk,
+            'p' => PreviousHunk,
             'o' => FoldOpen,
             'f' => ToggleFolds,
-            'y' => CopyLocation,
+            'y' => CopyCursorLocation,
             'r' => Rollback,
             'G' => GoToBottom,
             'H' => FocusSide(Side::Left),
@@ -130,8 +130,8 @@ fn command(key: Key) -> Option<Command> {
         KeyCode::Left => ScrollLeft,
         KeyCode::Right => ScrollRight,
         // F7 and Shift+F7 are IntelliJ's `NextDiff` and `PreviousDiff`
-        KeyCode::F(7) if key.shift => PrevChange,
-        KeyCode::F(7) => NextChange,
+        KeyCode::F(7) if key.shift => PreviousHunk,
+        KeyCode::F(7) => NextHunk,
         _ => return None,
     };
     Some(cmd)
@@ -174,11 +174,11 @@ mod tests {
         assert_eq!(last(&chars("$")), c(ScrollToEnd));
         assert_eq!(last(&chars("d")), c(HalfPageDown));
         assert_eq!(last(&chars("u")), c(HalfPageUp));
-        assert_eq!(last(&chars("n")), c(NextChange));
-        assert_eq!(last(&chars("p")), c(PrevChange));
+        assert_eq!(last(&chars("n")), c(NextHunk));
+        assert_eq!(last(&chars("p")), c(PreviousHunk));
         assert_eq!(last(&chars("o")), c(FoldOpen));
         assert_eq!(last(&chars("f")), c(ToggleFolds));
-        assert_eq!(last(&chars("y")), c(CopyLocation));
+        assert_eq!(last(&chars("y")), c(CopyCursorLocation));
         assert_eq!(last(&chars("r")), c(Rollback));
         assert_eq!(last(&chars("G")), c(GoToBottom));
         assert_eq!(last(&chars("H")), c(FocusSide(Side::Left)));
@@ -205,8 +205,8 @@ mod tests {
     fn ctrl_and_cmd() {
         assert_eq!(last(&[Key::ctrl('d')]), c(HalfPageDown));
         assert_eq!(last(&[Key::ctrl('u')]), c(HalfPageUp));
-        assert_eq!(last(&[Key::ctrl('n')]), c(NextChange));
-        assert_eq!(last(&[Key::ctrl('p')]), c(PrevChange));
+        assert_eq!(last(&[Key::ctrl('n')]), c(NextHunk));
+        assert_eq!(last(&[Key::ctrl('p')]), c(PreviousHunk));
         assert_eq!(run(&[Key::ctrl('x')]), [Parsed::Ignored]);
         let mut k = Key::char('d');
         k.cmd = true;
@@ -216,8 +216,8 @@ mod tests {
     #[test]
     fn f7_and_arrow_keys() {
         let k = Key::new;
-        assert_eq!(last(&[k(KeyCode::F(7))]), c(NextChange));
-        assert_eq!(last(&[k(KeyCode::F(7)).shift()]), c(PrevChange));
+        assert_eq!(last(&[k(KeyCode::F(7))]), c(NextHunk));
+        assert_eq!(last(&[k(KeyCode::F(7)).shift()]), c(PreviousHunk));
         assert_eq!(last(&[k(KeyCode::Down)]), c(MoveDown));
         assert_eq!(last(&[k(KeyCode::Up)]), c(MoveUp));
         assert_eq!(last(&[k(KeyCode::Left)]), c(ScrollLeft));

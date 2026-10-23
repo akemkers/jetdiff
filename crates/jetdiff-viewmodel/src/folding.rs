@@ -1,5 +1,6 @@
-//! Folding of unchanged lines. Port of `FoldingModelSupport`: `FoldingBuilderBase` builds
-//! nested levels per gap, and `FoldedBlock` holds the regions paired on both sides.
+//! Folding of unchanged lines. Port of `FoldingModelSupport`, where `FoldedBlock` holds the regions
+//! paired on both sides. IntelliJ nests three folds per run of unchanged lines, jetdiff builds one
+//! (ADR-0002).
 
 use std::ops::Range;
 
@@ -12,29 +13,25 @@ use crate::model::{FileDiff, idx};
 const CONTEXT_RANGE: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FoldBlock {
+pub struct Fold {
     /// `None` when the side has fewer than two lines to fold.
     pub lines: [Option<Range<usize>>; 2],
     /// Shared by the sides, since `MyFoldingListener` mirrors the state.
-    pub expanded: bool,
+    pub open: bool,
 }
 
-impl FoldBlock {
+impl Fold {
     pub fn lines(&self, side: Side) -> Option<Range<usize>> {
         self.lines[idx(side)].clone()
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FoldId {
-    pub group: usize,
-    /// 0 is the outermost, with the least context.
-    pub block: usize,
-}
+/// Index into `Folding::folds`.
+pub type FoldId = usize;
 
-/// A collapsed fold that is shown, with an id for click and hover.
+/// A closed fold with lines on both sides, so it has a fold link. With an id for click and hover.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Connector {
+pub struct ClosedFold {
     pub id: FoldId,
     /// The first line of the fold per side.
     pub lines: [usize; 2],
@@ -46,8 +43,8 @@ type Regions = [Option<Range<usize>>; 2];
 #[derive(Debug, Clone)]
 pub struct Folding {
     line_counts: [usize; 2],
-    /// `FoldedGroup`: nested fold blocks per gap, outermost first.
-    groups: Vec<Vec<FoldBlock>>,
+    /// One per run of unchanged lines, in line order.
+    folds: Vec<Fold>,
     visible: [Vec<VisualFold>; 2],
     visible_ids: [Vec<FoldId>; 2],
     hovered: Option<FoldId>,
@@ -56,31 +53,23 @@ pub struct Folding {
 impl Folding {
     pub fn new(diff: &FileDiff) -> Self {
         let line_counts = line_counts(diff);
-        let changes = diff.blocks().iter().map(|b| b.lines.clone());
-        let groups = build_groups(changes, line_counts)
+        let hunks = diff.hunks().iter().map(|hunk| hunk.lines.clone());
+        let folds = build_folds(hunks, line_counts)
             .into_iter()
-            .map(|group| {
-                group
-                    .into_iter()
-                    .map(|lines| FoldBlock {
-                        lines,
-                        expanded: false,
-                    })
-                    .collect()
-            })
+            .map(|lines| Fold { lines, open: false })
             .collect();
-        Self::with_groups(line_counts, groups)
+        Self::with_folds(line_counts, folds)
     }
 
     /// No folds. For tests.
     pub fn none(diff: &FileDiff) -> Self {
-        Self::with_groups(line_counts(diff), Vec::new())
+        Self::with_folds(line_counts(diff), Vec::new())
     }
 
-    fn with_groups(line_counts: [usize; 2], groups: Vec<Vec<FoldBlock>>) -> Self {
+    fn with_folds(line_counts: [usize; 2], folds: Vec<Fold>) -> Self {
         let mut folding = Self {
             line_counts,
-            groups,
+            folds,
             visible: Default::default(),
             visible_ids: Default::default(),
             hovered: None,
@@ -89,12 +78,8 @@ impl Folding {
         folding
     }
 
-    pub fn groups(&self) -> &[Vec<FoldBlock>] {
-        &self.groups
-    }
-
-    fn block(&self, id: FoldId) -> &FoldBlock {
-        &self.groups[id.group][id.block]
+    pub fn folds(&self) -> &[Fold] {
+        &self.folds
     }
 
     pub fn layout(&self, side: Side, line_height: f32) -> LineLayout<'_> {
@@ -112,13 +97,13 @@ impl Folding {
         ]
     }
 
-    /// Collapsed folds shown on the side, in order.
+    /// Closed folds shown on the side, in order.
     pub fn visible(&self, side: Side) -> impl Iterator<Item = (FoldId, &VisualFold)> {
         let i = idx(side);
         self.visible_ids[i].iter().copied().zip(&self.visible[i])
     }
 
-    /// `getBlockForLine`: the collapsed fold that starts on the line. Other lines in a fold are
+    /// `getBlockForLine`: the closed fold that starts on the line. Other lines in a fold are
     /// hidden, and `yPositionToLogicalLine` always gives the first line.
     pub fn fold_at_line(&self, side: Side, line: usize) -> Option<FoldId> {
         let i = idx(side);
@@ -130,45 +115,39 @@ impl Folding {
             .map(|_| self.visible_ids[i][k])
     }
 
-    /// `FoldedBlock.setExpanded`: both sides. A click on a fold opens the next level.
-    pub fn set_expanded(&mut self, id: FoldId, expanded: bool) -> bool {
-        let block = &mut self.groups[id.group][id.block];
-        if block.expanded == expanded {
+    /// `FoldedBlock.setExpanded`: both sides.
+    pub fn set_open(&mut self, id: FoldId, open: bool) -> bool {
+        let fold = &mut self.folds[id];
+        if fold.open == open {
             return false;
         }
-        block.expanded = expanded;
+        fold.open = open;
         self.update();
         true
     }
 
     /// `FoldingModelSupport.expandAll`.
-    pub fn expand_all(&mut self, expanded: bool) -> bool {
+    pub fn set_all_open(&mut self, open: bool) -> bool {
         let mut changed = false;
-        for block in self.groups.iter_mut().flatten() {
-            changed |= block.expanded != expanded;
-            block.expanded = expanded;
+        for fold in &mut self.folds {
+            changed |= fold.open != open;
+            fold.open = open;
         }
         self.update();
         changed
     }
 
-    /// `ExpandRegionAction` at the caret: the fold that starts on the line, otherwise the outermost
-    /// collapsed one that contains it.
-    pub fn expand_at(&mut self, side: Side, line: usize) -> bool {
-        if let Some(id) = self.unique_start(side, line)
-            && !self.block(id).expanded
-        {
-            return self.set_expanded(id, true);
-        }
-        let found = self
-            .containing(side, line)
-            .find(|&id| !self.block(id).expanded);
-        found.is_some_and(|id| self.set_expanded(id, true))
+    /// `ExpandRegionAction` at the cursor: the closed fold that contains the line.
+    pub fn open_at(&mut self, side: Side, line: usize) -> bool {
+        let found = self.folds.iter().position(|fold| {
+            !fold.open && fold.lines(side).is_some_and(|lines| lines.contains(&line))
+        });
+        found.is_some_and(|id| self.set_open(id, true))
     }
 
-    /// `FoldingModelImpl.onFoldProcessingEnd`: a caret inside a collapsed fold is moved to
+    /// `FoldingModelImpl.onFoldProcessingEnd`: a cursor inside a closed fold is moved to
     /// its start.
-    pub fn caret_after(&self, side: Side, line: usize) -> usize {
+    pub fn cursor_after(&self, side: Side, line: usize) -> usize {
         let folds = &self.visible[idx(side)];
         let k = folds.partition_point(|f| f.lines.start <= line);
         match k.checked_sub(1).map(|k| &folds[k]) {
@@ -187,69 +166,32 @@ impl Folding {
         changed
     }
 
-    /// `MyPaintable.process`: per group the outermost fold block that is collapsed on both
-    /// sides. If one side has no fold, there is no fold link.
-    pub fn connectors(&self) -> impl Iterator<Item = Connector> + '_ {
-        self.groups.iter().enumerate().filter_map(|(g, group)| {
-            let (b, block) = group.iter().enumerate().find(|(_, b)| !b.expanded)?;
-            let [Some(l), Some(r)] = &block.lines else {
-                // Inner fold blocks are smaller, so they are also missing a side
+    /// `MyPaintable.process`: the folds that are closed on both sides. If one side has no fold,
+    /// there is no fold link.
+    pub fn closed_folds(&self) -> impl Iterator<Item = ClosedFold> + '_ {
+        self.folds.iter().enumerate().filter_map(|(id, fold)| {
+            let [Some(left_side_lines), Some(right_side_lines)] = &fold.lines else {
                 return None;
             };
-            let id = FoldId { group: g, block: b };
-            Some(Connector {
+            (!fold.open).then_some(ClosedFold {
                 id,
-                lines: [l.start, r.start],
+                lines: [left_side_lines.start, right_side_lines.start],
                 hovered: self.hovered == Some(id),
             })
         })
     }
 
-    /// `FoldingUtil.findFoldRegionStartingAtLine`: only if exactly one region starts there.
-    fn unique_start(&self, side: Side, line: usize) -> Option<FoldId> {
-        let mut found = None;
-        for (id, block) in self.ids() {
-            if block.lines(side).is_some_and(|r| r.start == line) {
-                if found.is_some() {
-                    return None;
-                }
-                found = Some(id);
-            }
-        }
-        found
-    }
-
-    /// Fold blocks with a region that contains the line, outermost first.
-    fn containing(&self, side: Side, line: usize) -> impl Iterator<Item = FoldId> + '_ {
-        self.ids()
-            .filter(move |(_, b)| b.lines(side).is_some_and(|r| r.contains(&line)))
-            .map(|(id, _)| id)
-    }
-
-    fn ids(&self) -> impl Iterator<Item = (FoldId, &FoldBlock)> {
-        self.groups.iter().enumerate().flat_map(|(g, group)| {
-            group
-                .iter()
-                .enumerate()
-                .map(move |(b, block)| (FoldId { group: g, block: b }, block))
-        })
-    }
-
-    /// The outermost collapsed region per group and side. That is the one `FoldingModel` shows, and
-    /// the only one with a separator (`getHighlighterCondition`).
+    /// The closed folds per side, which `FoldingModel` shows with a fold wave
+    /// (`getHighlighterCondition`).
     fn update(&mut self) {
         for side in [Side::Left, Side::Right] {
             let i = idx(side);
             let (ids, ranges): (Vec<_>, Vec<_>) = self
-                .groups
+                .folds
                 .iter()
                 .enumerate()
-                .filter_map(|(g, group)| {
-                    group.iter().enumerate().find_map(|(b, block)| {
-                        let lines = block.lines(side)?;
-                        (!block.expanded).then_some((FoldId { group: g, block: b }, lines))
-                    })
-                })
+                .filter(|(_, fold)| !fold.open)
+                .filter_map(|(id, fold)| Some((id, fold.lines(side)?)))
                 .unzip();
             self.visible[i] = visual_folds(ranges);
             self.visible_ids[i] = ids;
@@ -267,40 +209,34 @@ fn line_counts(diff: &FileDiff) -> [usize; 2] {
     [diff.line_count(Side::Left), diff.line_count(Side::Right)]
 }
 
-/// `FoldingBuilderBase.build` and `addGroup`: one gap between each hunk, plus before the first
-/// and after the last. The levels have 1, 2 and 4 times `CONTEXT_RANGE` lines of context.
-fn build_groups(
-    changes: impl IntoIterator<Item = [Range<usize>; 2]>,
+/// `FoldingBuilderBase.build` and `addGroup` with only the first level: one fold per run of
+/// unchanged lines between the hunks, plus before the first and after the last.
+fn build_folds(
+    hunks: impl IntoIterator<Item = [Range<usize>; 2]>,
     line_counts: [usize; 2],
-) -> Vec<Vec<Regions>> {
-    let mut groups = Vec::new();
+) -> Vec<Regions> {
+    let mut folds = Vec::new();
     let counts = line_counts.map(|c| c as i64);
+    let context = CONTEXT_RANGE as i64;
     let mut add = |starts: [i64; 2], ends: [i64; 2]| {
-        let group: Vec<Regions> = [CONTEXT_RANGE, CONTEXT_RANGE * 2, CONTEXT_RANGE * 4]
-            .into_iter()
-            .filter_map(|shift| {
-                let shift = shift as i64;
-                let regions: Regions = std::array::from_fn(|i| {
-                    let start = starts[i].saturating_add(shift).clamp(0, counts[i]);
-                    let end = ends[i].saturating_sub(shift).clamp(0, counts[i]);
-                    (end - start >= 2).then_some(start as usize..end as usize)
-                });
-                regions.iter().any(Option::is_some).then_some(regions)
-            })
-            .collect();
-        if !group.is_empty() {
-            groups.push(group);
+        let regions: Regions = std::array::from_fn(|i| {
+            let start = starts[i].saturating_add(context).clamp(0, counts[i]);
+            let end = ends[i].saturating_sub(context).clamp(0, counts[i]);
+            (end - start >= 2).then_some(start as usize..end as usize)
+        });
+        if regions.iter().any(Option::is_some) {
+            folds.push(regions);
         }
     };
-    // `Integer.MIN_VALUE` and `MAX_VALUE`: the first and last gap fold all the way to the edge
+    // `Integer.MIN_VALUE` and `MAX_VALUE`: the first and last fold go all the way to the edge
     let mut last = [i64::MIN; 2];
-    for c in changes {
+    for lines in hunks {
         let starts = last;
-        last = [c[0].end as i64, c[1].end as i64];
-        add(starts, [c[0].start as i64, c[1].start as i64]);
+        last = [lines[0].end as i64, lines[1].end as i64];
+        add(starts, [lines[0].start as i64, lines[1].start as i64]);
     }
     add(last, [i64::MAX; 2]);
-    groups
+    folds
 }
 
 #[cfg(test)]
@@ -320,7 +256,7 @@ mod tests {
     }
 
     /// Hunks on lines 10, 40 and 90 of 100.
-    fn three_changes() -> FileDiff {
+    fn three_hunks() -> FileDiff {
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [10, 40, 90] {
@@ -333,128 +269,116 @@ mod tests {
         [Some(r.clone()), Some(r)]
     }
 
+    fn visible(folding: &Folding, side: Side) -> Vec<Range<usize>> {
+        folding
+            .visible(side)
+            .map(|(_, fold)| fold.lines.clone())
+            .collect()
+    }
+
     #[test]
-    fn groups_with_three_levels() {
-        // 101 lines with the empty one after the last '\n'
-        let groups = build_groups(
-            [[10..11, 10..11], [40..41, 40..41], [90..91, 90..91]],
-            [101, 101],
-        );
+    fn one_fold_per_run_with_four_lines_of_context() {
+        let folding = Folding::new(&three_hunks());
+        let folds: Vec<_> = folding
+            .folds()
+            .iter()
+            .map(|fold| fold.lines.clone())
+            .collect();
         assert_eq!(
-            groups,
-            vec![
-                // The first gap goes all the way to the top, so all the levels start at 0
-                vec![both(0..6), both(0..2)],
-                // 16 lines of context gives 27..24, so no region
-                vec![both(15..36), both(19..32)],
-                vec![both(45..86), both(49..82), both(57..74)],
-                vec![both(95..101), both(99..101)],
-            ]
+            folds,
+            // 101 lines with the empty one after the last '\n'. The first and last fold go all the
+            // way to the edge.
+            [both(0..6), both(15..36), both(45..86), both(95..101)]
         );
+        assert_eq!(visible(&folding, L), [0..6, 15..36, 45..86, 95..101]);
     }
 
     #[test]
     fn at_least_two_lines_per_side() {
-        // Gap of 9 lines: 4 context on each side leaves one line, so no fold
-        let groups = build_groups([[0..1, 0..1], [10..11, 10..11]], [11, 11]);
-        assert!(groups.iter().flatten().all(|r| r != &both(5..6)));
-        assert_eq!(groups.len(), 0);
+        // Run of 9 lines: 4 context on each side leaves one line, so no fold
+        let folds = build_folds([[0..1, 0..1], [10..11, 10..11]], [11, 11]);
+        assert!(folds.is_empty());
         // Different length: only the long side gets a fold
-        let groups = build_groups([[0..1, 0..1], [10..11, 20..21]], [11, 21]);
-        assert_eq!(groups[0][0], [None, Some(5..16)]);
+        let folds = build_folds([[0..1, 0..1], [10..11, 20..21]], [11, 21]);
+        assert_eq!(folds, [[None, Some(5..16)]]);
     }
 
     #[test]
     fn equal_files_fold_completely() {
-        let d = diff(&lines("a", 30), &lines("a", 30));
-        let f = Folding::new(&d);
-        assert_eq!(f.groups.len(), 1);
-        assert_eq!(f.groups[0][0].lines, both(0..31));
-        assert_eq!(f.layout(L, 10.).visual_line_count(), 1);
+        let diff = diff(&lines("a", 30), &lines("a", 30));
+        let folding = Folding::new(&diff);
+        assert_eq!(folding.folds().len(), 1);
+        assert_eq!(folding.folds()[0].lines, both(0..31));
+        assert_eq!(folding.layout(L, 10.).visual_line_count(), 1);
     }
 
     #[test]
     fn context_off_gives_no_folds() {
-        let d = three_changes();
-        let f = Folding::none(&d);
-        assert!(f.groups.is_empty());
-        assert_eq!(f.layout(L, 10.).visual_line_count(), 101);
-        assert_eq!(f.connectors().count(), 0);
+        let diff = three_hunks();
+        let folding = Folding::none(&diff);
+        assert!(folding.folds().is_empty());
+        assert_eq!(folding.layout(L, 10.).visual_line_count(), 101);
+        assert_eq!(folding.closed_folds().count(), 0);
     }
 
     #[test]
-    fn click_opens_one_level_at_a_time() {
-        let d = three_changes();
-        let mut f = Folding::new(&d);
-        let visible = |f: &Folding| -> Vec<Range<usize>> {
-            f.visible(L).map(|(_, v)| v.lines.clone()).collect()
-        };
-        assert_eq!(visible(&f), [0..6, 15..36, 45..86, 95..101]);
-        let id = f.fold_at_line(L, 45).unwrap();
-        assert_eq!(id, FoldId { group: 2, block: 0 });
-        assert_eq!(f.fold_at_line(R, 45), Some(id));
-        assert_eq!(f.fold_at_line(L, 46), None);
+    fn opening_a_fold_shows_the_whole_run() {
+        let diff = three_hunks();
+        let mut folding = Folding::new(&diff);
+        let id = folding.fold_at_line(L, 45).unwrap();
+        assert_eq!(id, 2);
+        assert_eq!(folding.fold_at_line(R, 45), Some(id));
+        assert_eq!(folding.fold_at_line(L, 46), None);
 
-        assert!(f.set_expanded(id, true));
-        assert_eq!(visible(&f)[2], 49..82);
-        let id = f.fold_at_line(R, 49).unwrap();
-        f.set_expanded(id, true);
-        assert_eq!(visible(&f)[2], 57..74);
-        let id = f.fold_at_line(L, 57).unwrap();
-        f.set_expanded(id, true);
-        assert_eq!(visible(&f), [0..6, 15..36, 95..101]);
-        // Both sides follow
-        assert_eq!(
-            visible(&f),
-            f.visible(R)
-                .map(|(_, v)| v.lines.clone())
-                .collect::<Vec<_>>()
-        );
+        assert!(folding.set_open(id, true));
+        // No smaller fold is left inside 45..86, and both sides follow
+        assert_eq!(visible(&folding, L), [0..6, 15..36, 95..101]);
+        assert_eq!(visible(&folding, R), visible(&folding, L));
+        assert!((45..86).all(|line| folding.fold_at_line(L, line).is_none()));
+        // The folds 0..6, 15..36 and 95..101 each still take one visual line
+        assert_eq!(folding.layout(L, 10.).visual_line_count(), 101 - 5 - 20 - 5);
     }
 
     #[test]
-    fn expand_and_collapse_all() {
-        let d = three_changes();
-        let mut f = Folding::new(&d);
-        assert!(f.expand_all(true));
-        assert_eq!(f.visible(L).count(), 0);
-        assert_eq!(f.layout(R, 10.).visual_line_count(), 101);
-        assert!(!f.expand_all(true));
-        f.expand_all(false);
-        assert_eq!(f.visible(L).count(), 4);
+    fn open_and_close_all() {
+        let diff = three_hunks();
+        let mut folding = Folding::new(&diff);
+        assert!(folding.set_all_open(true));
+        assert_eq!(folding.visible(L).count(), 0);
+        assert_eq!(folding.layout(R, 10.).visual_line_count(), 101);
+        assert!(!folding.set_all_open(true));
+        folding.set_all_open(false);
+        assert_eq!(folding.visible(L).count(), 4);
     }
 
     #[test]
-    fn expand_at_caret() {
-        let d = three_changes();
-        let mut f = Folding::new(&d);
-        // Caret on the fold's line: outermost collapsed
-        assert!(f.expand_at(L, 45));
-        assert_eq!(f.fold_at_line(L, 49), Some(FoldId { group: 2, block: 1 }));
-        // Line 60 is in all three levels; the outermost collapsed is level 1
-        assert!(f.expand_at(L, 60));
-        assert_eq!(f.fold_at_line(L, 57), Some(FoldId { group: 2, block: 2 }));
-        // Line 0: all the levels start there, so it falls back to the containing one
-        assert!(f.expand_at(L, 0));
-        assert_eq!(f.fold_at_line(L, 0), Some(FoldId { group: 0, block: 1 }));
+    fn open_at_opens_the_fold_containing_the_line() {
+        let diff = three_hunks();
+        let mut folding = Folding::new(&diff);
+        // Inside the fold 45..86, not on its first line
+        assert!(folding.open_at(L, 60));
+        assert_eq!(visible(&folding, L), [0..6, 15..36, 95..101]);
+        assert!(!folding.open_at(L, 60));
+        // On the first line
+        assert!(folding.open_at(R, 0));
+        assert_eq!(visible(&folding, L), [15..36, 95..101]);
         // Inside a hunk there is nothing
-        assert!(!f.expand_at(L, 10));
+        assert!(!folding.open_at(L, 10));
     }
 
     #[test]
-    fn caret_in_collapsed_fold_moves_to_start() {
-        let d = three_changes();
-        let f = Folding::new(&d);
-        assert_eq!(f.caret_after(L, 50), 45);
-        assert_eq!(f.caret_after(L, 45), 45);
-        assert_eq!(f.caret_after(L, 40), 40);
-        assert_eq!(f.caret_after(L, 3), 0);
+    fn cursor_in_closed_fold_moves_to_start() {
+        let diff = three_hunks();
+        let folding = Folding::new(&diff);
+        assert_eq!(folding.cursor_after(L, 50), 45);
+        assert_eq!(folding.cursor_after(L, 45), 45);
+        assert_eq!(folding.cursor_after(L, 40), 40);
+        assert_eq!(folding.cursor_after(L, 3), 0);
     }
 
     #[test]
     fn fold_links_need_fold_on_both_sides() {
-        // Right has 20 extra lines after line 10: the Left gap 10..20 becomes too small
-        // on the innermost level, but Right's does not
+        // Right has 20 extra lines after line 10, so the last fold starts at 14 and 34
         let a = lines("a", 30);
         let b = format!(
             "{}{}{}",
@@ -462,35 +386,34 @@ mod tests {
             lines("x", 20),
             &a[lines("a", 10).len()..]
         );
-        let d = diff(&a, &b);
-        assert_eq!(d.blocks()[0].lines, [10..10, 10..30]);
-        let mut f = Folding::new(&d);
-        let c: Vec<_> = f.connectors().collect();
-        assert_eq!(c.len(), 2);
-        assert_eq!(c[0].lines, [0, 0]);
-        assert_eq!(c[1].lines, [14, 34]);
-        f.set_hovered(Some(c[1].id));
-        assert!(f.connectors().nth(1).unwrap().hovered);
+        let diff = diff(&a, &b);
+        assert_eq!(diff.hunks()[0].lines, [10..10, 10..30]);
+        let mut folding = Folding::new(&diff);
+        let closed: Vec<_> = folding.closed_folds().collect();
+        assert_eq!(closed.len(), 2);
+        assert_eq!(closed[0].lines, [0, 0]);
+        assert_eq!(closed[1].lines, [14, 34]);
+        folding.set_hovered(Some(closed[1].id));
+        assert!(folding.closed_folds().nth(1).unwrap().hovered);
 
         // Only one side has a fold: no fold link
-        let groups = build_groups([[0..1, 0..1], [10..11, 20..21]], [11, 21]);
-        assert_eq!(groups[0][0].clone(), [None, Some(5..16)]);
-        let d = diff(
-            &(lines("a", 1) + &lines("b", 9) + "c\n"),
-            &(lines("a", 1) + &lines("b", 19) + "c\n"),
-        );
-        let f = Folding::new(&d);
-        assert!(f.connectors().all(|c| c.lines[0] != 5));
+        let one_side = Fold {
+            lines: [None, Some(5..16)],
+            open: false,
+        };
+        let folding = Folding::with_folds([11, 21], vec![one_side]);
+        assert_eq!(folding.fold_at_line(R, 5), Some(0));
+        assert_eq!(folding.closed_folds().count(), 0);
     }
 
     #[test]
     fn hover_resets_when_fold_disappears() {
-        let d = three_changes();
-        let mut f = Folding::new(&d);
-        let id = f.fold_at_line(L, 45).unwrap();
-        assert!(f.set_hovered(Some(id)));
-        assert!(!f.set_hovered(Some(id)));
-        f.set_expanded(id, true);
-        assert_eq!(f.hovered(), None);
+        let diff = three_hunks();
+        let mut folding = Folding::new(&diff);
+        let id = folding.fold_at_line(L, 45).unwrap();
+        assert!(folding.set_hovered(Some(id)));
+        assert!(!folding.set_hovered(Some(id)));
+        folding.set_open(id, true);
+        assert_eq!(folding.hovered(), None);
     }
 }

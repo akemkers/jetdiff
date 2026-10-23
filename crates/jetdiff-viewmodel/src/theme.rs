@@ -5,7 +5,7 @@
 
 use jetdiff_syntax::Token;
 
-use crate::model::DiffType;
+use crate::model::HunkKind;
 
 /// RGBA, alpha 255 is opaque.
 pub type Rgba = [u8; 4];
@@ -19,16 +19,16 @@ pub struct DiffColors {
     /// Line background and inline highlight, and the fill in the divider.
     pub background: Rgba,
     /// `ERROR_STRIPE_COLOR` in the scrollbar.
-    pub stripe: Rgba,
+    pub hunk_minimap: Rgba,
     /// Background for lines with inline highlight (`TextDiffTypeFactory.getIgnoredBackgroundColor`).
     pub ignored: Rgba,
 }
 
 impl DiffColors {
-    fn new(background: Rgba, stripe: Rgba, editor_bg: Rgba) -> Self {
+    fn new(background: Rgba, hunk_minimap: Rgba, editor_bg: Rgba) -> Self {
         Self {
             background,
-            stripe,
+            hunk_minimap,
             ignored: ignored_color(background, editor_bg),
         }
     }
@@ -71,32 +71,32 @@ pub struct Theme {
     pub editor_bg: Rgba,
     pub editor_fg: Rgba,
     pub line_number: Rgba,
-    pub line_number_caret_row: Rgba,
+    pub cursor_row_line_number: Rgba,
     /// The cursor's line. Transparent and stronger than `CARET_ROW_COLOR`, since it is
     /// the only highlight and must show over the diff backgrounds.
-    pub row_highlight: Rgba,
-    /// The line number of the cursor's line. Yellow, since no diff color is yellow.
-    pub gutter_highlight: Rgba,
+    pub cursor_row_background: Rgba,
+    /// The fill behind the line numbers on the cursor's line. Yellow, since no diff color is yellow.
+    pub cursor_row_gutter: Rgba,
     pub indent_guide: Rgba,
-    /// `DIFF_SEPARATOR_WAVE`, the stroke over folded areas.
-    pub separator_wave: Rgba,
+    /// `DIFF_SEPARATOR_WAVE`, for the fold wave and the fold link.
+    pub fold_wave: Rgba,
     /// Gray thumb with alpha, like the macOS scrollbar in IntelliJ.
     pub scrollbar_thumb: Rgba,
     /// `Tree.selectionBackground`.
     pub tree_selection: Rgba,
-    /// `Tree.selectionInactiveBackground`, when the panel doesn't have focus.
+    /// `Tree.selectionInactiveBackground`, when the side panel doesn't have focus.
     pub tree_selection_inactive: Rgba,
     /// The line and dots in the commit list.
     pub commit_graph: Rgba,
-    /// Message above the keymap bar. Warnings are yellow.
-    pub message_bg: Rgba,
-    pub warning_bg: Rgba,
-    pub message_fg: Rgba,
+    /// Notification above the keymap bar. Warnings are yellow.
+    pub notification_info_background: Rgba,
+    pub notification_warning_background: Rgba,
+    pub notification_foreground: Rgba,
     /// `FileStatus` ADDED, DELETED and MODIFIED. Rename uses MODIFIED.
     pub file_added: Rgba,
     pub file_deleted: Rgba,
     pub file_modified: Rgba,
-    pub inserted: DiffColors,
+    pub added: DiffColors,
     pub deleted: DiffColors,
     pub modified: DiffColors,
     /// Indexed with `Token as usize`.
@@ -113,22 +113,22 @@ impl Theme {
             editor_bg: bg,
             editor_fg: rgb(fg),
             line_number: rgb(0x4B5059),
-            line_number_caret_row: rgb(0xA1A3AB),
-            row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
-            gutter_highlight: rgb(0x8A6D2F),
+            cursor_row_line_number: rgb(0xA1A3AB),
+            cursor_row_background: [0xFF, 0xFF, 0xFF, 0x12],
+            cursor_row_gutter: rgb(0x8A6D2F),
             indent_guide: rgb(0x323438),
-            separator_wave: rgb(0x555555),
+            fold_wave: rgb(0x555555),
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x2E436E),
             tree_selection_inactive: rgb(0x43454A),
             commit_graph: rgb(0x56A8F5),
-            message_bg: rgb(0x73BD79),
-            warning_bg: rgb(0xD5B778),
-            message_fg: bg,
+            notification_info_background: rgb(0x73BD79),
+            notification_warning_background: rgb(0xD5B778),
+            notification_foreground: bg,
             file_added: rgb(0x73BD79),
             file_deleted: rgb(0x6F737A),
             file_modified: rgb(0x70AEFF),
-            inserted: DiffColors::new(rgb(0x294436), rgb(0x447152), bg),
+            added: DiffColors::new(rgb(0x294436), rgb(0x447152), bg),
             deleted: DiffColors::new(rgb(0x484A4A), rgb(0x656E76), bg),
             modified: DiffColors::new(rgb(0x385570), rgb(0x43698D), bg),
             syntax: Token::ALL.map(|t| match t {
@@ -162,7 +162,7 @@ impl Theme {
         }
     }
 
-    /// Islands Light. MODIFIED comes from Light, INSERTED and DELETED from Default.
+    /// Islands Light. `MODIFIED` comes from Light, `INSERTED` and `DELETED` from Default.
     pub fn light() -> Self {
         let bg = rgb(0xFFFFFF);
         let fg = 0x080808;
@@ -171,22 +171,22 @@ impl Theme {
             editor_bg: bg,
             editor_fg: rgb(fg),
             line_number: rgb(0xAEB3C2),
-            line_number_caret_row: rgb(0x767A8A),
-            row_highlight: [0x2E, 0x6B, 0xE6, 0x1A],
-            gutter_highlight: rgb(0xF5D98B),
+            cursor_row_line_number: rgb(0x767A8A),
+            cursor_row_background: [0x2E, 0x6B, 0xE6, 0x1A],
+            cursor_row_gutter: rgb(0xF5D98B),
             indent_guide: rgb(0xEBECF0),
-            separator_wave: rgb(0xD0D0D0),
+            fold_wave: rgb(0xD0D0D0),
             scrollbar_thumb: [0x00, 0x00, 0x00, 0x33],
             tree_selection: rgb(0xD5E1FF),
             tree_selection_inactive: rgb(0xDFE1E5),
             commit_graph: rgb(0x3574F0),
-            message_bg: rgb(0xBEE6BE),
-            warning_bg: rgb(0xF5D98B),
-            message_fg: rgb(fg),
+            notification_info_background: rgb(0xBEE6BE),
+            notification_warning_background: rgb(0xF5D98B),
+            notification_foreground: rgb(fg),
             file_added: rgb(0x067D17),
             file_deleted: rgb(0x6C707E),
             file_modified: rgb(0x0033B3),
-            inserted: DiffColors::new(rgb(0xBEE6BE), rgb(0xAADEAA), bg),
+            added: DiffColors::new(rgb(0xBEE6BE), rgb(0xAADEAA), bg),
             deleted: DiffColors::new(rgb(0xD6D6D6), rgb(0xC8C8C8), bg),
             modified: DiffColors::new(rgb(0xC2D8F2), rgb(0xB6D2F2), bg),
             syntax: Token::ALL.map(|t| match t {
@@ -245,28 +245,28 @@ impl Theme {
             editor_bg: base,
             editor_fg: rgb(TEXT),
             line_number: rgb(OVERLAY0),
-            line_number_caret_row: rgb(LAVENDER),
+            cursor_row_line_number: rgb(LAVENDER),
             // Like Islands Dark
-            row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
+            cursor_row_background: [0xFF, 0xFF, 0xFF, 0x12],
             // Yellow with 0.5
-            gutter_highlight: rgb(0x8C806E),
+            cursor_row_gutter: rgb(0x8C806E),
             indent_guide: rgb(SURFACE0),
             // Inherited from Darcula
-            separator_wave: rgb(0x555555),
+            fold_wave: rgb(0x555555),
             // Like Islands Dark
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
             tree_selection: rgb(0x353748),
             // Between base and selected, since surface0 is almost the same as selected
             tree_selection_inactive: rgb(0x2A2B3C),
             commit_graph: rgb(TEAL),
-            message_bg: rgb(GREEN),
-            warning_bg: rgb(YELLOW),
-            message_fg: base,
+            notification_info_background: rgb(GREEN),
+            notification_warning_background: rgb(YELLOW),
+            notification_foreground: base,
             file_added: rgb(GREEN),
             file_deleted: rgb(SURFACE2),
             file_modified: rgb(BLUE),
-            // Green, red and blue with 0.25 for the background and 0.2 for the stripe
-            inserted: DiffColors::new(rgb(0x404F4B), rgb(0x394545), base),
+            // Green, red and blue with 0.25 for the background and 0.2 for the hunk minimap
+            added: DiffColors::new(rgb(0x404F4B), rgb(0x394545), base),
             deleted: DiffColors::new(rgb(0x53394C), rgb(0x493446), base),
             modified: DiffColors::new(rgb(0x394461), rgb(0x333C57), base),
             syntax: Token::ALL.map(|t| match t {
@@ -297,11 +297,11 @@ impl Theme {
         }
     }
 
-    pub fn diff(&self, diff_type: DiffType) -> &DiffColors {
-        match diff_type {
-            DiffType::Inserted => &self.inserted,
-            DiffType::Deleted => &self.deleted,
-            DiffType::Modified => &self.modified,
+    pub fn diff(&self, kind: HunkKind) -> &DiffColors {
+        match kind {
+            HunkKind::Added => &self.added,
+            HunkKind::Deleted => &self.deleted,
+            HunkKind::Modified => &self.modified,
         }
     }
 
@@ -334,7 +334,7 @@ mod tests {
     #[test]
     fn ignored_in_dark() {
         let t = Theme::dark();
-        assert_eq!(t.inserted.ignored, rgb(0x1F2B26));
+        assert_eq!(t.added.ignored, rgb(0x1F2B26));
         assert_eq!(t.deleted.ignored, rgb(0x2C2D2E));
         assert_eq!(t.modified.ignored, rgb(0x25323E));
     }
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn ignored_in_light() {
         let t = Theme::light();
-        assert_eq!(t.inserted.ignored, rgb(0xE5F5E5));
+        assert_eq!(t.added.ignored, rgb(0xE5F5E5));
         assert_eq!(t.deleted.ignored, rgb(0xEFEFEF));
         assert_eq!(t.modified.ignored, rgb(0xE7EFFA));
     }

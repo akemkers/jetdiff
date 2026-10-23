@@ -11,7 +11,7 @@ use crate::cursor::Cursor;
 use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{FileDiff, idx};
-use crate::nav::{next_block, prev_block, target_for_block};
+use crate::nav::{next_hunk, previous_hunk, target_for_hunk};
 use crate::scroll::{PositionKeeper, ScrollState};
 use crate::scrolloff;
 
@@ -75,14 +75,14 @@ impl DiffState {
 
     /// `InitialScrollPositionSupport`: the first hunk, with the cursor on Right.
     pub fn init(&mut self, vp: Viewport) {
-        if self.diff.blocks().is_empty() {
+        if self.diff.hunks().is_empty() {
             return;
         }
-        let t = target_for_block(&self.diff, &self.folding, 0, vp);
+        let t = target_for_hunk(&self.diff, &self.folding, 0, vp);
         self.scroll.y = t.scroll_y;
         self.scroll.x = t.scroll_x;
         let side = self.cursor.side;
-        self.cursor = Cursor::new(side, self.clamp_line(side, t.caret_lines[idx(side)]));
+        self.cursor = Cursor::new(side, self.clamp_line(side, t.cursor_lines[idx(side)]));
     }
 
     fn layout(&self, side: Side, vp: Viewport) -> LineLayout<'_> {
@@ -93,10 +93,10 @@ impl DiffState {
         self.diff.line(side, line)
     }
 
-    /// A valid line outside collapsed folds.
+    /// A valid line outside closed folds.
     fn clamp_line(&self, side: Side, line: usize) -> usize {
         let line = line.min(self.diff.line_count(side) - 1);
-        self.folding.caret_after(side, line)
+        self.folding.cursor_after(side, line)
     }
 
     fn cursor_visual(&self, vp: Viewport) -> usize {
@@ -147,7 +147,7 @@ impl DiffState {
         Outcome::instant()
     }
 
-    /// The end of the line, one character in from the right edge. A collapsed fold has no text.
+    /// The end of the line, one character in from the right edge. A closed fold has no text.
     fn scroll_to_end(&mut self, hx: Horizontal) -> Outcome {
         let c = self.cursor;
         let cells = if self.folding.fold_at_line(c.side, c.line).is_some() {
@@ -187,16 +187,16 @@ impl DiffState {
             }
             HalfPageDown => self.half_page(1, vp),
             HalfPageUp => self.half_page(-1, vp),
-            NextChange => self.change(true, vp),
-            PrevChange => self.change(false, vp),
+            NextHunk => self.go_to_hunk(true, vp),
+            PreviousHunk => self.go_to_hunk(false, vp),
             FocusSide(side) => self.focus_side(side, vp),
-            FoldOpen => self.change_folding(vp, |s, f| f.expand_at(s.0, s.1)),
+            FoldOpen => self.change_folding(vp, |s, f| f.open_at(s.0, s.1)),
             ToggleFolds => self.change_folding(vp, |_, f| {
                 let any_closed = f.visible(Side::Left).next().is_some();
-                f.expand_all(any_closed)
+                f.set_all_open(any_closed)
             }),
             // Owned by the UI. After zoom, `rescale` is called.
-            CopyLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
+            CopyCursorLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
         }
     }
 
@@ -232,18 +232,18 @@ impl DiffState {
 
     /// `n` and `p` use IntelliJ's navigation and landing, so the cursor goes to the start of
     /// the hunk. Scroll is only adjusted if the landing breaks scrolloff.
-    fn change(&mut self, next: bool, vp: Viewport) -> Outcome {
+    fn go_to_hunk(&mut self, next: bool, vp: Viewport) -> Outcome {
         let side = self.cursor.side;
-        let block = if next {
-            next_block(&self.diff, side, self.cursor.line)
+        let hunk = if next {
+            next_hunk(&self.diff, side, self.cursor.line)
         } else {
-            prev_block(&self.diff, side, self.cursor.line)
+            previous_hunk(&self.diff, side, self.cursor.line)
         };
-        let Some(block) = block else {
+        let Some(hunk) = hunk else {
             return Outcome::default();
         };
-        let t = target_for_block(&self.diff, &self.folding, block, vp);
-        let line = self.clamp_line(side, t.caret_lines[idx(side)]);
+        let t = target_for_hunk(&self.diff, &self.folding, hunk, vp);
+        let line = self.clamp_line(side, t.cursor_lines[idx(side)]);
         self.cursor = Cursor::new(side, line);
         self.master = side;
         self.scroll.y = t.scroll_y;
@@ -256,7 +256,7 @@ impl DiffState {
     }
 
     /// The line on the other side, via `BaseSyncScrollable.transfer`.
-    fn transferred_line(&self) -> usize {
+    fn mirrored_line(&self) -> usize {
         let c = self.cursor;
         let other = c.side.other();
         let line = self.diff.mapping().transfer(c.side, c.line);
@@ -264,17 +264,17 @@ impl DiffState {
     }
 
     /// `TwosideTextDiffViewer.transferPosition`, without a column.
-    pub fn transferred_cursor(&self) -> Cursor {
-        Cursor::new(self.cursor.side.other(), self.transferred_line())
+    pub fn mirrored_cursor(&self) -> Cursor {
+        Cursor::new(self.cursor.side.other(), self.mirrored_line())
     }
 
-    /// The hunk the cursor is in. `None` on a collapsed fold.
-    pub fn cursor_block(&self) -> Option<usize> {
+    /// The hunk the cursor is in. `None` on a closed fold.
+    pub fn cursor_hunk(&self) -> Option<usize> {
         let c = self.cursor;
         if self.folding.fold_at_line(c.side, c.line).is_some() {
             return None;
         }
-        self.diff.block_at(c.side, c.line)
+        self.diff.hunk_at(c.side, c.line)
     }
 
     /// The same file with new content. Cursor and scroll are kept as far as possible.
@@ -304,11 +304,11 @@ impl DiffState {
     }
 
     /// The cursor's line in the newest version.
-    pub fn location(&self) -> Cursor {
+    pub fn cursor_location(&self) -> Cursor {
         if self.cursor.side == Side::Right {
             self.cursor
         } else {
-            self.transferred_cursor()
+            self.mirrored_cursor()
         }
     }
 
@@ -318,27 +318,28 @@ impl DiffState {
         if self.cursor.side == side {
             return Outcome::default();
         }
-        self.cursor = self.transferred_cursor();
+        self.cursor = self.mirrored_cursor();
         self.follow(vp, false);
         Outcome::animated()
     }
 
-    /// `runBatchFoldingOperation` with `PositionKeeper`. The other side's caret is
-    /// the transferred position, since we only have one cursor.
+    /// `runBatchFoldingOperation` with `PositionKeeper`. The other side uses
+    /// the mirrored cursor, since we only have one cursor.
     fn change_folding(
         &mut self,
         vp: Viewport,
         op: impl FnOnce((Side, usize), &mut Folding) -> bool,
     ) -> Outcome {
         let side = self.cursor.side;
-        let mut carets = [0; 2];
-        carets[idx(side)] = self.cursor.line;
-        carets[idx(side.other())] = self.transferred_line();
-        let keeper = PositionKeeper::save(&self.scroll, &self.folding, carets, vp);
+        let mut cursor_lines = [0; 2];
+        cursor_lines[idx(side)] = self.cursor.line;
+        cursor_lines[idx(side.other())] = self.mirrored_line();
+        let keeper = PositionKeeper::save(&self.scroll, &self.folding, cursor_lines, vp);
         if !op((side, self.cursor.line), Rc::make_mut(&mut self.folding)) {
             return Outcome::default();
         }
-        let after = [Side::Left, Side::Right].map(|s| self.folding.caret_after(s, carets[idx(s)]));
+        let after = [Side::Left, Side::Right]
+            .map(|side| self.folding.cursor_after(side, cursor_lines[idx(side)]));
         self.set_line(after[idx(side)]);
         keeper.restore(&mut self.scroll, &self.diff, &self.folding, after, vp);
         Outcome {
@@ -371,17 +372,18 @@ impl DiffState {
     }
 
     /// Zoom: the cursor line is kept at the same place in the viewport, measured in lines.
-    pub fn rescale(&mut self, old_line_height: f32, vp: Viewport, x_scale: f32) {
+    pub fn rescale(&mut self, previous_line_height: f32, viewport: Viewport, x_scale: f32) {
         let side = self.cursor.side;
-        let cv = self.cursor_visual(vp) as f32;
-        let offset = cv - self.scroll.y(side) / old_line_height;
-        let y = (cv - offset) * vp.line_height;
-        let y = self.layout(side, vp).clamp_scroll(y, vp.height);
+        let cursor_visual = self.cursor_visual(viewport) as f32;
+        let offset = cursor_visual - self.scroll.y(side) / previous_line_height;
+        let y = (cursor_visual - offset) * viewport.line_height;
+        let y = self.layout(side, viewport).clamp_scroll(y, viewport.height);
         self.master = side;
         self.scroll.y[idx(side)] = y;
-        self.scroll.sync_from(&self.diff, &self.folding, side, vp);
+        self.scroll
+            .sync_from(&self.diff, &self.folding, side, viewport);
         self.scroll.x *= x_scale;
-        self.push_cursor(vp);
+        self.push_cursor(viewport);
     }
 }
 
@@ -426,7 +428,7 @@ mod tests {
     }
 
     /// Hunks on lines 10, 40 and 90 of 100, one line each.
-    fn three_changes(folds: bool) -> DiffState {
+    fn three_hunks(folds: bool) -> DiffState {
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [10, 40, 90] {
@@ -539,21 +541,21 @@ mod tests {
 
     #[test]
     fn next_and_previous_hunk() {
-        let mut s = three_changes(false);
+        let mut s = three_hunks(false);
         s.init(VP);
         assert_eq!((s.cursor.side, s.cursor.line), (R, 10));
-        let out = run(&mut s, NextChange);
+        let out = run(&mut s, NextHunk);
         assert!(out.animate);
         assert_eq!(s.cursor.line, 40);
         assert_scrolloff(&s);
-        run(&mut s, PrevChange);
+        run(&mut s, PreviousHunk);
         assert_eq!(s.cursor.line, 10);
-        times(&mut s, NextChange, 2);
+        times(&mut s, NextHunk, 2);
         assert_eq!(s.cursor.line, 90);
-        assert!(!run(&mut s, NextChange).changed);
-        times(&mut s, PrevChange, 2);
+        assert!(!run(&mut s, NextHunk).changed);
+        times(&mut s, PreviousHunk, 2);
         assert_eq!(s.cursor.line, 10);
-        assert!(!run(&mut s, PrevChange).changed);
+        assert!(!run(&mut s, PreviousHunk).changed);
     }
 
     #[test]
@@ -563,10 +565,10 @@ mod tests {
             height: 400.,
             line_height: LH,
         };
-        let mut s = three_changes(false);
+        let mut s = three_hunks(false);
         s.init(vp);
-        s.execute(NextChange, vp, NO_X);
-        let t = target_for_block(&s.diff, &s.folding, 1, vp);
+        s.execute(NextHunk, vp, NO_X);
+        let t = target_for_hunk(&s.diff, &s.folding, 1, vp);
         assert_eq!(s.scroll.y, t.scroll_y);
     }
 
@@ -574,13 +576,13 @@ mod tests {
     fn cursor_location_is_in_newest_version() {
         let mut s = state("x\nnew1\nnew2\ncommon\n", "x\ncommon\n", false);
         s.click(L, 3);
-        assert_eq!(s.location(), Cursor::new(R, 1));
+        assert_eq!(s.cursor_location(), Cursor::new(R, 1));
         s.click(R, 0);
-        assert_eq!(s.location(), Cursor::new(R, 0));
+        assert_eq!(s.cursor_location(), Cursor::new(R, 0));
     }
 
     #[test]
-    fn switching_side_transfers_the_line() {
+    fn switching_side_moves_to_the_mirrored_cursor() {
         // Left has three more lines in the hunk
         let a = "x\nnew1\nnew2\nnew3\ncommon æøå\ny\n";
         let b = "x\ncommon æøå\ny\n";
@@ -601,8 +603,8 @@ mod tests {
     }
 
     #[test]
-    fn j_skips_collapsed_fold() {
-        let mut s = three_changes(true);
+    fn j_skips_closed_fold() {
+        let mut s = three_hunks(true);
         // The first fold is 0..6, so line 6
         assert_eq!(s.cursor.line, 0);
         run(&mut s, MoveDown);
@@ -622,14 +624,14 @@ mod tests {
 
     #[test]
     fn fold_commands_keep_the_cursor() {
-        let mut s = three_changes(true);
+        let mut s = three_hunks(true);
         s.click(R, 45);
         let y = top(&s);
         let out = run(&mut s, FoldOpen);
         assert!(out.folding_changed);
         assert_eq!(s.cursor.line, 45);
         assert_eq!(top(&s), y);
-        assert!(s.folding.fold_at_line(R, 49).is_some());
+        assert!((45..86).all(|line| s.folding.cursor_after(R, line) == line));
         run(&mut s, ToggleFolds);
         assert_eq!(s.folding.visible(R).count(), 0);
         times(&mut s, MoveDown, 20);
@@ -709,26 +711,26 @@ mod tests {
 
     #[test]
     fn rollback_keeps_cursor_and_scroll() {
-        // Close enough that the gap 37..44 is not folded after 40 is rolled back
+        // Close enough that the run 37..44 is not folded after 40 is rolled back
         let a = lines("a", 100);
         let mut b: Vec<String> = a.lines().map(str::to_owned).collect();
         for i in [36, 40, 44] {
             b[i] = format!("x{i}");
         }
         let mut s = state(&a, &(b.join("\n") + "\n"), true);
-        run(&mut s, NextChange);
-        run(&mut s, NextChange);
+        run(&mut s, NextHunk);
+        run(&mut s, NextHunk);
         assert_eq!(s.cursor, Cursor::new(R, 40));
-        assert_eq!(s.cursor_block(), Some(1));
+        assert_eq!(s.cursor_hunk(), Some(1));
         let y = top(&s);
         let a = s.diff.text(L).to_owned();
         let text = s.diff.text(R).replace("x40\n", "a40\n");
         let diff = FileDiff::new(&a, &text, ComparisonPolicy::Default).unwrap();
         let folding = Rc::new(Folding::new(&diff));
         s.replace_diff(Rc::new(diff), folding, VP);
-        assert_eq!(s.diff.blocks().len(), 2);
+        assert_eq!(s.diff.hunks().len(), 2);
         assert_eq!(s.cursor, Cursor::new(R, 40));
         assert_eq!(top(&s), y);
-        assert_eq!(s.cursor_block(), None);
+        assert_eq!(s.cursor_hunk(), None);
     }
 }

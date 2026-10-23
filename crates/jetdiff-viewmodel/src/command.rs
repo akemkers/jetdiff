@@ -16,16 +16,16 @@ pub enum Command {
     GoToBottom,
     HalfPageDown,
     HalfPageUp,
-    NextChange,
-    PrevChange,
+    NextHunk,
+    PreviousHunk,
     /// Does nothing when only one side is shown, or the side is already active.
     FocusSide(Side),
-    /// One level, like `ExpandRegionAction`.
+    /// The fold at the cursor, like `ExpandRegionAction`.
     FoldOpen,
     /// Opens all if any are closed, otherwise closes all.
     ToggleFolds,
-    /// `file:line` for the cursor's line to the clipboard.
-    CopyLocation,
+    /// The cursor location to the clipboard.
+    CopyCursorLocation,
     /// Roll back the hunk on the cursor's line to Left, in the file on disk.
     Rollback,
     ZoomIn,

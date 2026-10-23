@@ -9,10 +9,13 @@ use gpui::{
 };
 use jetdiff_viewmodel::columns::ExpandedLine;
 use jetdiff_viewmodel::model::SyntaxSpan;
-use jetdiff_viewmodel::{InlineHighlight, SideGeometry, StripeMarker, thumb_range};
+use jetdiff_viewmodel::{HunkMinimapMark, InlineHighlight, SideGeometry, thumb_range};
 
 use crate::text::TextStyle;
 use crate::theme::{UiDiffColors, UiTheme};
+
+/// The mirrored cursor, or the cursor when the diff doesn't have focus.
+const INACTIVE_CURSOR_ROW_OPACITY: f32 = 0.4;
 
 pub fn rect(x: Range<f32>, top: f32, bottom: f32) -> Bounds<Pixels> {
     Bounds::new(
@@ -55,19 +58,19 @@ pub fn paint_code_background(
 }
 
 /// Diff color for a hunk: full color in the number area. The outermost 3px of the gutter and all
-/// of the text get the ignored color when the hunk is whitespace only.
-pub fn paint_change(
+/// of the text get IntelliJ's ignored color when the hunk was compared by word.
+pub fn paint_hunk(
     geom: &SideGeometry,
     top: f32,
     bottom: f32,
     colors: &UiDiffColors,
-    ignored: bool,
+    compared_by_word: bool,
     window: &mut Window,
 ) {
     let gutter = geom.gutter_layout;
     let separator = geom.gutter_x(gutter.separator..gutter.width);
     let outer = separator.start.min(geom.text.start)..separator.end.max(geom.text.end);
-    let text_color = if ignored {
+    let text_color = if compared_by_word {
         colors.ignored
     } else {
         colors.background
@@ -79,7 +82,7 @@ pub fn paint_change(
 
 /// The cursor's line, over the diff backgrounds so it doesn't disappear in hunks. With focus
 /// the number is also highlighted, which is easiest to find again after a jump.
-pub fn paint_caret_row(
+pub fn paint_cursor_row(
     geom: &SideGeometry,
     top: f32,
     bottom: f32,
@@ -88,14 +91,16 @@ pub fn paint_caret_row(
     window: &mut Window,
 ) {
     let color = if active {
-        theme.row_highlight
+        theme.cursor_row_background
     } else {
-        theme.row_highlight.opacity(0.4)
+        theme
+            .cursor_row_background
+            .opacity(INACTIVE_CURSOR_ROW_OPACITY)
     };
     window.paint_quad(fill(rect(geom.text.clone(), top, bottom), color));
     if active {
         let numbers = geom.gutter_x(0.0..geom.gutter_layout.separator);
-        window.paint_quad(fill(rect(numbers, top, bottom), theme.gutter_highlight));
+        window.paint_quad(fill(rect(numbers, top, bottom), theme.cursor_row_gutter));
     }
 }
 
@@ -151,7 +156,7 @@ impl ShapedText {
         window: &mut Window,
     ) {
         for highlight in highlights {
-            let color = theme.diff(highlight.diff_type).background;
+            let color = theme.diff(highlight.kind).background;
             let start_x = text_x + self.x_for_col(highlight.cols.start);
             if highlight.cols.is_empty() && !highlight.past_line_end {
                 // `DiffEmptyHighlighterRenderer`
@@ -215,23 +220,23 @@ pub fn shape_number(
 
 /// Hunk minimap rectangles in the track, merged per pixel. Recomputed when the track height changes.
 #[derive(Debug, Clone, Default)]
-pub struct StripeRects {
+pub struct HunkMinimapRects {
     /// The whole height of the code view.
     pub track_height: f32,
     pub rects: Vec<(f32, f32, Hsla)>,
 }
 
-impl StripeRects {
+impl HunkMinimapRects {
     pub fn new(
-        markers: &[StripeMarker],
+        marks: &[HunkMinimapMark],
         content_height: f32,
         track_height: f32,
         theme: &UiTheme,
     ) -> Self {
         let mut rects: Vec<(f32, f32, Hsla)> = Vec::new();
-        for marker in markers {
-            let (start, end) = marker.track_range(content_height, track_height);
-            let color = theme.diff(marker.diff_type).stripe;
+        for mark in marks {
+            let (start, end) = mark.track_range(content_height, track_height);
+            let color = theme.diff(mark.kind).hunk_minimap;
             match rects.last_mut() {
                 Some(last) if last.2 == color && start <= last.1 => last.1 = last.1.max(end),
                 _ => rects.push((start, end, color)),
@@ -253,10 +258,13 @@ impl StripeRects {
         theme: &UiTheme,
         window: &mut Window,
     ) {
-        let markers = geom.marker_x();
-        if !markers.is_empty() {
+        let hunk_minimap_x = geom.hunk_minimap_x();
+        if !hunk_minimap_x.is_empty() {
             for &(start, end, color) in &self.rects {
-                window.paint_quad(fill(rect(markers.clone(), top + start, top + end), color));
+                window.paint_quad(fill(
+                    rect(hunk_minimap_x.clone(), top + start, top + end),
+                    color,
+                ));
             }
         }
         let thumb = geom.thumb_x();

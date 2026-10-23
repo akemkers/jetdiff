@@ -2,8 +2,8 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use jetdiff_app::{Commits, FileTree, LOCAL_CHANGES, age, count_label, file_name};
-use jetdiff_changes::{RowKind, Status};
+use jetdiff_app::{Commits, Files, LOCAL_CHANGES, age, count_label, file_name};
+use jetdiff_files::{FileStatus, RowKind};
 use jetdiff_viewmodel::columns::display_width;
 use jetdiff_viewmodel::{Key, KeyCode, Theme};
 use ratatui::buffer::Buffer;
@@ -24,7 +24,7 @@ const COMMITS_FRACTION: f32 = 0.4;
 const MIN_COMMITS_HEIGHT: u16 = 3;
 
 /// The columns in a row in the tree: margin, indent per level, the arrow in front of a folder (or the same
-/// space in front of a file), and the edge to the right of the panel.
+/// space in front of a file), and the edge to the right of the side panel.
 const LEFT_MARGIN: usize = 1;
 const INDENT: usize = 2;
 const MARKER: usize = 2;
@@ -39,7 +39,7 @@ pub enum Section {
 pub enum ListKey {
     Down,
     Up,
-    Open,
+    Select,
 }
 
 pub fn list_key(key: Key) -> Option<ListKey> {
@@ -49,7 +49,7 @@ pub fn list_key(key: Key) -> Option<ListKey> {
     match key.code {
         KeyCode::Char('j') | KeyCode::Down => Some(ListKey::Down),
         KeyCode::Char('k') | KeyCode::Up => Some(ListKey::Up),
-        KeyCode::Char('l') | KeyCode::Enter => Some(ListKey::Open),
+        KeyCode::Char('l') | KeyCode::Enter => Some(ListKey::Select),
         _ => None,
     }
 }
@@ -76,13 +76,13 @@ impl ListArea {
     }
 }
 
-pub struct Panel {
-    pub tree: FileTree,
+pub struct SidePanel {
+    pub files: Files,
     pub commits: Option<Commits>,
     pub files_open: bool,
     pub commits_open: bool,
     icons: bool,
-    files: ListArea,
+    file_rows: ListArea,
     commit_rows: ListArea,
     headings: [Option<u16>; 2],
 }
@@ -93,15 +93,15 @@ pub enum Click {
     Commit(usize),
 }
 
-impl Panel {
-    pub fn new(tree: FileTree, commits: Option<Commits>, icons: bool) -> Self {
+impl SidePanel {
+    pub fn new(files: Files, commits: Option<Commits>, icons: bool) -> Self {
         Self {
-            tree,
+            files,
             commits,
             files_open: true,
             commits_open: true,
             icons,
-            files: ListArea::default(),
+            file_rows: ListArea::default(),
             commit_rows: ListArea::default(),
             headings: [None; 2],
         }
@@ -122,16 +122,16 @@ impl Panel {
     }
 
     pub fn reveal_file(&mut self, file: usize) {
-        if let Some(row) = self.tree.reveal(file) {
-            self.files.reveal(row);
+        if let Some(row) = self.files.reveal(file) {
+            self.file_rows.reveal(row);
         }
     }
 
     pub fn move_cursor(&mut self, section: Section, down: bool) {
         match section {
             Section::Files => {
-                let row = self.tree.move_cursor(down);
-                self.files.reveal(row);
+                let row = self.files.move_cursor(down);
+                self.file_rows.reveal(row);
             }
             Section::Commits => {
                 if let Some(commits) = &mut self.commits {
@@ -144,10 +144,10 @@ impl Panel {
 
     /// The width the content needs, within the limits.
     pub fn width(&self, window_width: u16) -> u16 {
-        let changes = self.tree.changes();
+        let changed_files = self.files.changed_files();
         let icon_width = if self.icons { 2 } else { 0 };
         let widest = self
-            .tree
+            .files
             .rows()
             .iter()
             .map(|row| {
@@ -155,12 +155,12 @@ impl Panel {
                     RowKind::Dir { name, count, .. } => {
                         display_width(name) + 1 + count_label(*count).len()
                     }
-                    &RowKind::File(file) => {
-                        let change = &changes[file];
-                        let renamed = change
-                            .renamed_from()
-                            .map_or(0, |renamed_from| 1 + display_width(&renamed_from));
-                        display_width(file_name(&change.path)) + renamed
+                    &RowKind::File(index) => {
+                        let file = &changed_files[index];
+                        let renamed = file
+                            .renamed_from_label()
+                            .map_or(0, |label| 1 + display_width(&label));
+                        display_width(file_name(&file.path)) + renamed
                     }
                 };
                 LEFT_MARGIN + INDENT * row.depth + MARKER + icon_width + text + BORDER
@@ -177,19 +177,23 @@ impl Panel {
                 return Some(Click::Heading(section));
             }
         }
-        if let Some(row) = self.files.row_at(y).filter(|&r| r < self.tree.rows().len()) {
+        if let Some(row) = self
+            .file_rows
+            .row_at(y)
+            .filter(|&row| row < self.files.rows().len())
+        {
             return Some(Click::File(row));
         }
         let commits = self.commits.as_ref()?;
         self.commit_rows
             .row_at(y)
-            .filter(|&r| r < commits.len())
+            .filter(|&row| row < commits.len())
             .map(Click::Commit)
     }
 
     pub fn wheel(&mut self, y: u16, down: bool) {
         for (list, len) in [
-            (&mut self.files, self.tree.rows().len()),
+            (&mut self.file_rows, self.files.rows().len()),
             (
                 &mut self.commit_rows,
                 self.commits.as_ref().map_or(0, |commits| commits.len()),
@@ -231,7 +235,7 @@ impl Panel {
             ..area
         };
         self.headings = [None; 2];
-        self.files.area = Rect::default();
+        self.file_rows.area = Rect::default();
         self.commit_rows.area = Rect::default();
 
         let has_commits = self.commits.is_some();
@@ -248,7 +252,7 @@ impl Panel {
             (false, true) => y,
         };
         if self.files_open {
-            self.files.area = Rect {
+            self.file_rows.area = Rect {
                 y,
                 height: commits_top.saturating_sub(y),
                 ..area
@@ -286,12 +290,12 @@ impl Panel {
     fn row_bg(
         theme: &Theme,
         cursor: bool,
-        open: bool,
+        selected: bool,
         focused: bool,
     ) -> Option<ratatui::style::Color> {
         if focused && cursor {
             Some(color(theme.tree_selection))
-        } else if open {
+        } else if selected {
             Some(color(theme.tree_selection_inactive))
         } else {
             None
@@ -305,9 +309,9 @@ impl Panel {
         theme: &Theme,
         buf: &mut Buffer,
     ) {
-        let list = self.files;
-        let rows = self.tree.rows();
-        let changes = self.tree.changes();
+        let list = self.file_rows;
+        let rows = self.files.rows();
+        let changed_files = self.files.changed_files();
         let dim = Style::default().fg(color(theme.line_number));
         for (i, row) in rows
             .iter()
@@ -320,12 +324,9 @@ impl Panel {
             let mut spans = vec![Span::raw(indent)];
             match &row.kind {
                 RowKind::Dir {
-                    name,
-                    count,
-                    expanded,
-                    ..
+                    name, count, open, ..
                 } => {
-                    spans.push(Span::styled(if *expanded { "▾ " } else { "▸ " }, dim));
+                    spans.push(Span::styled(if *open { "▾ " } else { "▸ " }, dim));
                     if self.icons {
                         spans.push(icon(folder_icon(theme.dark)));
                     }
@@ -333,30 +334,30 @@ impl Panel {
                     spans.push(Span::styled(format!(" {}", count_label(*count)), dim));
                 }
                 &RowKind::File(f) => {
-                    let change = &changes[f];
-                    let status = match change.status {
-                        Status::Added => theme.file_added,
-                        Status::Deleted => theme.file_deleted,
-                        Status::Modified | Status::Renamed => theme.file_modified,
+                    let file = &changed_files[f];
+                    let status = match file.status {
+                        FileStatus::Added => theme.file_added,
+                        FileStatus::Deleted => theme.file_deleted,
+                        FileStatus::Modified | FileStatus::Renamed => theme.file_modified,
                     };
                     let style = Style::default().fg(color(status));
                     spans.push(Span::raw("  "));
                     if self.icons {
-                        spans.push(icon(file_icon(&change.path, theme.dark)));
+                        spans.push(icon(file_icon(&file.path, theme.dark)));
                     }
-                    spans.push(Span::styled(file_name(&change.path).to_owned(), style));
-                    if let Some(from) = change.renamed_from() {
+                    spans.push(Span::styled(file_name(&file.path).to_owned(), style));
+                    if let Some(from) = file.renamed_from_label() {
                         spans.push(Span::styled(format!(" {from}"), dim));
                     }
                 }
             }
-            let open = selected.is_some_and(|f| row.kind == RowKind::File(f));
+            let is_selected = selected.is_some_and(|f| row.kind == RowKind::File(f));
             let line_area = Rect {
                 y,
                 height: 1,
                 ..list.area
             };
-            if let Some(bg) = Self::row_bg(theme, i == self.tree.cursor(), open, focused) {
+            if let Some(bg) = Self::row_bg(theme, i == self.files.cursor(), is_selected, focused) {
                 buf.set_style(line_area, Style::default().bg(bg));
             }
             buf.set_line(line_area.x, y, &Line::from(spans), line_area.width);

@@ -4,11 +4,11 @@
 use std::ops::{Range, RangeInclusive};
 
 use gpui::{App, Bounds, Pixels, ShapedLine, SharedString, Window, fill, point, px};
-use jetdiff_viewmodel::separator::{stroke_width, wave};
+use jetdiff_viewmodel::fold_paths::{fold_wave_path, stroke_width};
 use jetdiff_viewmodel::{FileDiff, Folding, LineLayout, SideGeometry};
 
 use super::code_paint::{
-    ShapedText, StripeRects, mask, paint_caret_row, paint_change, paint_code_background, rect,
+    HunkMinimapRects, ShapedText, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
     shape_number,
 };
 use super::divider::stroke_path;
@@ -33,13 +33,13 @@ pub struct SplitSide<'a> {
     pub height: f32,
     pub scroll_y: f32,
     pub scroll_x: f32,
-    pub caret: CaretRow,
-    pub stripe: &'a StripeRects,
+    pub cursor_row: CursorRow,
+    pub hunk_minimap: &'a HunkMinimapRects,
 }
 
 /// The cursor's line as this side draws it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CaretRow {
+pub struct CursorRow {
     pub line: usize,
     /// The active side with focus gets full color, so you can see where `o` acts.
     pub active: bool,
@@ -47,11 +47,11 @@ pub struct CaretRow {
 
 /// What is visible in the viewport this frame.
 struct Visible {
-    /// Logical lines, also those hidden in a collapsed fold.
+    /// Logical lines, also those hidden in a closed fold.
     logical: RangeInclusive<usize>,
-    /// Visual lines, where a collapsed fold is one line.
+    /// Visual lines, where a closed fold is one line.
     visual: RangeInclusive<usize>,
-    /// The lines that have text and a number. Collapsed folds have neither
+    /// The lines that have text and a number. Closed folds have neither
     /// (`hideLineNumberPredicate`).
     lines: Vec<usize>,
 }
@@ -64,14 +64,14 @@ impl SplitSide<'_> {
         let widest = window.with_content_mask(mask(self.area(self.geom.bounds())), |window| {
             let bottom = self.top + self.height;
             paint_code_background(self.geom, self.top, bottom, self.theme, window);
-            self.paint_block_backgrounds(&visible, window);
+            self.paint_hunk_backgrounds(&visible, window);
             // Over the diff backgrounds, otherwise it disappears in hunks
-            self.paint_caret_row(&visible, window);
+            self.paint_cursor_row(&visible, window);
             self.paint_folds(&visible, window);
             let widest = self.paint_text(&visible, cache, window, cx);
             self.paint_line_numbers(&visible, cache, window, cx);
             let content_height = self.layout().content_height();
-            self.stripe.paint(
+            self.hunk_minimap.paint(
                 self.geom,
                 self.top,
                 self.scroll_y,
@@ -118,49 +118,49 @@ impl SplitSide<'_> {
     }
 
     /// Per hunk, not per line, so a large hunk becomes one rectangle.
-    fn paint_block_backgrounds(&self, visible: &Visible, window: &mut Window) {
+    fn paint_hunk_backgrounds(&self, visible: &Visible, window: &mut Window) {
         let geom = self.geom;
         let side = geom.side;
         let layout = self.layout();
         let (first, last) = (*visible.logical.start(), *visible.logical.end());
-        let blocks = self.diff.blocks();
-        let start = blocks.partition_point(|block| block.lines(side).end < first);
+        let hunks = self.diff.hunks();
+        let start = hunks.partition_point(|hunk| hunk.lines(side).end < first);
         let whole = geom.text.start.min(geom.gutter.start)..geom.text.end.max(geom.gutter.end);
 
-        for block in &blocks[start..] {
-            let lines = block.lines(side);
+        for hunk in &hunks[start..] {
+            let lines = hunk.lines(side);
             if lines.start > last + 1 {
                 break;
             }
-            let colors = self.theme.diff(block.diff_type);
-            let (band_top, band_bottom) = layout.block_band(lines.clone());
+            let colors = self.theme.diff(hunk.kind);
+            let (band_top, band_bottom) = layout.hunk_band(lines.clone());
             let (top, bottom) = (self.screen_y(band_top), self.screen_y(band_bottom));
             if lines.is_empty() {
                 window.paint_quad(fill(rect(whole.clone(), top, bottom), colors.background));
                 continue;
             }
-            paint_change(geom, top, bottom, colors, block.ignored(), window);
+            paint_hunk(geom, top, bottom, colors, hunk.compared_by_word(), window);
         }
     }
 
-    fn paint_caret_row(&self, visible: &Visible, window: &mut Window) {
-        let line = self.caret.line;
+    fn paint_cursor_row(&self, visible: &Visible, window: &mut Window) {
+        let line = self.cursor_row.line;
         if !visible.logical.contains(&line) {
             return;
         }
         let top = self.screen_y(self.layout().line_top(line));
         let bottom = top + self.style.line_height();
-        paint_caret_row(
+        paint_cursor_row(
             self.geom,
             top,
             bottom,
-            self.caret.active,
+            self.cursor_row.active,
             self.theme,
             window,
         );
     }
 
-    /// `DiffLineSeparatorRenderer`: a wave over the gutter and text, with the phase from the divider.
+    /// `DiffLineSeparatorRenderer`: a fold wave over the gutter and text, with the phase from the divider.
     fn paint_folds(&self, visible: &Visible, window: &mut Window) {
         let geom = self.geom;
         let line_height = self.style.line_height();
@@ -179,10 +179,10 @@ impl SplitSide<'_> {
                 break;
             }
             let y = self.screen_y(layout.visual_line_to_y(fold.visual));
-            let path = wave(geom.bounds(), edge, geom.mirrored, y, line_height);
+            let path = fold_wave_path(geom.bounds(), edge, geom.mirrored, y, line_height);
             let width = stroke_width(hovered == Some(id));
             let to_pixels = |p: jetdiff_viewmodel::Point| point(px(p.x), px(p.y));
-            stroke_path(window, &path, to_pixels, width, self.theme.separator_wave);
+            stroke_path(window, &path, to_pixels, width, self.theme.fold_wave);
         }
     }
 
@@ -236,11 +236,11 @@ impl SplitSide<'_> {
         window.with_content_mask(mask(self.area(geom.gutter.clone())), |window| {
             for &line in &visible.lines {
                 let y = self.screen_y(layout.line_top(line)) + self.style.number_dy;
-                let caret;
-                let number = if line == self.caret.line {
-                    let color = self.theme.line_number_caret_row;
-                    caret = shape_number(line, color, self.style, window);
-                    &caret
+                let cursor_number;
+                let number = if line == self.cursor_row.line {
+                    let color = self.theme.cursor_row_line_number;
+                    cursor_number = shape_number(line, color, self.style, window);
+                    &cursor_number
                 } else {
                     &cache
                         .get_or_insert_with(line, || self.shape(line, window))
@@ -262,9 +262,9 @@ impl SplitSide<'_> {
             window,
         );
         // The default color disappears against the diff background, especially blue
-        let changed = self.diff.line_highlight(side, line).block.is_some();
-        let color = if changed {
-            self.theme.line_number_caret_row
+        let in_hunk = self.diff.line_highlight(side, line).hunk.is_some();
+        let color = if in_hunk {
+            self.theme.cursor_row_line_number
         } else {
             self.theme.line_number
         };
