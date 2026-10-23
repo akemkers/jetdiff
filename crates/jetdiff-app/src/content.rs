@@ -1,6 +1,6 @@
 //! From git content to `FileDiff`.
 
-use jetdiff_changes::{FileChange, Status};
+use jetdiff_files::{ChangedFile, FileStatus};
 use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +32,7 @@ impl Notice {
 }
 
 pub fn build_diff(
-    change: &FileChange,
+    file: &ChangedFile,
     content: Result<[String; 2], String>,
 ) -> (FileDiff, Option<Notice>) {
     match content {
@@ -43,13 +43,14 @@ pub fn build_diff(
         ),
         Ok([l, r]) => match FileDiff::new(&l, &r, ComparisonPolicy::Default) {
             Ok(mut diff) => {
-                let lang = Language::from_path(&change.path)
-                    .or_else(|| Language::from_path(change.left_path()));
+                let lang = Language::from_path(&file.path)
+                    .or_else(|| Language::from_path(file.left_path()));
                 if let Some(lang) = lang {
                     diff.highlight_syntax(lang);
                 }
                 // When moved, or with only the file mode changed, the diff would otherwise be empty without explanation
-                let identical = l == r && !matches!(change.status, Status::Added | Status::Deleted);
+                let identical =
+                    l == r && !matches!(file.status, FileStatus::Added | FileStatus::Deleted);
                 (
                     diff,
                     identical.then(|| Notice::info("The content is identical")),
@@ -71,21 +72,21 @@ pub fn empty_diff() -> FileDiff {
 mod tests {
     use super::*;
 
-    fn change(path: &str, status: Status) -> FileChange {
-        FileChange {
+    fn changed_file(path: &str, status: FileStatus) -> ChangedFile {
+        ChangedFile {
             path: path.into(),
-            old_path: None,
+            renamed_from: None,
             status,
         }
     }
 
-    fn notice(change: &FileChange, content: Result<[String; 2], String>) -> Option<Notice> {
-        build_diff(change, content).1
+    fn notice(file: &ChangedFile, content: Result<[String; 2], String>) -> Option<Notice> {
+        build_diff(file, content).1
     }
 
     #[test]
     fn message_when_diff_cannot_be_shown() {
-        let m = change("a.rs", Status::Modified);
+        let m = changed_file("a.rs", FileStatus::Modified);
         let text = |l: &str, r: &str| Ok([l.to_owned(), r.to_owned()]);
         assert_eq!(notice(&m, text("a\n", "b\n")), None);
         assert_eq!(
@@ -101,6 +102,9 @@ mod tests {
             Some(Notice::warning("gone"))
         );
         // An empty added file is not «identical»
-        assert_eq!(notice(&change("a.rs", Status::Added), text("", "")), None);
+        assert_eq!(
+            notice(&changed_file("a.rs", FileStatus::Added), text("", "")),
+            None
+        );
     }
 }

@@ -75,8 +75,8 @@ impl CommitList {
         let row = match key {
             ListKey::Down => self.commits.move_cursor(true),
             ListKey::Up => self.commits.move_cursor(false),
-            ListKey::Open => {
-                let hash = self.commits.open_cursor();
+            ListKey::Select => {
+                let hash = self.commits.select_at_cursor();
                 return self.selected(hash, cx);
             }
         };

@@ -68,15 +68,8 @@ pub fn file_icon(path: &str, dark: bool) -> String {
     icon(name, dark)
 }
 
-pub fn chevron_icon(expanded: bool, dark: bool) -> String {
-    icon(
-        if expanded {
-            "chevronDown"
-        } else {
-            "chevronRight"
-        },
-        dark,
-    )
+pub fn chevron_icon(open: bool, dark: bool) -> String {
+    icon(if open { "chevronDown" } else { "chevronRight" }, dark)
 }
 
 pub fn folder_icon(dark: bool) -> String {

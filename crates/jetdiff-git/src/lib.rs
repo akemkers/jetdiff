@@ -1,4 +1,4 @@
-//! Changes and file content from git. Calls `git` so the result is the same as in
+//! Changed files and their content from git. Calls `git` so the result is the same as in
 //! `git diff`, with the user's config and rename detection.
 
 use std::ops::Range;
@@ -7,7 +7,7 @@ use std::process::Command;
 use std::sync::OnceLock;
 use std::thread;
 
-use jetdiff_changes::{FileChange, Status};
+use jetdiff_files::{ChangedFile, FileStatus};
 
 /// The commit list never shows more, so an old default branch doesn't give thousands.
 const MAX_COMMITS: usize = 50;
@@ -189,7 +189,7 @@ impl Repo {
             .unwrap_or_default()
     }
 
-    pub fn changes(&self) -> Result<Vec<FileChange>, String> {
+    pub fn changed_files(&self) -> Result<Vec<ChangedFile>, String> {
         let mut args = vec!["diff", "--name-status", "-z", "-M", &self.left];
         args.extend(self.right.as_deref());
         let untracked = ["ls-files", "-z", "--others", "--exclude-standard"];
@@ -200,29 +200,29 @@ impl Repo {
                 .then(|| s.spawn(|| git(&self.root, &untracked)));
             (git(&self.root, &args), untracked.map(|t| t.join().unwrap()))
         });
-        let mut changes = parse_name_status(&diff?);
+        let mut files = parse_name_status(&diff?);
         if let Some(untracked) = untracked {
-            changes.extend(untracked?.split_terminator('\0').map(|p| FileChange {
-                path: p.to_owned(),
-                old_path: None,
-                status: Status::Added,
+            files.extend(untracked?.split_terminator('\0').map(|path| ChangedFile {
+                path: path.to_owned(),
+                renamed_from: None,
+                status: FileStatus::Added,
             }));
         }
-        Ok(changes)
+        Ok(files)
     }
 
     /// The content on each side. A side that doesn't exist is empty.
-    pub fn read(&self, change: &FileChange) -> Result<[String; 2], String> {
-        let left = match change.status {
-            Status::Added => String::new(),
-            _ => self.blob(&self.left, change.left_path())?,
+    pub fn read(&self, file: &ChangedFile) -> Result<[String; 2], String> {
+        let left = match file.status {
+            FileStatus::Added => String::new(),
+            _ => self.blob(&self.left, file.left_path())?,
         };
-        let right = match (change.status, &self.right) {
-            (Status::Deleted, _) => String::new(),
-            (_, Some(rev)) => self.blob(rev, &change.path)?,
+        let right = match (file.status, &self.right) {
+            (FileStatus::Deleted, _) => String::new(),
+            (_, Some(rev)) => self.blob(rev, &file.path)?,
             (_, None) => {
-                let bytes = std::fs::read(self.root.join(&change.path))
-                    .map_err(|e| format!("{}: {e}", change.path))?;
+                let bytes = std::fs::read(self.root.join(&file.path))
+                    .map_err(|e| format!("{}: {e}", file.path))?;
                 String::from_utf8_lossy(&bytes).into_owned()
             }
         };
@@ -234,11 +234,11 @@ impl Repo {
     /// Replaced as bytes, so encoding and line breaks don't change.
     pub fn rollback(
         &self,
-        change: &FileChange,
+        file: &ChangedFile,
         lines: [Range<usize>; 2],
         before: &str,
     ) -> Result<String, String> {
-        let path = &change.path;
+        let path = &file.path;
         if !self.is_work_tree() {
             return Err("a commit can't be changed".into());
         }
@@ -247,9 +247,9 @@ impl Repo {
         if String::from_utf8_lossy(&disk) != before {
             return Err(format!("{path} has changed on disk"));
         }
-        let left = match change.status {
-            Status::Added => Vec::new(),
-            _ => self.blob_bytes(&self.left, change.left_path())?,
+        let left = match file.status {
+            FileStatus::Added => Vec::new(),
+            _ => self.blob_bytes(&self.left, file.left_path())?,
         };
         let after = replace_with_left(&left, &disk, lines)
             .ok_or_else(|| format!("{path}: the lines don't exist"))?;
@@ -373,38 +373,38 @@ fn run(mut cmd: Command, name: &str) -> Result<Vec<u8>, String> {
 }
 
 /// `R100\0old\0new\0M\0path\0`. Type changes and conflicts are shown as modified.
-fn parse_name_status(out: &str) -> Vec<FileChange> {
+fn parse_name_status(out: &str) -> Vec<ChangedFile> {
     let mut fields = out.split_terminator('\0');
-    let mut changes = Vec::new();
+    let mut files = Vec::new();
     while let (Some(status), Some(path)) = (fields.next(), fields.next()) {
-        let change = match status.as_bytes()[0] {
-            b'A' => FileChange {
+        let file = match status.as_bytes()[0] {
+            b'A' => ChangedFile {
                 path: path.to_owned(),
-                old_path: None,
-                status: Status::Added,
+                renamed_from: None,
+                status: FileStatus::Added,
             },
-            b'D' => FileChange {
+            b'D' => ChangedFile {
                 path: path.to_owned(),
-                old_path: None,
-                status: Status::Deleted,
+                renamed_from: None,
+                status: FileStatus::Deleted,
             },
             b'R' | b'C' => {
                 let Some(new) = fields.next() else { break };
-                FileChange {
+                ChangedFile {
                     path: new.to_owned(),
-                    old_path: Some(path.to_owned()),
-                    status: Status::Renamed,
+                    renamed_from: Some(path.to_owned()),
+                    status: FileStatus::Renamed,
                 }
             }
-            _ => FileChange {
+            _ => ChangedFile {
                 path: path.to_owned(),
-                old_path: None,
-                status: Status::Modified,
+                renamed_from: None,
+                status: FileStatus::Modified,
             },
         };
-        changes.push(change);
+        files.push(file);
     }
-    changes
+    files
 }
 
 /// `hash\x1ftime\x1fmessage\0` per commit.
@@ -480,13 +480,19 @@ mod tests {
             .collect()
     }
 
-    fn summary(changes: &[FileChange]) -> Vec<(Status, &str, Option<&str>)> {
-        let mut s: Vec<_> = changes
+    fn summary(files: &[ChangedFile]) -> Vec<(FileStatus, &str, Option<&str>)> {
+        let mut summary: Vec<_> = files
             .iter()
-            .map(|c| (c.status, c.path.as_str(), c.old_path.as_deref()))
+            .map(|file| {
+                (
+                    file.status,
+                    file.path.as_str(),
+                    file.renamed_from.as_deref(),
+                )
+            })
             .collect();
-        s.sort_by_key(|c| c.1);
-        s
+        summary.sort_by_key(|&(_, path, _)| path);
+        summary
     }
 
     #[test]
@@ -495,9 +501,9 @@ mod tests {
         assert_eq!(
             summary(&c),
             [
-                (Status::Modified, "a.rs", None),
-                (Status::Deleted, "gone.rs", None),
-                (Status::Renamed, "new.rs", Some("old.rs")),
+                (FileStatus::Modified, "a.rs", None),
+                (FileStatus::Deleted, "gone.rs", None),
+                (FileStatus::Renamed, "new.rs", Some("old.rs")),
             ]
         );
     }
@@ -508,9 +514,9 @@ mod tests {
         r.write("src/a.rs", "fn a() {}\n");
         r.commit();
         let repo = Repo::commit(&r.0, "HEAD").unwrap();
-        let changes = repo.changes().unwrap();
-        assert_eq!(summary(&changes), [(Status::Added, "src/a.rs", None)]);
-        assert_eq!(repo.read(&changes[0]).unwrap(), ["", "fn a() {}\n"]);
+        let files = repo.changed_files().unwrap();
+        assert_eq!(summary(&files), [(FileStatus::Added, "src/a.rs", None)]);
+        assert_eq!(repo.read(&files[0]).unwrap(), ["", "fn a() {}\n"]);
     }
 
     #[test]
@@ -524,17 +530,17 @@ mod tests {
         std::fs::remove_file(r.0.join("gone.rs")).unwrap();
         r.commit();
         let repo = Repo::commit(&r.0, "HEAD").unwrap();
-        let changes = repo.changes().unwrap();
+        let files = repo.changed_files().unwrap();
         assert_eq!(
-            summary(&changes),
+            summary(&files),
             [
-                (Status::Deleted, "gone.rs", None),
-                (Status::Renamed, "new.rs", Some("old.rs")),
+                (FileStatus::Deleted, "gone.rs", None),
+                (FileStatus::Renamed, "new.rs", Some("old.rs")),
             ]
         );
-        let renamed = changes
+        let renamed = files
             .iter()
-            .find(|c| c.status == Status::Renamed)
+            .find(|file| file.status == FileStatus::Renamed)
             .unwrap();
         assert_eq!(repo.read(renamed).unwrap(), [long.clone(), long]);
     }
@@ -547,15 +553,15 @@ mod tests {
         r.write("a.rs", "new\n");
         r.write("new/b.rs", "b\n");
         let repo = Repo::work_tree(&r.0).unwrap();
-        let changes = repo.changes().unwrap();
+        let files = repo.changed_files().unwrap();
         assert_eq!(
-            summary(&changes),
+            summary(&files),
             [
-                (Status::Modified, "a.rs", None),
-                (Status::Added, "new/b.rs", None)
+                (FileStatus::Modified, "a.rs", None),
+                (FileStatus::Added, "new/b.rs", None)
             ]
         );
-        assert_eq!(repo.read(&changes[0]).unwrap(), ["old\n", "new\n"]);
+        assert_eq!(repo.read(&files[0]).unwrap(), ["old\n", "new\n"]);
     }
 
     #[test]
@@ -589,19 +595,19 @@ mod tests {
         r.commit();
         r.write("a.rs", "a\nx\n");
         let repo = Repo::work_tree(&r.0).unwrap();
-        let change = repo.changes().unwrap().remove(0);
+        let file = repo.changed_files().unwrap().remove(0);
         assert_eq!(
-            repo.rollback(&change, [1..2, 1..2], "other\n"),
+            repo.rollback(&file, [1..2, 1..2], "other\n"),
             Err("a.rs has changed on disk".into())
         );
         assert_eq!(
-            repo.rollback(&change, [1..2, 1..2], "a\nx\n"),
+            repo.rollback(&file, [1..2, 1..2], "a\nx\n"),
             Ok("a\nb\n".into())
         );
         assert_eq!(std::fs::read_to_string(r.0.join("a.rs")).unwrap(), "a\nb\n");
         let head = r.git(&["rev-parse", "HEAD"]);
         let commit = Repo::commit(&r.0, head.trim_end()).unwrap();
-        assert!(commit.rollback(&change, [1..2, 1..2], "a\nb\n").is_err());
+        assert!(commit.rollback(&file, [1..2, 1..2], "a\nb\n").is_err());
     }
 
     #[test]
@@ -611,9 +617,9 @@ mod tests {
         r.commit();
         std::fs::write(r.0.join("a.txt"), b"bl\xe5b\xe6r\nr\xf8dgr\xf8t\n").unwrap();
         let repo = Repo::work_tree(&r.0).unwrap();
-        let change = repo.changes().unwrap().remove(0);
-        let [_, before] = repo.read(&change).unwrap();
-        repo.rollback(&change, [1..2, 1..2], &before).unwrap();
+        let file = repo.changed_files().unwrap().remove(0);
+        let [_, before] = repo.read(&file).unwrap();
+        repo.rollback(&file, [1..2, 1..2], &before).unwrap();
         assert_eq!(
             std::fs::read(r.0.join("a.txt")).unwrap(),
             b"bl\xe5b\xe6r\nr\xf8d\n"
@@ -628,9 +634,9 @@ mod tests {
         r.commit();
         r.write("a.txt", "a\r\nx\r\n");
         let repo = Repo::work_tree(&r.0).unwrap();
-        let change = repo.changes().unwrap().remove(0);
-        assert_eq!(repo.read(&change).unwrap()[0], "a\r\nb\r\n");
-        repo.rollback(&change, [1..2, 1..2], "a\r\nx\r\n").unwrap();
+        let file = repo.changed_files().unwrap().remove(0);
+        assert_eq!(repo.read(&file).unwrap()[0], "a\r\nb\r\n");
+        repo.rollback(&file, [1..2, 1..2], "a\r\nx\r\n").unwrap();
         assert_eq!(std::fs::read(r.0.join("a.txt")).unwrap(), b"a\r\nb\r\n");
     }
 
@@ -645,8 +651,8 @@ mod tests {
         r.write("a.rs", "changed\n");
         let repo = Repo::work_tree(&r.0).unwrap();
         assert_eq!(
-            summary(&repo.changes().unwrap()),
-            [(Status::Modified, "a.rs", None)]
+            summary(&repo.changed_files().unwrap()),
+            [(FileStatus::Modified, "a.rs", None)]
         );
     }
 

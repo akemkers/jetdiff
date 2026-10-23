@@ -16,7 +16,7 @@ mod widgets;
 
 use std::io::{self, BufWriter, Stdout};
 
-use jetdiff_changes::FileChange;
+use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Terminal;
@@ -49,11 +49,11 @@ pub fn run_file(
 
 pub fn run_changes(
     repo: Repo,
-    changes: Vec<FileChange>,
+    changed_files: Vec<ChangedFile>,
     title: &str,
     settings: Settings,
 ) -> io::Result<()> {
-    run(App::changes(repo, changes, &settings), title)
+    run(App::changes(repo, changed_files, &settings), title)
 }
 
 /// The whole frame in one write, and the terminal shows it only when it is done. Without this

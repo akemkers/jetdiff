@@ -1,12 +1,12 @@
 //! The GPUI layer. Draws only what `jetdiff-viewmodel` computes.
 
 mod cache;
-mod changes_tree;
 mod changes_view;
 mod code_viewer;
 mod commit_list;
 mod file_diff;
 mod file_header;
+mod file_tree;
 mod help;
 mod icons;
 mod keystroke;

@@ -125,18 +125,18 @@ graph TD
     tui --> view
     jetdiff --> view[jetdiff-viewmodel]
     jetdiff --> git[jetdiff-git]
-    jetdiff --> changes[jetdiff-changes]
+    jetdiff --> files[jetdiff-files]
     ui --> app[jetdiff-app]
     ui --> view
     ui --> git
-    ui --> changes
+    ui --> files
     ui --> core[jetdiff-core]
     app --> view
     app --> git
-    app --> changes
+    app --> files
     view --> core
     view --> syntax[jetdiff-syntax]
-    git --> changes
+    git --> files
 ```
 
 | Crate                                           | Responsibility                                                    |
@@ -149,7 +149,7 @@ graph TD
 | [`jetdiff-core`](crates/jetdiff-core)           | The diff algorithm, ported from IntelliJ                          |
 | [`jetdiff-syntax`](crates/jetdiff-syntax)       | Syntax colors with tree-sitter                                    |
 | [`jetdiff-git`](crates/jetdiff-git)             | Changes and file content from `git`                               |
-| [`jetdiff-changes`](crates/jetdiff-changes)     | Changed files and the tree they are shown in                      |
+| [`jetdiff-files`](crates/jetdiff-files)         | Changed files and the tree they are shown in                      |
 
 Other folders:
 

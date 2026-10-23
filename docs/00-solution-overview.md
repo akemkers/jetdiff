@@ -36,8 +36,8 @@ jetdiff-viewmodel
   geometry       gutter, text and scrollbar per side, and Unified with two number columns
   keys           key sequences to commands
 
-jetdiff-changes  FileChange { path, old_path, status } and the tree model: folders first,
-                 merged single-child folders, expanded state
+jetdiff-files    ChangedFile { path, renamed_from, status } and the tree model: folders first,
+                 merged single-child folders, open and closed folders
 
 jetdiff-git      git CLI: changes for a commit or Local changes, and file content
 
@@ -59,7 +59,7 @@ jetdiff-ui       GPUI
     unified      one code view with old and new number, and mouse hits
     code_paint   what both draw the same: text, inline highlights, hunk minimap
   file_diff      keys, mouse, zoom and scroll animation for the diff
-  changes_tree   the file tree with icons and file status colors
+  file_tree      the file tree with icons and file status colors
   changes_view   the tree + one file, like the commit dialog in IntelliJ
   theme          color table from JetBrains (light and dark)
 

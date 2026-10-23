@@ -27,7 +27,7 @@ Application::new().with_assets(Assets).run(|cx| {
     // One file:
     cx.new(|cx| FileDiffView::standalone(diff, paths, cx));
     // A repo or a commit, with the tree and commits:
-    cx.new(|cx| ChangesView::new(repo, changes, cx));
+    cx.new(|cx| ChangesView::new(repo, changed_files, cx));
 });
 ```
 
@@ -37,7 +37,7 @@ The keys go through `KeyParser` in `jetdiff-viewmodel`. Actions like zoom and sw
 
 ```mermaid
 graph TD
-    cv[ChangesView] --> tree[ChangesTree]
+    cv[ChangesView] --> tree[FileTree]
     cv --> commits[CommitList]
     cv --> fdv[FileDiffView]
     cv --> watcher[Watcher]
@@ -63,7 +63,7 @@ graph TD
   - `unified`: one code view with old and new line numbers
   - `code_paint`: what both diff modes draw the same way
 - `help`: draws the keymap bar and the popup. The keys are in `jetdiff_app::help`
-- `changes_tree`, `commit_list`: the lists in the side panel, over `FileTree` and `Commits` from `jetdiff-app`
+- `file_tree`, `commit_list`: the lists in the side panel, over `Files` and `Commits` from `jetdiff-app`
 - `message`: a brief info or pinned warning above the keymap bar
 - `watcher`: polls `jetdiff_app::Watcher` on the GPUI executor
 - `theme`: Catppuccin Mocha and IntelliJ's Islands themes

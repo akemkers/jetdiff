@@ -6,14 +6,14 @@ use gpui::{
     Window, actions, div, prelude::*, px,
 };
 use jetdiff_app::{Changes, Reloaded, Show, Shown, empty_diff};
-use jetdiff_changes::FileChange;
+use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::metrics::FONT_SIZE;
 
-use crate::changes_tree::{ChangesTree, Selection};
 use crate::commit_list::{CommitList, SelectCommit};
 use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ToggleView, ZoomIn, ZoomOut, Zoomed};
 use crate::file_header::file_header;
+use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::message::{Level, Message};
@@ -39,14 +39,14 @@ actions!(
 pub struct ChangesView {
     changes: Changes,
     selection: Entity<Selection>,
-    tree: Entity<ChangesTree>,
+    files: Entity<FileTree>,
     diff: Entity<FileDiffView>,
     message: Entity<Message>,
     /// Only for Local changes.
     commits: Option<Entity<CommitList>>,
     scale: f32,
     panel_open: bool,
-    /// The sections in the side panel can be collapsed to just the heading.
+    /// The sections in the side panel can be closed to just the heading.
     files_open: bool,
     commits_open: bool,
     width: PanelWidth,
@@ -57,11 +57,12 @@ pub struct ChangesView {
 }
 
 impl ChangesView {
-    pub fn new(repo: Repo, changes: Vec<FileChange>, cx: &mut Context<Self>) -> Self {
-        let changes = Changes::new(repo, changes);
+    pub fn new(repo: Repo, changed_files: Vec<ChangedFile>, cx: &mut Context<Self>) -> Self {
+        let changes = Changes::new(repo, changed_files);
         let first = changes.first();
         let selection = cx.new(|_| Selection(first));
-        let tree = cx.new(|cx| ChangesTree::new(changes.changes().clone(), selection.clone(), cx));
+        let files =
+            cx.new(|cx| FileTree::new(changes.changed_files().clone(), selection.clone(), cx));
         let message = cx.new(|_| Message::default());
         let diff =
             cx.new(|cx| FileDiffView::new(empty_diff(), Default::default(), message.clone(), cx));
@@ -98,7 +99,7 @@ impl ChangesView {
         let mut view = Self {
             changes,
             selection,
-            tree,
+            files,
             diff,
             message,
             commits,
@@ -120,7 +121,7 @@ impl ChangesView {
     fn zoomed(&mut self, font_size: f32, cx: &mut Context<Self>) {
         self.scale = font_size / FONT_SIZE;
         let scale = self.scale;
-        self.tree.update(cx, |t, cx| t.set_scale(scale, cx));
+        self.files.update(cx, |t, cx| t.set_scale(scale, cx));
         if let Some(commits) = &self.commits {
             commits.update(cx, |c, cx| c.set_scale(scale, cx));
         }
@@ -168,15 +169,16 @@ impl ChangesView {
             }
             Reloaded::Done {
                 commits,
-                changes,
+                changed_files,
                 file,
                 notice,
             } => {
                 if let Some(list) = &self.commits {
                     list.update(cx, |l, cx| l.set_commits(commits, cx));
                 }
-                if let Some(changes) = changes {
-                    self.tree.update(cx, |t, cx| t.set_changes(changes, cx));
+                if let Some(changed_files) = changed_files {
+                    self.files
+                        .update(cx, |t, cx| t.set_changed_files(changed_files, cx));
                 }
                 self.selection.update(cx, |s, cx| s.set(file, cx));
                 if let Some(n) = notice {
@@ -228,7 +230,7 @@ impl ChangesView {
         if !self.panel_open {
             return (None, None);
         }
-        let tree = self.files_open.then(|| self.tree.focus_handle(cx));
+        let tree = self.files_open.then(|| self.files.focus_handle(cx));
         let commits = self.commits.as_ref().filter(|_| self.commits_open);
         (tree, commits.map(|c| c.focus_handle(cx)))
     }
@@ -275,7 +277,7 @@ impl ChangesView {
         }
     }
 
-    /// Heading with + or −. A click collapses or expands the section.
+    /// Heading with + or −. A click opens or closes the section.
     fn heading(
         &self,
         title: &'static str,
@@ -300,7 +302,7 @@ impl ChangesView {
                 let open = toggle(this);
                 *open = !*open;
                 // Focus in a closed section goes to the diff
-                let tree = this.tree.focus_handle(cx);
+                let tree = this.files.focus_handle(cx);
                 let commits = this.commits.as_ref().map(|c| c.focus_handle(cx));
                 let hidden = (!this.files_open && tree.is_focused(window))
                     || (!this.commits_open && commits.is_some_and(|c| c.is_focused(window)));
@@ -315,7 +317,7 @@ impl ChangesView {
     fn side_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let viewport = window.viewport_size();
         let unscaled = |v: gpui::Pixels| f32::from(v) / self.scale;
-        let content = self.tree.update(cx, |t, _| t.content_width(window));
+        let content = self.files.update(cx, |t, _| t.content_width(window));
         let width = self.width.resolve(content, unscaled(viewport.width));
         let theme = cx.global::<Settings>().theme;
         let mut panel = div()
@@ -331,7 +333,7 @@ impl ChangesView {
             .text_size(px(TEXT_SIZE * self.scale))
             .child(self.heading("Files", self.files_open, cx, |this| &mut this.files_open))
             .when(self.files_open, |d| {
-                d.child(div().flex_1().min_h_0().child(self.tree.clone()))
+                d.child(div().flex_1().min_h_0().child(self.files.clone()))
             });
         if let Some(commits) = self.commits.clone() {
             let section = div()
@@ -379,10 +381,10 @@ impl Render for ChangesView {
             .on_action(cx.listener(Self::focus_up))
             .on_action(cx.listener(Self::toggle_side_panel))
             .on_action(cx.listener(|this, _: &NextFile, _, cx| {
-                this.tree.update(cx, |t, cx| t.step(true, cx))
+                this.files.update(cx, |t, cx| t.step(true, cx))
             }))
             .on_action(cx.listener(|this, _: &PrevFile, _, cx| {
-                this.tree.update(cx, |t, cx| t.step(false, cx))
+                this.files.update(cx, |t, cx| t.step(false, cx))
             }))
             // Zoom, help and diff mode also work when the tree or the commit list has focus
             .on_action(cx.listener(|this, a: &ZoomIn, w, cx| {
@@ -411,8 +413,8 @@ impl Render for ChangesView {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .children(self.changes.shown().map(|change| {
-                        file_header(&change.path, self.scale, &cx.global::<Settings>().theme)
+                    .children(self.changes.shown().map(|file| {
+                        file_header(&file.path, self.scale, &cx.global::<Settings>().theme)
                     }))
                     .child(div().flex_1().min_h_0().child(self.diff.clone())),
             )

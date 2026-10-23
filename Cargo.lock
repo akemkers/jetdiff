@@ -3108,7 +3108,7 @@ version = "0.1.0"
 dependencies = [
  "gpui",
  "jetdiff-app",
- "jetdiff-changes",
+ "jetdiff-files",
  "jetdiff-git",
  "jetdiff-tui",
  "jetdiff-ui",
@@ -3121,15 +3121,11 @@ dependencies = [
 name = "jetdiff-app"
 version = "0.1.0"
 dependencies = [
- "jetdiff-changes",
+ "jetdiff-files",
  "jetdiff-git",
  "jetdiff-viewmodel",
  "notify",
 ]
-
-[[package]]
-name = "jetdiff-changes"
-version = "0.1.0"
 
 [[package]]
 name = "jetdiff-core"
@@ -3140,10 +3136,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "jetdiff-files"
+version = "0.1.0"
+
+[[package]]
 name = "jetdiff-git"
 version = "0.1.0"
 dependencies = [
- "jetdiff-changes",
+ "jetdiff-files",
 ]
 
 [[package]]
@@ -3170,7 +3170,7 @@ name = "jetdiff-tui"
 version = "0.1.0"
 dependencies = [
  "jetdiff-app",
- "jetdiff-changes",
+ "jetdiff-files",
  "jetdiff-git",
  "jetdiff-viewmodel",
  "ratatui",
@@ -3183,8 +3183,8 @@ version = "0.1.0"
 dependencies = [
  "gpui",
  "jetdiff-app",
- "jetdiff-changes",
  "jetdiff-core",
+ "jetdiff-files",
  "jetdiff-git",
  "jetdiff-viewmodel",
 ]

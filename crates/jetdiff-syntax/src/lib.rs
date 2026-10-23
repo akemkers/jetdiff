@@ -399,20 +399,20 @@ mod tests {
     #[test]
     fn rust_like_rustrover() {
         use Token::*;
-        let text = "use std::path::{Path, PathBuf};\nuse jetdiff_changes::Status;\n\
+        let text = "use std::path::{Path, PathBuf};\nuse jetdiff_files::FileStatus;\n\
             fn f(dir: &Path) -> Result<Self, String> {\n\
             let a = thread::scope(|s| s.spawn(|| verify(dir)));\n\
             let b = a.join().unwrap()?;\n\
-            match b { Status::Added => println!(), Token::Foo { .. } => {} }\n\
+            match b { FileStatus::Added => println!(), Token::Foo { .. } => {} }\n\
             self.root\n}\n";
         has(
             Language::Rust,
             text,
             &[
                 ("std", Crate),
-                ("jetdiff_changes", Crate),
+                ("jetdiff_files", Crate),
                 ("PathBuf", Struct),
-                ("Status", Struct),
+                ("FileStatus", Struct),
                 ("Result", Enum),
                 ("Self", Keyword),
                 ("String", Struct),

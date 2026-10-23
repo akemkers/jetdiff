@@ -1,6 +1,6 @@
 # jetdiff-app
 
-The state around the diff: the changes in the repo, the file being shown, the file tree, the commit list and the watcher. No GUI, so the GPUI view and a terminal view can share it.
+The state around the diff: the changed files in the repo, the file being shown, the file tree, the commit list and the watcher. No GUI, so the GPUI view and a terminal view can share it.
 
 ## Why
 
@@ -10,9 +10,9 @@ The state around the diff: the changes in the repo, the file being shown, the fi
 
 | Owns                                                                                                    | Module    |
 | ------------------------------------------------------------------------------------------------------- | --------- |
-| The repo, the commit being shown, the changes and the file being shown. Reload, and which file is selected afterwards | `changes` |
+| The repo, the commit being shown, the changed files and the file being shown. Reload, and which file is selected afterwards | `changes` |
 | From the content git gives to `FileDiff`: binary file, too big, identical content and syntax          | `content` |
-| The file tree's rows and cursor, and folders being collapsed                                          | `files`   |
+| The file tree's rows and cursor, and folders being open or closed                                       | `files`   |
 | The commit list's rows, cursor and selection, and the age like "3 hours ago"                          | `commits` |
 | Rollback and `file:line` for the cursor's line: what is rolled back, or why it can't be               | `actions` |
 | The keys in the keymap bar and in the help on `?`                                                     | `help`    |
@@ -26,7 +26,7 @@ The state around the diff: the changes in the repo, the file being shown, the fi
 | ----------------------------------- | -------------------------------------------------------------------------- |
 | `jetdiff-viewmodel`                 | The diff of one file: cursor, scroll, folding, Split and Unified, vim keys |
 | `jetdiff-git`                       | Talking to `git`                                                           |
-| `jetdiff-changes`                   | `FileChange` and the tree model                                            |
+| `jetdiff-files`                     | `ChangedFile` and the tree model                                           |
 | The UI (`jetdiff-ui`, `jetdiff-tui`) | Drawing, focus, mouse, animation, zoom, clipboard, timers and threads      |
 | The binary (`jetdiff`)              | Arguments and the config file                                              |
 
@@ -39,7 +39,7 @@ The crate starts no threads and has no timers. Work that takes time comes as a j
 ```rust
 use jetdiff_app::{Changes, Reloaded, Show, Watcher};
 
-let mut changes = Changes::new(repo, repo_changes);
+let mut changes = Changes::new(repo, changed_files);
 let mut selected = changes.first();
 
 // The selected file
@@ -55,7 +55,7 @@ if let Some(paths) = watcher.take() {
     let job = changes.reload();          // Send, can run on another thread
     let loaded = job.run();
     match changes.reloaded(loaded, &paths) {
-        Reloaded::Done { commits, changes, file, notice } => selected = file,
+        Reloaded::Done { commits, changed_files, file, notice } => selected = file,
         Reloaded::Failed { shown, error } => { /* the commit list shows `shown` */ }
     }
 }
@@ -69,12 +69,12 @@ graph TD
     changes --> content[content: build_diff]
     content --> view[jetdiff-viewmodel: FileDiff]
     changes --> git[jetdiff-git: Repo]
-    ui --> files[files: FileTree]
+    ui --> files[files: Files]
     ui --> commits[commits: Commits]
     ui --> watcher[watcher: Watcher]
     ui --> actions[actions: rollback and file:line]
     actions --> mode[jetdiff-viewmodel: DiffMode]
-    files --> tree[jetdiff-changes: ChangeTree]
+    files --> tree[jetdiff-files: Tree]
 ```
 
 ## Tests

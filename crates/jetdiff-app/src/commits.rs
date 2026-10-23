@@ -73,7 +73,7 @@ impl Commits {
         Some(hash)
     }
 
-    pub fn open_cursor(&mut self) -> Option<Option<String>> {
+    pub fn select_at_cursor(&mut self) -> Option<Option<String>> {
         self.select(self.row_of(&self.cursor))
     }
 
@@ -138,8 +138,8 @@ mod tests {
         assert_eq!(c.len(), 3);
         assert_eq!(c.select(0), None);
         assert_eq!(c.move_cursor(true), 1);
-        assert_eq!(c.open_cursor(), Some(Some("a".into())));
-        assert_eq!(c.open_cursor(), None);
+        assert_eq!(c.select_at_cursor(), Some(Some("a".into())));
+        assert_eq!(c.select_at_cursor(), None);
         assert!(c.is_selected(1) && c.is_cursor(1));
     }
 

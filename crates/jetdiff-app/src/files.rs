@@ -1,31 +1,31 @@
-//! The file tree. The selected file is owned by whoever uses the tree.
+//! The file tree's state: its rows and cursor. The selected file is owned by whoever uses the tree.
 
 use std::rc::Rc;
 
-use jetdiff_changes::{ChangeTree, FileChange, Row, RowKind};
+use jetdiff_files::{ChangedFile, Row, RowKind, Tree};
 
 use crate::step;
 
-pub struct FileTree {
-    changes: Rc<[FileChange]>,
-    tree: ChangeTree,
+pub struct Files {
+    changed_files: Rc<[ChangedFile]>,
+    tree: Tree,
     rows: Rc<[Row]>,
     cursor: usize,
 }
 
-impl FileTree {
-    pub fn new(changes: Rc<[FileChange]>) -> Self {
-        let tree = ChangeTree::new(&changes);
+impl Files {
+    pub fn new(changed_files: Rc<[ChangedFile]>) -> Self {
+        let tree = Tree::new(&changed_files);
         Self {
             rows: tree.rows().into(),
-            changes,
+            changed_files,
             tree,
             cursor: 0,
         }
     }
 
-    pub fn changes(&self) -> &Rc<[FileChange]> {
-        &self.changes
+    pub fn changed_files(&self) -> &Rc<[ChangedFile]> {
+        &self.changed_files
     }
 
     pub fn rows(&self) -> &Rc<[Row]> {
@@ -36,10 +36,10 @@ impl FileTree {
         self.cursor
     }
 
-    pub fn set_changes(&mut self, changes: Rc<[FileChange]>) {
-        self.tree.rebuild(&changes);
+    pub fn set_changed_files(&mut self, changed_files: Rc<[ChangedFile]>) {
+        self.tree.rebuild(&changed_files);
         self.rows = self.tree.rows().into();
-        self.changes = changes;
+        self.changed_files = changed_files;
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
     }
 
@@ -54,7 +54,7 @@ impl FileTree {
 
     /// The selected file becomes visible, also when it was selected with the keyboard in a closed folder.
     pub fn reveal(&mut self, file: usize) -> Option<usize> {
-        self.tree.reveal(file, &self.changes);
+        self.tree.reveal(file, &self.changed_files);
         self.rows = self.tree.rows().into();
         let row = self
             .rows
@@ -69,7 +69,8 @@ impl FileTree {
         self.cursor
     }
 
-    pub fn open(&mut self, row: usize) -> Option<usize> {
+    /// The file on the row. A folder row opens or closes the folder instead, and selects nothing.
+    pub fn select(&mut self, row: usize) -> Option<usize> {
         self.cursor = row;
         match &self.rows[row].kind {
             RowKind::Dir { path, .. } => {
@@ -81,11 +82,11 @@ impl FileTree {
         }
     }
 
-    pub fn open_cursor(&mut self) -> Option<usize> {
+    pub fn select_at_cursor(&mut self) -> Option<usize> {
         if self.rows.is_empty() {
             return None;
         }
-        self.open(self.cursor)
+        self.select(self.cursor)
     }
 }
 
@@ -100,38 +101,38 @@ pub fn file_name(path: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use jetdiff_changes::Status;
+    use jetdiff_files::FileStatus;
 
     use super::*;
 
-    fn tree(paths: &[&str]) -> FileTree {
-        let changes: Vec<_> = paths
+    fn files(paths: &[&str]) -> Files {
+        let changed_files: Vec<_> = paths
             .iter()
-            .map(|p| FileChange {
-                path: (*p).into(),
-                old_path: None,
-                status: Status::Modified,
+            .map(|path| ChangedFile {
+                path: (*path).into(),
+                renamed_from: None,
+                status: FileStatus::Modified,
             })
             .collect();
-        FileTree::new(changes.into())
+        Files::new(changed_files.into())
     }
 
     #[test]
-    fn folder_collapses_and_file_is_selected() {
+    fn folder_closes_and_file_is_selected() {
         // src/, src/a.rs, b.rs
-        let mut t = tree(&["src/a.rs", "b.rs"]);
+        let mut t = files(&["src/a.rs", "b.rs"]);
         assert_eq!(t.rows().len(), 3);
-        assert_eq!(t.open(0), None);
+        assert_eq!(t.select(0), None);
         assert_eq!(t.rows().len(), 2);
-        assert_eq!(t.open(1), Some(1));
-        t.open(0);
+        assert_eq!(t.select(1), Some(1));
+        t.select(0);
         assert_eq!(t.reveal(0), Some(1));
         assert_eq!(t.rows().len(), 3);
     }
 
     #[test]
     fn next_file_stops_at_the_ends() {
-        let t = tree(&["a.rs", "b.rs"]);
+        let t = files(&["a.rs", "b.rs"]);
         assert_eq!(t.next_file(0, true), Some(1));
         assert_eq!(t.next_file(1, true), None);
         assert_eq!(t.next_file(0, false), None);
@@ -139,14 +140,14 @@ mod tests {
 
     #[test]
     fn cursor_stays_within_new_rows() {
-        let mut t = tree(&["a.rs", "b.rs", "c.rs"]);
+        let mut t = files(&["a.rs", "b.rs", "c.rs"]);
         t.move_cursor(true);
         t.move_cursor(true);
         assert_eq!(t.cursor(), 2);
-        let changes = tree(&["a.rs"]).changes().clone();
-        t.set_changes(changes);
+        let changed_files = files(&["a.rs"]).changed_files().clone();
+        t.set_changed_files(changed_files);
         assert_eq!(t.cursor(), 0);
-        assert_eq!(tree(&[]).open_cursor(), None);
+        assert_eq!(files(&[]).select_at_cursor(), None);
     }
 
     #[test]

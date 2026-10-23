@@ -13,7 +13,7 @@ pub use actions::{RollbackRequest, location, rollback_request};
 pub use changes::{Changes, Loaded, ReloadJob, Reloaded, Show, Shown};
 pub use commits::{Commits, LOCAL_CHANGES, age};
 pub use content::{Level, Notice, build_diff, empty_diff};
-pub use files::{FileTree, count_label, file_name};
+pub use files::{Files, count_label, file_name};
 pub use keys::{AppCommand, BINDINGS, app_command};
 pub use watcher::Watcher;
 

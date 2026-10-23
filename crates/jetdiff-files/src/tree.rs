@@ -4,18 +4,18 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-use crate::FileChange;
+use crate::ChangedFile;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RowKind {
     Dir {
-        /// The whole path, used as the id for collapsing.
+        /// The whole path, used as the id for opening and closing.
         path: String,
         name: String,
         count: usize,
-        expanded: bool,
+        open: bool,
     },
-    /// Index in `changes`.
+    /// Index in the changed files.
     File(usize),
 }
 
@@ -35,19 +35,19 @@ struct Dir {
 }
 
 #[derive(Debug)]
-pub struct ChangeTree {
+pub struct Tree {
     root: Dir,
-    collapsed: HashSet<String>,
+    closed_folders: HashSet<String>,
     /// The files in the order the tree shows them, for next and previous file.
     order: Vec<usize>,
 }
 
-impl ChangeTree {
-    pub fn new(changes: &[FileChange]) -> Self {
+impl Tree {
+    pub fn new(files: &[ChangedFile]) -> Self {
         let mut root = Dir::default();
-        for (i, c) in changes.iter().enumerate() {
+        for (i, file) in files.iter().enumerate() {
             let mut dir = &mut root;
-            let mut parts: Vec<&str> = c.path.split('/').collect();
+            let mut parts: Vec<&str> = file.path.split('/').collect();
             parts.pop();
             for part in parts {
                 let pos = match dir.dirs.iter().position(|d| d.name == part) {
@@ -66,7 +66,7 @@ impl ChangeTree {
             }
             dir.files.push(i);
         }
-        finish(&mut root, changes);
+        finish(&mut root, files);
         for d in &mut root.dirs {
             merge_single_children(d);
         }
@@ -74,17 +74,17 @@ impl ChangeTree {
         collect_files(&root, &mut order);
         Self {
             root,
-            collapsed: HashSet::new(),
+            closed_folders: HashSet::new(),
             order,
         }
     }
 
-    /// New changes. Collapsed folders stay collapsed.
-    pub fn rebuild(&mut self, changes: &[FileChange]) {
-        let collapsed = std::mem::take(&mut self.collapsed);
+    /// New changed files. Closed folders stay closed.
+    pub fn rebuild(&mut self, files: &[ChangedFile]) {
+        let closed_folders = std::mem::take(&mut self.closed_folders);
         *self = Self {
-            collapsed,
-            ..Self::new(changes)
+            closed_folders,
+            ..Self::new(files)
         };
     }
 
@@ -96,17 +96,17 @@ impl ChangeTree {
 
     fn push_rows(&self, dir: &Dir, depth: usize, rows: &mut Vec<Row>) {
         for d in &dir.dirs {
-            let expanded = !self.collapsed.contains(&d.path);
+            let open = !self.closed_folders.contains(&d.path);
             rows.push(Row {
                 depth,
                 kind: RowKind::Dir {
                     path: d.path.clone(),
                     name: d.name.clone(),
                     count: d.count,
-                    expanded,
+                    open,
                 },
             });
-            if expanded {
+            if open {
                 self.push_rows(d, depth + 1, rows);
             }
         }
@@ -117,8 +117,8 @@ impl ChangeTree {
     }
 
     pub fn toggle(&mut self, dir_path: &str) {
-        if !self.collapsed.remove(dir_path) {
-            self.collapsed.insert(dir_path.to_owned());
+        if !self.closed_folders.remove(dir_path) {
+            self.closed_folders.insert(dir_path.to_owned());
         }
     }
 
@@ -140,12 +140,12 @@ impl ChangeTree {
     }
 
     /// Opens the folders above a file, so it shows when it is selected with the keyboard.
-    pub fn reveal(&mut self, file: usize, changes: &[FileChange]) {
-        let path = &changes[file].path;
+    pub fn reveal(&mut self, file: usize, files: &[ChangedFile]) {
+        let path = &files[file].path;
         let mut end = 0;
         while let Some(i) = path[end..].find('/') {
             end += i;
-            self.collapsed.remove(&path[..end]);
+            self.closed_folders.remove(&path[..end]);
             end += 1;
         }
     }
@@ -160,16 +160,11 @@ fn join(parent: &str, name: &str) -> String {
 }
 
 /// Sorts and counts files. Names are compared case-insensitively first.
-fn finish(dir: &mut Dir, changes: &[FileChange]) -> usize {
-    let name = |i: &usize| changes[*i].path.rsplit('/').next().unwrap_or_default();
+fn finish(dir: &mut Dir, files: &[ChangedFile]) -> usize {
+    let name = |i: &usize| files[*i].path.rsplit('/').next().unwrap_or_default();
     dir.files.sort_by(|a, b| by_name(name(a), name(b)));
     dir.dirs.sort_by(|a, b| by_name(&a.name, &b.name));
-    dir.count = dir.files.len()
-        + dir
-            .dirs
-            .iter_mut()
-            .map(|d| finish(d, changes))
-            .sum::<usize>();
+    dir.count = dir.files.len() + dir.dirs.iter_mut().map(|d| finish(d, files)).sum::<usize>();
     dir.count
 }
 
@@ -202,28 +197,28 @@ fn collect_files(dir: &Dir, out: &mut Vec<usize>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Status;
+    use crate::FileStatus;
 
-    fn changes(paths: &[&str]) -> Vec<FileChange> {
+    fn changed_files(paths: &[&str]) -> Vec<ChangedFile> {
         paths
             .iter()
-            .map(|p| FileChange {
-                path: p.to_string(),
-                old_path: None,
-                status: Status::Modified,
+            .map(|path| ChangedFile {
+                path: path.to_string(),
+                renamed_from: None,
+                status: FileStatus::Modified,
             })
             .collect()
     }
 
     /// Rows like `"  name (count)"` for folders and `"  file"` for files.
-    fn show(tree: &ChangeTree, changes: &[FileChange]) -> Vec<String> {
+    fn show(tree: &Tree, files: &[ChangedFile]) -> Vec<String> {
         tree.rows()
             .iter()
             .map(|r| {
                 let indent = "  ".repeat(r.depth);
                 match &r.kind {
                     RowKind::Dir { name, count, .. } => format!("{indent}{name} ({count})"),
-                    RowKind::File(i) => format!("{indent}{}", changes[*i].path),
+                    RowKind::File(i) => format!("{indent}{}", files[*i].path),
                 }
             })
             .collect()
@@ -231,10 +226,10 @@ mod tests {
 
     #[test]
     fn folders_before_files_and_sorted() {
-        let c = changes(&["b.rs", "src/z.rs", "A.md", "src/a.rs", "docs/x.md"]);
-        let t = ChangeTree::new(&c);
+        let files = changed_files(&["b.rs", "src/z.rs", "A.md", "src/a.rs", "docs/x.md"]);
+        let tree = Tree::new(&files);
         assert_eq!(
-            show(&t, &c),
+            show(&tree, &files),
             [
                 "docs (1)",
                 "  docs/x.md",
@@ -249,14 +244,14 @@ mod tests {
 
     #[test]
     fn single_child_folders_are_merged() {
-        let c = changes(&[
+        let files = changed_files(&[
             "crates/ui/src/a.rs",
             "crates/ui/src/b.rs",
             "crates/core/c.rs",
         ]);
-        let t = ChangeTree::new(&c);
+        let tree = Tree::new(&files);
         assert_eq!(
-            show(&t, &c),
+            show(&tree, &files),
             [
                 "crates (3)",
                 "  core (1)",
@@ -269,40 +264,40 @@ mod tests {
     }
 
     #[test]
-    fn collapsing_and_reveal() {
-        let c = changes(&["a/b/x.rs", "a/c/y.rs"]);
-        let mut t = ChangeTree::new(&c);
-        t.toggle("a");
-        assert_eq!(show(&t, &c), ["a (2)"]);
-        t.reveal(1, &c);
-        assert_eq!(show(&t, &c).len(), 5);
+    fn closing_and_reveal() {
+        let files = changed_files(&["a/b/x.rs", "a/c/y.rs"]);
+        let mut tree = Tree::new(&files);
+        tree.toggle("a");
+        assert_eq!(show(&tree, &files), ["a (2)"]);
+        tree.reveal(1, &files);
+        assert_eq!(show(&tree, &files).len(), 5);
     }
 
     #[test]
-    fn rebuild_keeps_collapsing() {
-        let c = changes(&["a/x.rs", "b/y.rs"]);
-        let mut t = ChangeTree::new(&c);
-        t.toggle("a");
-        let c = changes(&["a/x.rs", "a/z.rs", "b/y.rs"]);
-        t.rebuild(&c);
-        assert_eq!(show(&t, &c), ["a (2)", "b (1)", "  b/y.rs"]);
+    fn rebuild_keeps_folders_closed() {
+        let files = changed_files(&["a/x.rs", "b/y.rs"]);
+        let mut tree = Tree::new(&files);
+        tree.toggle("a");
+        let files = changed_files(&["a/x.rs", "a/z.rs", "b/y.rs"]);
+        tree.rebuild(&files);
+        assert_eq!(show(&tree, &files), ["a (2)", "b (1)", "  b/y.rs"]);
     }
 
     #[test]
     fn empty_tree() {
-        let t = ChangeTree::new(&[]);
-        assert_eq!(t.first(), None);
-        assert!(t.rows().is_empty());
+        let tree = Tree::new(&[]);
+        assert_eq!(tree.first(), None);
+        assert!(tree.rows().is_empty());
     }
 
     #[test]
     fn next_file_follows_the_tree() {
-        let c = changes(&["z.rs", "src/a.rs"]);
-        let t = ChangeTree::new(&c);
-        assert_eq!(t.first(), Some(1));
-        assert_eq!(t.step(1, true), 0);
-        assert_eq!(t.step(0, true), 0);
-        assert_eq!(t.step(0, false), 1);
-        assert_eq!(t.step(1, false), 1);
+        let files = changed_files(&["z.rs", "src/a.rs"]);
+        let tree = Tree::new(&files);
+        assert_eq!(tree.first(), Some(1));
+        assert_eq!(tree.step(1, true), 0);
+        assert_eq!(tree.step(0, true), 0);
+        assert_eq!(tree.step(0, false), 1);
+        assert_eq!(tree.step(1, false), 1);
     }
 }

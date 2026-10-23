@@ -91,7 +91,7 @@ fn read(path: &str) -> Result<String, String> {
 /// What the window should show, ready before the app starts so errors can be written to the terminal.
 pub enum Content {
     File(Box<FileDiff>, [String; 2]),
-    Changes(Repo, Vec<jetdiff_changes::FileChange>),
+    Changes(Repo, Vec<jetdiff_files::ChangedFile>),
 }
 
 fn load(source: &Source) -> Result<(Content, String), String> {
@@ -112,8 +112,8 @@ fn load(source: &Source) -> Result<(Content, String), String> {
     };
     // Several windows open at the same time must be told apart in the title
     let title = format!("{}: {title}", repo.name());
-    let changes = repo.changes()?;
-    Ok((Content::Changes(repo, changes), title))
+    let changed_files = repo.changed_files()?;
+    Ok((Content::Changes(repo, changed_files), title))
 }
 
 /// Shows that `work` is working, with a spinner and time in a terminal.

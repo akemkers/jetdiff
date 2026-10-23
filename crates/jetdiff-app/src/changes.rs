@@ -1,9 +1,9 @@
-//! The changes in a repo and the file being shown.
+//! The changed files in a repo and the file being shown.
 
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use jetdiff_changes::{ChangeTree, FileChange};
+use jetdiff_files::{ChangedFile, Tree};
 use jetdiff_git::{Commit, Repo};
 use jetdiff_viewmodel::FileDiff;
 
@@ -13,7 +13,7 @@ use crate::content::{Notice, build_diff};
 pub struct Loaded {
     commit: Option<String>,
     repo: Repo,
-    changes: Vec<FileChange>,
+    changed_files: Vec<ChangedFile>,
     commits: Vec<Commit>,
 }
 
@@ -31,11 +31,11 @@ impl ReloadJob {
             Some(hash) => Repo::commit(&self.root, hash)?,
             None => home,
         };
-        let changes = repo.changes()?;
+        let changed_files = repo.changed_files()?;
         Ok(Loaded {
             commit: self.commit,
             repo,
-            changes,
+            changed_files,
             commits,
         })
     }
@@ -49,7 +49,7 @@ pub enum Reloaded {
     Done {
         commits: Vec<Commit>,
         /// Only when the list has changed.
-        changes: Option<Rc<[FileChange]>>,
+        changed_files: Option<Rc<[ChangedFile]>>,
         file: Option<usize>,
         notice: Option<Notice>,
     },
@@ -73,20 +73,20 @@ pub struct Shown {
 pub struct Changes {
     repo: Repo,
     commit: Option<String>,
-    /// The commit `changes` is from. Becomes equal to `commit` when loading is done.
+    /// The commit `changed_files` is from. Becomes equal to `commit` when loading is done.
     loaded_commit: Option<String>,
-    changes: Rc<[FileChange]>,
+    changed_files: Rc<[ChangedFile]>,
     /// What the diff shows now. The same content after a reload leaves the position alone.
-    shown: Option<(FileChange, Result<[String; 2], String>)>,
+    shown: Option<(ChangedFile, Result<[String; 2], String>)>,
 }
 
 impl Changes {
-    pub fn new(repo: Repo, changes: Vec<FileChange>) -> Self {
+    pub fn new(repo: Repo, changed_files: Vec<ChangedFile>) -> Self {
         Self {
             repo,
             commit: None,
             loaded_commit: None,
-            changes: changes.into(),
+            changed_files: changed_files.into(),
             shown: None,
         }
     }
@@ -95,16 +95,16 @@ impl Changes {
         &self.repo
     }
 
-    pub fn changes(&self) -> &Rc<[FileChange]> {
-        &self.changes
+    pub fn changed_files(&self) -> &Rc<[ChangedFile]> {
+        &self.changed_files
     }
 
-    pub fn shown(&self) -> Option<&FileChange> {
-        self.shown.as_ref().map(|(c, _)| c)
+    pub fn shown(&self) -> Option<&ChangedFile> {
+        self.shown.as_ref().map(|(file, _)| file)
     }
 
     pub fn first(&self) -> Option<usize> {
-        ChangeTree::new(&self.changes).first()
+        Tree::new(&self.changed_files).first()
     }
 
     /// Shown after the next `reload`.
@@ -124,7 +124,7 @@ impl Changes {
         let Loaded {
             commit,
             repo,
-            changes,
+            changed_files,
             commits,
         } = match loaded {
             Ok(l) => l,
@@ -139,20 +139,20 @@ impl Changes {
         // Only Local changes against Local changes is an update. A commit doesn't change.
         let same_work_tree = commit.is_none() && self.loaded_commit.is_none();
         let touched = if same_work_tree && !paths.is_empty() {
-            jetdiff_changes::touched(&self.changes, &changes, paths)
+            jetdiff_files::touched(&self.changed_files, &changed_files, paths)
         } else {
             0
         };
-        let selected = self.shown().map(|c| c.path.clone());
+        let selected = self.shown().map(|file| file.path.clone());
         self.repo = repo;
         self.loaded_commit = commit;
-        let changed = (*changes != *self.changes).then(|| {
-            self.changes = changes.into();
-            self.changes.clone()
+        let changed = (*changed_files != *self.changed_files).then(|| {
+            self.changed_files = changed_files.into();
+            self.changed_files.clone()
         });
         // The selected file is kept as long as it is included
         let file = selected
-            .and_then(|p| self.changes.iter().position(|c| c.path == p))
+            .and_then(|p| self.changed_files.iter().position(|file| file.path == p))
             .or_else(|| self.first());
         let notice = match touched {
             0 => None,
@@ -161,33 +161,35 @@ impl Changes {
         };
         Reloaded::Done {
             commits,
-            changes: changed,
+            changed_files: changed,
             file,
             notice,
         }
     }
 
     pub fn load(&mut self, file: Option<usize>) -> Show {
-        let Some(change) = file.map(|i| self.changes[i].clone()) else {
+        let Some(changed_file) = file.map(|i| self.changed_files[i].clone()) else {
             self.shown = None;
             return Show::Empty(Notice::info("No changes"));
         };
-        let content = self.repo.read(&change);
-        self.show(change, content)
+        let content = self.repo.read(&changed_file);
+        self.show(changed_file, content)
     }
 
-    fn show(&mut self, change: FileChange, content: Result<[String; 2], String>) -> Show {
-        let shown = Some((change.clone(), content.clone()));
+    fn show(&mut self, file: ChangedFile, content: Result<[String; 2], String>) -> Show {
+        let shown = Some((file.clone(), content.clone()));
         if shown == self.shown {
             return Show::Unchanged;
         }
-        let same_file = self.shown().is_some_and(|c| c.path == change.path);
+        let same_file = self
+            .shown()
+            .is_some_and(|previous| previous.path == file.path);
         self.shown = shown;
-        let (diff, notice) = build_diff(&change, content);
+        let (diff, notice) = build_diff(&file, content);
         Show::Diff(Box::new(Shown {
             diff,
             notice,
-            paths: [change.left_path().to_owned(), change.path.clone()],
+            paths: [file.left_path().to_owned(), file.path.clone()],
             can_rollback: self.repo.is_work_tree(),
             same_file,
         }))
@@ -195,13 +197,13 @@ impl Changes {
 
     /// Run a `reload` afterwards, so the list keeps up.
     pub fn rollback(&mut self, request: &RollbackRequest) -> Option<Result<Show, String>> {
-        let Some((change, Ok([left, _]))) = self.shown.clone() else {
+        let Some((file, Ok([left, _]))) = self.shown.clone() else {
             return None;
         };
         Some(
             self.repo
-                .rollback(&change, request.lines.clone(), &request.before)
-                .map(|after| self.show(change, Ok([left, after]))),
+                .rollback(&file, request.lines.clone(), &request.before)
+                .map(|after| self.show(file, Ok([left, after]))),
         )
     }
 }
@@ -247,8 +249,8 @@ mod tests {
 
         fn changes(&self) -> Changes {
             let repo = Repo::work_tree(Path::new(&self.0)).unwrap();
-            let changes = repo.changes().unwrap();
-            Changes::new(repo, changes)
+            let changed_files = repo.changed_files().unwrap();
+            Changes::new(repo, changed_files)
         }
     }
 
@@ -265,7 +267,7 @@ mod tests {
     }
 
     fn path(c: &Changes, file: Option<usize>) -> &str {
-        &c.changes()[file.unwrap()].path
+        &c.changed_files()[file.unwrap()].path
     }
 
     #[test]
@@ -278,14 +280,17 @@ mod tests {
         r.write("a.rs", "a2\n");
         r.write("b.rs", "b2\n");
         let mut c = r.changes();
-        let b = c.changes().iter().position(|c| c.path == "b.rs");
+        let b = c
+            .changed_files()
+            .iter()
+            .position(|file| file.path == "b.rs");
         assert!(matches!(c.load(b), Show::Diff(s) if !s.same_file && s.can_rollback));
         assert!(matches!(c.load(b), Show::Unchanged));
 
         r.write("b.rs", "b3\n");
         r.write("c.rs", "c\n");
         let Reloaded::Done {
-            changes,
+            changed_files,
             file,
             notice,
             ..
@@ -293,7 +298,7 @@ mod tests {
         else {
             panic!("reload failed");
         };
-        assert!(changes.is_some());
+        assert!(changed_files.is_some());
         assert_eq!(path(&c, file), "b.rs");
         assert_eq!(notice, Some(Notice::info("Updated: 2 files changed")));
         assert!(matches!(c.load(file), Show::Diff(s) if s.same_file));

@@ -14,8 +14,8 @@ The crate also decides what is compared. Local changes are against HEAD. The com
 use jetdiff_git::Repo;
 
 let repo = Repo::work_tree(Path::new("."))?;   // or Repo::commit(dir, "HEAD~2")
-let changes = repo.changes()?;                  // Vec<FileChange>
-let [left, right] = repo.read(&changes[0])?;    // the content on each side
+let files = repo.changed_files()?;              // Vec<ChangedFile>
+let [left, right] = repo.read(&files[0])?;      // the content on each side
 let commits = repo.commits()?;                  // the branch's commits, at most 50
 ```
 
@@ -24,7 +24,7 @@ let commits = repo.commits()?;                  // the branch's commits, at most
 ```mermaid
 graph LR
     dir[folder] --> repo[Repo]
-    repo -- git diff --> changes[Vec FileChange]
+    repo -- git diff --> files[Vec ChangedFile]
     repo -- git cat-file / disk --> read["[left, right]"]
     repo -- git log --> commits[Vec Commit]
 ```

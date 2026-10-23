@@ -7,7 +7,7 @@ license.workspace = true
 [dependencies]
 gpui.workspace = true
 jetdiff-app = { path = "../jetdiff-app" }
-jetdiff-changes = { path = "../jetdiff-changes" }
 jetdiff-core = { path = "../jetdiff-core" }
+jetdiff-files = { path = "../jetdiff-files" }
 jetdiff-git = { path = "../jetdiff-git" }
 jetdiff-viewmodel = { path = "../jetdiff-viewmodel" }

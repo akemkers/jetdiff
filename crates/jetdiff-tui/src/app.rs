@@ -7,10 +7,10 @@ use std::time::{Duration, Instant};
 
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
-    AppCommand, Changes, Commits, FileTree, Level, Loaded, Reloaded, Show, Shown, Watcher,
+    AppCommand, Changes, Commits, Files, Level, Loaded, Reloaded, Show, Shown, Watcher,
     app_command, empty_diff,
 };
-use jetdiff_changes::FileChange;
+use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Frame;
@@ -104,9 +104,9 @@ impl App {
         }
     }
 
-    pub fn changes(repo: Repo, changes: Vec<FileChange>, settings: &Settings) -> Self {
+    pub fn changes(repo: Repo, changed_files: Vec<ChangedFile>, settings: &Settings) -> Self {
         let mut message = Message::default();
-        let changes = Changes::new(repo, changes);
+        let changes = Changes::new(repo, changed_files);
         let mut commits = None;
         let mut watcher = None;
         let repo = changes.repo();
@@ -120,8 +120,8 @@ impl App {
                 Err(e) => message.show(format!("Can't watch for changes: {e}"), Level::Warning),
             }
         }
-        let tree = FileTree::new(changes.changes().clone());
-        let panel = Panel::new(tree, commits, settings.icons);
+        let files = Files::new(changes.changed_files().clone());
+        let panel = Panel::new(files, commits, settings.icons);
         let selected = changes.first();
         let (reload_sender, reload_receiver) = channel();
         let mut app = Self {
@@ -183,15 +183,15 @@ impl App {
             }
             Reloaded::Done {
                 commits,
-                changes,
+                changed_files,
                 file,
                 notice,
             } => {
                 if let Some(list) = &mut repo.panel.commits {
                     list.set_commits(commits);
                 }
-                if let Some(changes) = changes {
-                    repo.panel.tree.set_changes(changes);
+                if let Some(changed_files) = changed_files {
+                    repo.panel.files.set_changed_files(changed_files);
                 }
                 self.select(file);
                 if let Some(notice) = notice {
@@ -314,7 +314,7 @@ impl App {
                 let forward = cmd == AppCommand::NextFile;
                 if let Some(repo) = &self.repository
                     && let Some(file) = repo.selected
-                    && let Some(next) = repo.panel.tree.next_file(file, forward)
+                    && let Some(next) = repo.panel.files.next_file(file, forward)
                 {
                     self.select(Some(next));
                 }
@@ -363,9 +363,9 @@ impl App {
         match list_key(key) {
             Some(ListKey::Down) => repo.panel.move_cursor(section, true),
             Some(ListKey::Up) => repo.panel.move_cursor(section, false),
-            Some(ListKey::Open) => match section {
+            Some(ListKey::Select) => match section {
                 Section::Files => {
-                    if let Some(file) = repo.panel.tree.open_cursor() {
+                    if let Some(file) = repo.panel.files.select_at_cursor() {
                         self.select(Some(file));
                     }
                 }
@@ -374,7 +374,7 @@ impl App {
                         .panel
                         .commits
                         .as_mut()
-                        .and_then(|commits| commits.open_cursor());
+                        .and_then(|commits| commits.select_at_cursor());
                     self.select_commit(hash);
                 }
             },
@@ -412,7 +412,7 @@ impl App {
             }
             Some(Click::File(row)) => {
                 self.focus = Focus::Panel(Section::Files);
-                if let Some(file) = repo.panel.tree.open(row) {
+                if let Some(file) = repo.panel.files.select(row) {
                     self.select(Some(file));
                 }
             }
@@ -468,8 +468,8 @@ impl App {
             main.x += self.panel_area.width;
             main.width -= self.panel_area.width;
         }
-        if let Some(change) = self.repository.as_ref().and_then(|r| r.changes.shown()) {
-            widgets::header(&change.path, Rect { height: 1, ..main }, &theme, buf);
+        if let Some(file) = self.repository.as_ref().and_then(|r| r.changes.shown()) {
+            widgets::header(&file.path, Rect { height: 1, ..main }, &theme, buf);
             main.y += 1;
             main.height = main.height.saturating_sub(1);
         }
