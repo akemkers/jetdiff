@@ -629,7 +629,7 @@ mod tests {
         assert!(out.folding_changed);
         assert_eq!(s.cursor.line, 45);
         assert_eq!(top(&s), y);
-        assert!(s.folding.fold_at_line(R, 49).is_some());
+        assert!((45..86).all(|line| s.folding.caret_after(R, line) == line));
         run(&mut s, ToggleFolds);
         assert_eq!(s.folding.visible(R).count(), 0);
         times(&mut s, MoveDown, 20);

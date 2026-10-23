@@ -479,8 +479,8 @@ mod tests {
         let id = f.fold_at_line(L, 45).unwrap();
         f.set_expanded(id, true);
         keeper.restore(&mut s, &d, &f, carets, VP);
-        // 45..86 became 4 + fold + 4 lines, so 8 more visual lines above the caret
-        assert_eq!(s.y, [560., 560.]);
+        // 45..86 opened completely, so 40 more visual lines above the caret
+        assert_eq!(s.y, [1200., 1200.]);
         assert_eq!(screen(&f, &s), before);
     }
 
@@ -493,21 +493,21 @@ mod tests {
         s.scroll_to(&d, &f, L, 220., VP);
         let carets = [0, 0];
         let keeper = PositionKeeper::save(&s, &f, carets, VP);
-        // 0..6 becomes fold 0..2 and four lines, so four more visual lines
+        // 0..6 opens, so five more visual lines
         let id = f.fold_at_line(R, 0).unwrap();
         f.set_expanded(id, true);
         keeper.restore(&mut s, &d, &f, carets, VP);
-        assert_eq!(s.y, [300., 300.]);
+        assert_eq!(s.y, [320., 320.]);
         assert_eq!(f.layout(L, 20.).y_to_logical_line(s.y[0]), 36);
 
         // The top is on a fold that opens: the first line stays put
         let mut s = ScrollState::default();
-        s.scroll_to(&d, &f, L, 480., VP);
-        assert_eq!(f.layout(L, 20.).y_to_logical_line(480.), 45);
+        s.scroll_to(&d, &f, L, 500., VP);
+        assert_eq!(f.layout(L, 20.).y_to_logical_line(500.), 45);
         let keeper = PositionKeeper::save(&s, &f, carets, VP);
         f.expand_at(L, 45);
         keeper.restore(&mut s, &d, &f, carets, VP);
-        assert_eq!(s.y, [480., 480.]);
+        assert_eq!(s.y, [500., 500.]);
     }
 
     #[test]

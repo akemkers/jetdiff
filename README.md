@@ -49,7 +49,7 @@ For Local changes, the commit list sits under the tree: the branch's commits aga
 
 Local changes are reloaded when files change on disk. The selected file is kept, and the diff starts at the top if the content has changed.
 
-Unchanged lines are folded, with 4 lines of context. Click a fold to show more. Unified has no folding.
+Unchanged lines are folded, with 4 lines of context. Click a fold to open it. Unified has no folding.
 
 Syntax colors for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML and Markdown. The language is picked from the file extension.
 
@@ -88,7 +88,7 @@ A small, vim-inspired keymap for reading. The cursor is a whole line, with no co
 | `d` `u`, Ctrl+d Ctrl+u              | Half a page down and up                                                                              |
 | `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Next and previous hunk                                                                               |
 | `H` `L`                             | To Left and Right. Split only                                                                        |
-| `o`                                 | Open the fold at the cursor one level. Split only                                                    |
+| `o`                                 | Open the fold at the cursor. Split only                                                              |
 | `f`                                 | Open all folds, or close all if none are closed. Split only                                          |
 | `v`                                 | Switch between Split and Unified for all files. The cursor stays where it is                         |
 | `y`                                 | Copy the cursor location (`file:line`). The line is in the newest version, also from Left            |

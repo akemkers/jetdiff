@@ -286,14 +286,14 @@ mod tests {
         assert_eq!(seps[0].path[0], PathSeg::Move(Point { x: -0.5, y: 10. }));
         assert_eq!(seps[1].path[0], PathSeg::Move(Point { x: -0.5, y: 210. }));
         // A partly visible fold is included, a fully hidden one is not
-        let groups = |y: f32| -> Vec<usize> {
+        let ids = |y: f32| -> Vec<usize> {
             let seps = divider_separators(&f, [y, y], VP, 24.);
-            seps.iter().map(|s| s.id.group).collect()
+            seps.iter().map(|s| s.id).collect()
         };
-        assert_eq!(groups(10.), [0, 1]);
-        assert_eq!(groups(20.), [1]);
-        assert_eq!(groups(210.), [1, 2]);
-        assert_eq!(groups(230.), [2]);
+        assert_eq!(ids(10.), [0, 1]);
+        assert_eq!(ids(20.), [1]);
+        assert_eq!(ids(210.), [1, 2]);
+        assert_eq!(ids(230.), [2]);
         assert!(divider_separators(&Folding::none(&d), [0., 0.], VP, 24.).is_empty());
     }
 

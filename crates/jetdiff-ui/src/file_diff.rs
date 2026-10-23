@@ -421,8 +421,8 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// A click gives focus and moves the cursor to the line. A click on a fold opens the next level on
-    /// both sides (`DiffLineSeparatorRenderer.doAction`).
+    /// A click gives focus and moves the cursor to the line. A click on a fold opens it on both sides
+    /// (`DiffLineSeparatorRenderer.doAction`).
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
         self.keys.reset();
@@ -436,11 +436,6 @@ impl FileDiffView {
                 state.click(side, line);
                 if state.folding.fold_at_line(side, line).is_some() {
                     self.execute(Command::FoldOpen, window, cx);
-                    // The mouse is still on the line, which may now be the next level
-                    let id = self.fold_at(ev.position);
-                    if let DiffMode::Split(state) = &mut self.mode {
-                        Rc::make_mut(&mut state.folding).set_hovered(id);
-                    }
                 }
             }
             (Hit::Unified(row), DiffMode::Unified(state)) => state.click(row),

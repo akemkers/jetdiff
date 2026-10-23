@@ -20,7 +20,7 @@ pub enum Command {
     PrevChange,
     /// Does nothing when only one side is shown, or the side is already active.
     FocusSide(Side),
-    /// One level, like `ExpandRegionAction`.
+    /// The fold at the cursor, like `ExpandRegionAction`.
     FoldOpen,
     /// Opens all if any are closed, otherwise closes all.
     ToggleFolds,

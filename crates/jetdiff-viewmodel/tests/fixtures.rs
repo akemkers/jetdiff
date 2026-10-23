@@ -226,44 +226,61 @@ fn stripe_per_side() {
 }
 
 #[test]
-fn folds_lie_in_the_gaps_on_all_levels() {
+fn one_fold_per_run_with_four_lines_of_context() {
+    const CONTEXT: usize = 4;
     for (name, d) in all() {
         let f = Folding::new(&d);
         for (i, side) in [L, R].into_iter().enumerate() {
             let count = d.line_count(side);
-            // The gaps per side: before the first hunk, between, and after the last
+            // The runs of unchanged lines per side: before the first hunk, between, and after the last
             let mut bounds = vec![0];
             for b in d.blocks() {
                 bounds.extend([b.lines[i].start, b.lines[i].end]);
             }
             bounds.push(count);
-            let gaps: Vec<(usize, usize)> = bounds.chunks(2).map(|c| (c[0], c[1])).collect();
-            for group in f.groups() {
-                let mut outer: Option<std::ops::Range<usize>> = None;
-                for (level, block) in group.iter().enumerate() {
-                    let Some(r) = block.lines(side) else { continue };
-                    assert!(r.len() >= 2 && r.end <= count, "{name} {r:?}");
-                    let shift = 4 << level;
-                    let g = gaps
-                        .iter()
-                        .position(|(s, e)| *s <= r.start && r.end <= *e)
-                        .unwrap_or_else(|| panic!("{name} {side:?} {r:?} outside gap"));
-                    let (gs, ge) = gaps[g];
-                    // The first and last gap go all the way out to the edge
-                    let start = if g == 0 { 0 } else { gs + shift };
-                    let end = if g == gaps.len() - 1 {
+            let runs: Vec<(usize, usize)> = bounds.chunks(2).map(|c| (c[0], c[1])).collect();
+            let last = runs.len() - 1;
+            // The first and last run fold all the way out to the edge
+            let expected: Vec<_> = runs
+                .iter()
+                .enumerate()
+                .map(|(run, &(start, end))| {
+                    let start = if run == 0 { 0 } else { start + CONTEXT };
+                    let end = if run == last {
                         count
                     } else {
-                        ge - shift
+                        end.saturating_sub(CONTEXT)
                     };
-                    assert_eq!(r, start..end, "{name} {side:?} level {level}");
-                    if let Some(o) = &outer {
-                        assert!(o.start <= r.start && r.end <= o.end, "{name}");
-                    }
-                    outer = Some(r);
-                }
-            }
+                    start..end
+                })
+                .filter(|lines| lines.end >= lines.start + 2)
+                .collect();
+            let folds: Vec<_> = f
+                .folds()
+                .iter()
+                .filter_map(|fold| fold.lines(side))
+                .collect();
+            assert_eq!(folds, expected, "{name} {side:?}");
         }
+    }
+}
+
+#[test]
+fn opening_a_fold_shows_the_whole_run() {
+    for (name, d) in all() {
+        let mut f = Folding::new(&d);
+        let folds = f.folds().to_vec();
+        for (id, fold) in folds.iter().enumerate() {
+            let side = if fold.lines(L).is_some() { L } else { R };
+            let lines = fold.lines(side).unwrap();
+            assert_eq!(f.fold_at_line(side, lines.start), Some(id), "{name}");
+            assert!(f.set_expanded(id, true), "{name}");
+            assert!(
+                lines.clone().all(|line| f.caret_after(side, line) == line),
+                "{name} {lines:?}: still folded"
+            );
+        }
+        assert_eq!(f.visible(L).count() + f.visible(R).count(), 0, "{name}");
     }
 }
 
