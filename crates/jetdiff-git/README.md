@@ -13,7 +13,7 @@ The crate also decides what is compared. Local changes are against HEAD. The com
 ```rust
 use jetdiff_git::Repo;
 
-let repo = Repo::work_tree(Path::new("."))?;   // or Repo::commit(dir, "HEAD~2")
+let repo = Repo::local_changes(Path::new("."))?;   // or Repo::commit(dir, "HEAD~2")
 let files = repo.changed_files()?;              // Vec<ChangedFile>
 let [left, right] = repo.read(&files[0])?;      // the content on each side
 let commits = repo.commits()?;                  // the branch's commits, at most 50

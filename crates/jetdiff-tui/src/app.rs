@@ -1,4 +1,4 @@
-//! The event loop: keys and mouse, the watcher and reload in the background.
+//! The event loop: keys and mouse, the watcher and reading the repo source in the background.
 
 use std::io;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
-    AppCommand, Changes, Commits, Files, Level, Loaded, Reloaded, Show, Shown, Watcher,
-    app_command, empty_diff,
+    AppCommand, Applied, Commits, Files, Level, ReadJob, RepoRead, RepoSource, Show, Shown,
+    Watcher, app_command, empty_diff,
 };
 use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
@@ -33,48 +33,41 @@ enum Focus {
     Panel(Section),
 }
 
-/// The answer from a reload in the background.
-struct Reload {
+/// The answer from a read in the background.
+struct ReadAnswer {
     generation: u64,
-    loaded: Result<Loaded, String>,
-    /// The files the watcher saw change, empty when the reload came from something else.
-    paths: Vec<String>,
+    read: Result<RepoRead, String>,
 }
 
 struct Repository {
-    changes: Changes,
+    repo_source: RepoSource,
     panel: Panel,
     selected: Option<usize>,
     panel_open: bool,
     watcher: Option<Watcher>,
-    reload_sender: Sender<Reload>,
-    reload_receiver: Receiver<Reload>,
-    /// Only the answer to the last reload is used.
+    read_sender: Sender<ReadAnswer>,
+    read_receiver: Receiver<ReadAnswer>,
+    /// Only the answer to the last read is used.
     generation: u64,
 }
 
 impl Repository {
-    fn reload(&mut self, paths: Vec<String>) {
+    fn read(&mut self, job: ReadJob) {
         self.generation += 1;
         let generation = self.generation;
-        let job = self.changes.reload();
-        let sender = self.reload_sender.clone();
+        let sender = self.read_sender.clone();
         thread::spawn(move || {
-            let loaded = job.run();
-            let _ = sender.send(Reload {
-                generation,
-                loaded,
-                paths,
-            });
+            let read = job.run();
+            let _ = sender.send(ReadAnswer { generation, read });
         });
     }
 
-    /// The answer to the last reload, if it has arrived. Answers to older reloads are dropped.
-    fn latest_reload(&mut self) -> Option<Reload> {
+    /// The answer to the last read, if it has arrived. Answers to older reads are dropped.
+    fn latest_read(&mut self) -> Option<ReadAnswer> {
         let mut latest = None;
-        while let Ok(reload) = self.reload_receiver.try_recv() {
-            if reload.generation == self.generation {
-                latest = Some(reload);
+        while let Ok(answer) = self.read_receiver.try_recv() {
+            if answer.generation == self.generation {
+                latest = Some(answer);
             }
         }
         latest
@@ -104,13 +97,13 @@ impl App {
         }
     }
 
-    pub fn changes(repo: Repo, changed_files: Vec<ChangedFile>, settings: &Settings) -> Self {
+    pub fn repo_source(repo: Repo, changed_files: Vec<ChangedFile>, settings: &Settings) -> Self {
         let mut message = Message::default();
-        let changes = Changes::new(repo, changed_files);
+        let repo_source = RepoSource::new(repo, changed_files);
         let mut commits = None;
         let mut watcher = None;
-        let repo = changes.repo();
-        if repo.is_work_tree() {
+        let repo = repo_source.repo();
+        if repo.is_local_changes() {
             commits = Some(Commits::new(repo.commits().unwrap_or_else(|e| {
                 message.show(e, Level::Warning);
                 Vec::new()
@@ -120,20 +113,20 @@ impl App {
                 Err(e) => message.show(format!("Can't watch for changes: {e}"), Level::Warning),
             }
         }
-        let files = Files::new(changes.changed_files().clone());
+        let files = Files::new(repo_source.changed_files().clone());
         let panel = Panel::new(files, commits, settings.icons);
-        let selected = changes.first();
-        let (reload_sender, reload_receiver) = channel();
+        let selected = repo_source.first();
+        let (read_sender, read_receiver) = channel();
         let mut app = Self {
             message,
             repository: Some(Repository {
-                changes,
+                repo_source,
                 panel,
                 selected,
                 panel_open: settings.side_panel_open,
                 watcher,
-                reload_sender,
-                reload_receiver,
+                read_sender,
+                read_receiver,
                 generation: 0,
             }),
             ..Self::file(empty_diff(), Default::default(), settings)
@@ -162,26 +155,30 @@ impl App {
             return;
         };
         if let Some(paths) = repo.watcher.as_ref().and_then(|watcher| watcher.take()) {
-            repo.reload(paths);
+            let job = repo.repo_source.files_changed(paths);
+            repo.read(job);
         }
-        if let Some(reload) = repo.latest_reload() {
-            let reloaded = repo.changes.reloaded(reload.loaded, &reload.paths);
-            self.reloaded(reloaded);
+        if let Some(answer) = repo.latest_read() {
+            let applied = repo.repo_source.apply(answer.read);
+            self.show_applied(applied);
         }
     }
 
-    fn reloaded(&mut self, reloaded: Reloaded) {
+    fn show_applied(&mut self, applied: Applied) {
         let Some(repo) = &mut self.repository else {
             return;
         };
-        match reloaded {
-            Reloaded::Failed { shown, error } => {
+        match applied {
+            Applied::Failed {
+                selected_commit,
+                error,
+            } => {
                 if let Some(commits) = &mut repo.panel.commits {
-                    commits.set_selected(shown);
+                    commits.set_selected(selected_commit);
                 }
                 self.message.show(error, Level::Warning);
             }
-            Reloaded::Done {
+            Applied::Done {
                 commits,
                 changed_files,
                 file,
@@ -209,7 +206,7 @@ impl App {
         if let Some(file) = file {
             repo.panel.reveal_file(file);
         }
-        let show = repo.changes.load(file);
+        let show = repo.repo_source.load(file);
         self.show(show);
     }
 
@@ -251,10 +248,11 @@ impl App {
                 let Some(repo) = &mut self.repository else {
                     return Ok(());
                 };
-                match repo.changes.rollback(&request) {
+                match repo.repo_source.rollback(&request) {
                     None => {}
                     Some(Ok(show)) => {
-                        repo.reload(Vec::new());
+                        let job = repo.repo_source.rolled_back();
+                        repo.read(job);
                         self.show(show);
                     }
                     Some(Err(text)) => self.message.show(text, Level::Warning),
@@ -384,8 +382,8 @@ impl App {
 
     fn select_commit(&mut self, hash: Option<Option<String>>) {
         if let (Some(hash), Some(repo)) = (hash, &mut self.repository) {
-            repo.changes.select_commit(hash);
-            repo.reload(Vec::new());
+            let job = repo.repo_source.select_commit(hash);
+            repo.read(job);
         }
     }
 
@@ -468,7 +466,11 @@ impl App {
             main.x += self.panel_area.width;
             main.width -= self.panel_area.width;
         }
-        if let Some(file) = self.repository.as_ref().and_then(|r| r.changes.shown()) {
+        if let Some(file) = self
+            .repository
+            .as_ref()
+            .and_then(|repository| repository.repo_source.shown())
+        {
             widgets::header(&file.path, Rect { height: 1, ..main }, &theme, buf);
             main.y += 1;
             main.height = main.height.saturating_sub(1);

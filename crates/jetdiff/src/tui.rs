@@ -13,9 +13,9 @@ pub fn run(content: Content, title: &str, config: Config) -> Result<(), String> 
         icons: config.terminal.icons,
     };
     match content {
-        Content::File(diff, paths) => jetdiff_tui::run_file(*diff, paths, title, settings),
-        Content::Changes(repo, changed_files) => {
-            jetdiff_tui::run_changes(repo, changed_files, title, settings)
+        Content::FilePair(diff, paths) => jetdiff_tui::run_file_pair(*diff, paths, title, settings),
+        Content::Repo(repo, changed_files) => {
+            jetdiff_tui::run_repo_source(repo, changed_files, title, settings)
         }
     }
     .map_err(|e| e.to_string())

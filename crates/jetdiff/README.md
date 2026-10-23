@@ -1,6 +1,6 @@
 # jetdiff
 
-The binary. Reads the arguments and the config file, loads the content and opens the window or the terminal view.
+The binary. Reads the arguments and the config file, reads the source and opens the window or the terminal view.
 
 ## Why
 
@@ -20,10 +20,10 @@ See the main [README](../../README.md) for the arguments, settings and keys.
 graph LR
     args[arguments] --> source{Source}
     source -- file pair --> fd[FileDiff] --> fdv[FileDiffView]
-    source -- folder --> wt[Repo::work_tree] --> cv[ChangesView]
-    source -- commit --> c[Repo::commit] --> cv
+    source -- folder --> local[Repo::local_changes] --> rv[RepoView]
+    source -- commit --> c[Repo::commit] --> rv
 ```
 
-The content is loaded before the window opens, so errors like an unknown commit are written to the terminal with exit code 1. Errors in the arguments or the config file give exit code 2.
+The source is read before the window opens, so errors like an unknown commit are written to the terminal with exit code 1. Errors in the arguments or the config file give exit code 2.
 
 The keys that don't go through the vim parser in `jetdiff-viewmodel` are in `jetdiff_app::keys`. `bind_keys` in `gui.rs` turns them into GPUI bindings.

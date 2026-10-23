@@ -22,7 +22,7 @@ use crate::theme::UiTheme;
 const INDENT: f32 = 16.;
 const ICON_SIZE: f32 = 16.;
 
-/// The selected file, an index in the changed files. `None` when the list is empty. The tree and ChangesView
+/// The selected file, an index in the changed files. `None` when the list is empty. The tree and RepoView
 /// observe it.
 pub struct Selection(pub Option<usize>);
 

@@ -26,10 +26,10 @@ use jetdiff_git::{PullRequest, Repo};
 use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
 
 enum Source {
-    WorkTree(PathBuf),
+    LocalChanges(PathBuf),
     Commit(String),
     PullRequest(PullRequest),
-    Files(String, String),
+    FilePair(String, String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,13 +69,13 @@ fn frontend(tui: bool) -> Result<Frontend, String> {
 
 fn parse_source(paths: &[String]) -> Result<Source, String> {
     match paths {
-        [] => Ok(Source::WorkTree(".".into())),
+        [] => Ok(Source::LocalChanges(".".into())),
         [url] if url.starts_with("https://") => PullRequest::parse(url)
             .map(Source::PullRequest)
             .ok_or_else(|| format!("not a PR link: {url}")),
-        [dir] if Path::new(dir).is_dir() => Ok(Source::WorkTree(dir.into())),
+        [dir] if Path::new(dir).is_dir() => Ok(Source::LocalChanges(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
-        [left, right] => Ok(Source::Files(left.clone(), right.clone())),
+        [left, right] => Ok(Source::FilePair(left.clone(), right.clone())),
         _ => {
             Err("usage: jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left> <right>]".into())
         }
@@ -90,17 +90,17 @@ fn read(path: &str) -> Result<String, String> {
 
 /// What the window should show, ready before the app starts so errors can be written to the terminal.
 pub enum Content {
-    File(Box<FileDiff>, [String; 2]),
-    Changes(Repo, Vec<jetdiff_files::ChangedFile>),
+    FilePair(Box<FileDiff>, [String; 2]),
+    Repo(Repo, Vec<jetdiff_files::ChangedFile>),
 }
 
-fn load(source: &Source) -> Result<(Content, String), String> {
+fn read_source(source: &Source) -> Result<(Content, String), String> {
     let (repo, title) = match source {
-        Source::Files(left, right) => {
+        Source::FilePair(left, right) => {
             let diff = file_diff(left, right)?;
             let title = format!("{left} ↔ {right}");
             let paths = [left.clone(), right.clone()];
-            return Ok((Content::File(Box::new(diff), paths), title));
+            return Ok((Content::FilePair(Box::new(diff), paths), title));
         }
         Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
         Source::PullRequest(pr) => {
@@ -108,12 +108,12 @@ fn load(source: &Source) -> Result<(Content, String), String> {
             let repo = with_progress(&text, || Repo::pull_request(Path::new("."), pr))?;
             (repo, format!("PR #{}", pr.number))
         }
-        Source::WorkTree(dir) => (Repo::work_tree(dir)?, LOCAL_CHANGES.to_owned()),
+        Source::LocalChanges(dir) => (Repo::local_changes(dir)?, LOCAL_CHANGES.to_owned()),
     };
     // Several windows open at the same time must be told apart in the title
     let title = format!("{}: {title}", repo.name());
     let changed_files = repo.changed_files()?;
-    Ok((Content::Changes(repo, changed_files), title))
+    Ok((Content::Repo(repo, changed_files), title))
 }
 
 /// Shows that `work` is working, with a spinner and time in a terminal.
@@ -173,7 +173,7 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let (content, title) = match load(&source) {
+    let (content, title) = match read_source(&source) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{e}");

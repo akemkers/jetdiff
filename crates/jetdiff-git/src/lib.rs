@@ -129,7 +129,7 @@ impl Repo {
 
     /// Local changes, with files git doesn't track yet, against HEAD. The commit list has the commits on
     /// the branch, or the latest ones when the branch has none of its own.
-    pub fn work_tree(dir: &Path) -> Result<Self, String> {
+    pub fn local_changes(dir: &Path) -> Result<Self, String> {
         // Each git call costs a process, so the independent ones run at the same time
         let (root, head, branch) = thread::scope(|s| {
             let head = s.spawn(|| verify(dir, "HEAD"));
@@ -167,7 +167,7 @@ impl Repo {
     }
 
     /// Local changes can change while they are shown; a commit can't.
-    pub fn is_work_tree(&self) -> bool {
+    pub fn is_local_changes(&self) -> bool {
         self.right.is_none()
     }
 
@@ -239,7 +239,7 @@ impl Repo {
         before: &str,
     ) -> Result<String, String> {
         let path = &file.path;
-        if !self.is_work_tree() {
+        if !self.is_local_changes() {
             return Err("a commit can't be changed".into());
         }
         let full = self.root.join(path);
@@ -547,12 +547,12 @@ mod tests {
 
     #[test]
     fn local_changes_with_new_files() {
-        let r = TempRepo::new("worktree");
+        let r = TempRepo::new("local-changes");
         r.write("a.rs", "old\n");
         r.commit();
         r.write("a.rs", "new\n");
         r.write("new/b.rs", "b\n");
-        let repo = Repo::work_tree(&r.0).unwrap();
+        let repo = Repo::local_changes(&r.0).unwrap();
         let files = repo.changed_files().unwrap();
         assert_eq!(
             summary(&files),
@@ -594,7 +594,7 @@ mod tests {
         r.write("a.rs", "a\nb\n");
         r.commit();
         r.write("a.rs", "a\nx\n");
-        let repo = Repo::work_tree(&r.0).unwrap();
+        let repo = Repo::local_changes(&r.0).unwrap();
         let file = repo.changed_files().unwrap().remove(0);
         assert_eq!(
             repo.rollback(&file, [1..2, 1..2], "other\n"),
@@ -616,7 +616,7 @@ mod tests {
         std::fs::write(r.0.join("a.txt"), b"bl\xe5b\xe6r\nr\xf8d\n").unwrap();
         r.commit();
         std::fs::write(r.0.join("a.txt"), b"bl\xe5b\xe6r\nr\xf8dgr\xf8t\n").unwrap();
-        let repo = Repo::work_tree(&r.0).unwrap();
+        let repo = Repo::local_changes(&r.0).unwrap();
         let file = repo.changed_files().unwrap().remove(0);
         let [_, before] = repo.read(&file).unwrap();
         repo.rollback(&file, [1..2, 1..2], &before).unwrap();
@@ -633,7 +633,7 @@ mod tests {
         r.write("a.txt", "a\nb\n");
         r.commit();
         r.write("a.txt", "a\r\nx\r\n");
-        let repo = Repo::work_tree(&r.0).unwrap();
+        let repo = Repo::local_changes(&r.0).unwrap();
         let file = repo.changed_files().unwrap().remove(0);
         assert_eq!(repo.read(&file).unwrap()[0], "a\r\nb\r\n");
         repo.rollback(&file, [1..2, 1..2], "a\r\nx\r\n").unwrap();
@@ -649,7 +649,7 @@ mod tests {
         r.write("b.rs", "b\n");
         r.commit();
         r.write("a.rs", "changed\n");
-        let repo = Repo::work_tree(&r.0).unwrap();
+        let repo = Repo::local_changes(&r.0).unwrap();
         assert_eq!(
             summary(&repo.changed_files().unwrap()),
             [(FileStatus::Modified, "a.rs", None)]
@@ -671,7 +671,7 @@ mod tests {
         r.write("b.rs", "b\n");
         r.git(&["add", "-A"]);
         r.git(&["commit", "-q", "-m", "mine"]);
-        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["mine"]);
+        assert_eq!(subjects(&Repo::local_changes(&r.0).unwrap()), ["mine"]);
     }
 
     #[test]
@@ -684,26 +684,35 @@ mod tests {
         r.write("b.rs", "b\n");
         r.git(&["add", "-A"]);
         r.git(&["commit", "-q", "-m", "unpushed"]);
-        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["unpushed"]);
+        assert_eq!(subjects(&Repo::local_changes(&r.0).unwrap()), ["unpushed"]);
     }
 
     #[test]
     fn commits_on_the_branch_otherwise_the_latest() {
         let r = TempRepo::new("commits");
-        assert!(Repo::work_tree(&r.0).unwrap().commits().unwrap().is_empty());
+        assert!(
+            Repo::local_changes(&r.0)
+                .unwrap()
+                .commits()
+                .unwrap()
+                .is_empty()
+        );
         r.write("a.rs", "a\n");
         r.git(&["add", "-A"]);
         r.git(&["commit", "-q", "-m", "first"]);
         r.write("a.rs", "b\n");
         r.git(&["commit", "-q", "-am", "second\n\nmore text"]);
         assert_eq!(
-            subjects(&Repo::work_tree(&r.0).unwrap()),
+            subjects(&Repo::local_changes(&r.0).unwrap()),
             ["second", "first"]
         );
         r.git(&["checkout", "-q", "-b", "feature"]);
         r.write("a.rs", "c\n");
         r.git(&["commit", "-q", "-am", "on the branch"]);
-        assert_eq!(subjects(&Repo::work_tree(&r.0).unwrap()), ["on the branch"]);
+        assert_eq!(
+            subjects(&Repo::local_changes(&r.0).unwrap()),
+            ["on the branch"]
+        );
     }
 
     #[test]

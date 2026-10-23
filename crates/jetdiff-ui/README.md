@@ -4,7 +4,7 @@ The GPUI view: the diff, the file tree and the commit list.
 
 ## Why
 
-This is the layer that draws. The logic for the diff is in `jetdiff-viewmodel`, and the state around it (changes, reload, tree, commits, watcher) is in `jetdiff-app`. What's here is only what needs GPUI: text and shapes, mouse and keys, animation, zoom, focus, and running the jobs from `jetdiff-app` in the background.
+This is the layer that draws. The logic for the diff is in `jetdiff-viewmodel`, and the state around it (repo source, tree, commits, watcher) is in `jetdiff-app`. What's here is only what needs GPUI: text and shapes, mouse and keys, animation, zoom, focus, and running the jobs from `jetdiff-app` in the background.
 
 The modules don't know each other. Shared state, like the selected file, lives in small GPUI entities that everyone observes. The tree writes to `Selection` on click, and the diff follows it. `J` and `K` in the diff send an event that the tree moves the selection for.
 
@@ -13,7 +13,7 @@ The modules don't know each other. Shared state, like the selected file, lives i
 Two views are public:
 
 ```rust
-use jetdiff_ui::{Assets, ChangesView, FileDiffView, Settings, UiTheme, load_font};
+use jetdiff_ui::{Assets, FileDiffView, RepoView, Settings, UiTheme, load_font};
 
 Application::new().with_assets(Assets).run(|cx| {
     load_font(cx);
@@ -26,8 +26,8 @@ Application::new().with_assets(Assets).run(|cx| {
     });
     // One file:
     cx.new(|cx| FileDiffView::standalone(diff, paths, cx));
-    // A repo or a commit, with the tree and commits:
-    cx.new(|cx| ChangesView::new(repo, changed_files, cx));
+    // A repo source, with the tree and commits:
+    cx.new(|cx| RepoView::new(repo, changed_files, cx));
 });
 ```
 
@@ -37,14 +37,14 @@ The keys go through `KeyParser` in `jetdiff-viewmodel`. Actions like zoom and sw
 
 ```mermaid
 graph TD
-    cv[ChangesView] --> tree[FileTree]
-    cv --> commits[CommitList]
-    cv --> fdv[FileDiffView]
-    cv --> watcher[Watcher]
+    rv[RepoView] --> tree[FileTree]
+    rv --> commits[CommitList]
+    rv --> fdv[FileDiffView]
+    rv --> watcher[Watcher]
     tree -- writes --> sel[(Selection)]
-    sel -- observed --> cv
-    commits -- SelectCommit --> cv
-    watcher -- files changed --> cv
+    sel -- observed --> rv
+    commits -- SelectCommit --> rv
+    watcher -- files changed --> rv
     fdv --> viewer[code_viewer]
     viewer --> split[split]
     viewer --> unified[unified]
@@ -54,7 +54,7 @@ graph TD
     fdv --> msg[(Message)]
 ```
 
-- `changes_view`: the tree and the commit list on the left, the diff on the right. Runs reload from `jetdiff_app::Changes` in the background and shows the result
+- `repo_view`: the tree and the commit list on the left, the diff on the right. Runs the read jobs from `jetdiff_app::RepoSource` in the background and applies the result
 - `file_diff`: the diff of one file, Split or Unified. Keys, mouse, zoom and scroll animation
 - `code_viewer`: picks Split or Unified for drawing and mouse. Below it are:
   - `split`: two `SplitSide` with the divider between them

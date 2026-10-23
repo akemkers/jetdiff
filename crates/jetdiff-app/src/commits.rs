@@ -1,4 +1,4 @@
-//! The commit list. Row 0 and `None` are Local changes. A hash instead of a row, so the selection survives a reload.
+//! The commit list. Row 0 and `None` are Local changes. A hash instead of a row, so the selection survives a read.
 
 use std::rc::Rc;
 

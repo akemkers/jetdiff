@@ -42,7 +42,7 @@ jetdiff-files    ChangedFile { path, renamed_from, status } and the tree model: 
 jetdiff-git      git CLI: changes for a commit or Local changes, and file content
 
 jetdiff-app      the state around the diff, still without a GUI. Shared by all UIs
-  changes        repo, commit and the file being shown. Reload and the selected file afterwards
+  repo_source    the repo source and the file being shown. Reading it again per trigger, and the selected file
   content        from git content to FileDiff, with a message when it can't be shown
   files          the file tree's rows and cursor
   commits        the commit list's rows, cursor and selection
@@ -60,14 +60,14 @@ jetdiff-ui       GPUI
     code_paint   what both draw the same: text, inline highlights, hunk minimap
   file_diff      keys, mouse, zoom and scroll animation for the diff
   file_tree      the file tree with icons and file status colors
-  changes_view   the tree + one file, like the commit dialog in IntelliJ
+  repo_view      the tree + one file, like the commit dialog in IntelliJ
   theme          color table from JetBrains (light and dark)
 
 jetdiff-tui      the terminal, ratatui
   diff_view      keys, mouse and overlay for the diff
   code_viewer    Split and Unified as rows of cells, without folding
   panel          the file tree and the commit list
-  app            the event loop, watcher and reload in a thread
+  app            the event loop, watcher and reading the repo source in a thread
 
 jetdiff          binary: CLI, the gui and tui features
 ```

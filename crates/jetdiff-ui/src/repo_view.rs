@@ -1,11 +1,11 @@
-//! File tree and diff side by side, with the commit list under the tree. Fetches the content from git when a
-//! file or commit is selected, and again when Local changes change on disk.
+//! File tree and diff side by side, with the commit list under the tree. Loads the selected file, and reads
+//! the repo source again when a commit is selected, a hunk is rolled back or files change on disk.
 
 use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
     Window, actions, div, prelude::*, px,
 };
-use jetdiff_app::{Changes, Reloaded, Show, Shown, empty_diff};
+use jetdiff_app::{Applied, ReadJob, RepoSource, Show, Shown, empty_diff};
 use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::metrics::FONT_SIZE;
@@ -36,8 +36,8 @@ actions!(
     ]
 );
 
-pub struct ChangesView {
-    changes: Changes,
+pub struct RepoView {
+    repo_source: RepoSource,
     selection: Entity<Selection>,
     files: Entity<FileTree>,
     diff: Entity<FileDiffView>,
@@ -52,17 +52,17 @@ pub struct ChangesView {
     width: PanelWidth,
     commits_height: PanelHeight,
     _watcher: Option<Watcher>,
-    _reload: Option<Task<()>>,
+    _read: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
-impl ChangesView {
+impl RepoView {
     pub fn new(repo: Repo, changed_files: Vec<ChangedFile>, cx: &mut Context<Self>) -> Self {
-        let changes = Changes::new(repo, changed_files);
-        let first = changes.first();
+        let repo_source = RepoSource::new(repo, changed_files);
+        let first = repo_source.first();
         let selection = cx.new(|_| Selection(first));
         let files =
-            cx.new(|cx| FileTree::new(changes.changed_files().clone(), selection.clone(), cx));
+            cx.new(|cx| FileTree::new(repo_source.changed_files().clone(), selection.clone(), cx));
         let message = cx.new(|_| Message::default());
         let diff =
             cx.new(|cx| FileDiffView::new(empty_diff(), Default::default(), message.clone(), cx));
@@ -75,19 +75,19 @@ impl ChangesView {
         ];
 
         let (mut commits, mut watcher) = (None, None);
-        let repo = changes.repo();
-        if repo.is_work_tree() {
+        let repo = repo_source.repo();
+        if repo.is_local_changes() {
             let list = repo.commits().unwrap_or_else(|e| {
                 message.update(cx, |m, cx| m.show(e, Level::Warning, cx));
                 Vec::new()
             });
             let list = cx.new(|cx| CommitList::new(list, cx));
             subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectCommit, cx| {
-                this.changes.select_commit(e.0.clone());
-                this.changed(Vec::new(), cx);
+                let job = this.repo_source.select_commit(e.0.clone());
+                this.read(job, cx);
             }));
             commits = Some(list);
-            match Watcher::new(repo.root(), cx, Self::changed) {
+            match Watcher::new(repo.root(), cx, Self::files_changed) {
                 Ok(w) => watcher = Some(w),
                 Err(e) => {
                     let text = format!("Can't watch for changes: {e}");
@@ -97,7 +97,7 @@ impl ChangesView {
         }
 
         let mut view = Self {
-            changes,
+            repo_source,
             selection,
             files,
             diff,
@@ -110,7 +110,7 @@ impl ChangesView {
             width: PanelWidth::default(),
             commits_height: PanelHeight::default(),
             _watcher: watcher,
-            _reload: None,
+            _read: None,
             _subscriptions: subscriptions,
         };
         view.zoomed(cx.global::<Settings>().font_size, cx);
@@ -129,11 +129,12 @@ impl ChangesView {
 
     /// Updates the diff and the list at once, without waiting for the watcher.
     fn rollback(&mut self, e: &Rollback, cx: &mut Context<Self>) {
-        match self.changes.rollback(&e.0) {
+        match self.repo_source.rollback(&e.0) {
             None => {}
             Some(Ok(show)) => {
                 self.show(show, cx);
-                self.changed(Vec::new(), cx);
+                let job = self.repo_source.rolled_back();
+                self.read(job, cx);
             }
             Some(Err(text)) => self
                 .message
@@ -141,46 +142,57 @@ impl ChangesView {
         }
     }
 
-    /// Git is read in the background. A new change on the way cancels the previous one.
-    fn changed(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
-        let job = self.changes.reload();
-        self._reload = Some(cx.spawn(async move |this, cx| {
-            let loaded = cx
+    fn files_changed(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
+        let job = self.repo_source.files_changed(paths);
+        self.read(job, cx);
+    }
+
+    /// Git is read in the background. A new read cancels the one on the way.
+    fn read(&mut self, job: ReadJob, cx: &mut Context<Self>) {
+        self._read = Some(cx.spawn(async move |this, cx| {
+            let read = cx
                 .background_executor()
                 .spawn(async move { job.run() })
                 .await;
-            this.update(cx, |v, cx| {
-                let reloaded = v.changes.reloaded(loaded, &paths);
-                v.reloaded(reloaded, cx)
+            this.update(cx, |view, cx| {
+                let applied = view.repo_source.apply(read);
+                view.show_applied(applied, cx)
             })
             .ok();
         }));
     }
 
-    fn reloaded(&mut self, reloaded: Reloaded, cx: &mut Context<Self>) {
-        match reloaded {
-            Reloaded::Failed { shown, error } => {
-                // The list should show what is actually shown
+    fn show_applied(&mut self, applied: Applied, cx: &mut Context<Self>) {
+        match applied {
+            Applied::Failed {
+                selected_commit,
+                error,
+            } => {
+                // The list goes back to the commit that is still selected
                 if let Some(list) = &self.commits {
-                    list.update(cx, |l, cx| l.set_selected(shown, cx));
+                    list.update(cx, |commit_list, cx| {
+                        commit_list.set_selected(selected_commit, cx)
+                    });
                 }
                 self.message
                     .update(cx, |m, cx| m.show(error, Level::Warning, cx));
             }
-            Reloaded::Done {
+            Applied::Done {
                 commits,
                 changed_files,
                 file,
                 notice,
             } => {
                 if let Some(list) = &self.commits {
-                    list.update(cx, |l, cx| l.set_commits(commits, cx));
+                    list.update(cx, |commit_list, cx| commit_list.set_commits(commits, cx));
                 }
                 if let Some(changed_files) = changed_files {
-                    self.files
-                        .update(cx, |t, cx| t.set_changed_files(changed_files, cx));
+                    self.files.update(cx, |file_tree, cx| {
+                        file_tree.set_changed_files(changed_files, cx)
+                    });
                 }
-                self.selection.update(cx, |s, cx| s.set(file, cx));
+                self.selection
+                    .update(cx, |selection, cx| selection.set(file, cx));
                 if let Some(n) = notice {
                     self.message.update(cx, |m, cx| m.show(n.text, n.level, cx));
                 }
@@ -189,7 +201,7 @@ impl ChangesView {
     }
 
     fn load(&mut self, cx: &mut Context<Self>) {
-        let show = self.changes.load(self.selection.read(cx).0);
+        let show = self.repo_source.load(self.selection.read(cx).0);
         self.show(show, cx);
     }
 
@@ -364,13 +376,13 @@ impl ChangesView {
     }
 }
 
-impl Focusable for ChangesView {
+impl Focusable for RepoView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.diff.focus_handle(cx)
     }
 }
 
-impl Render for ChangesView {
+impl Render for RepoView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
@@ -413,7 +425,7 @@ impl Render for ChangesView {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .children(self.changes.shown().map(|file| {
+                    .children(self.repo_source.shown().map(|file| {
                         file_header(&file.path, self.scale, &cx.global::<Settings>().theme)
                     }))
                     .child(div().flex_1().min_h_0().child(self.diff.clone())),

@@ -4,13 +4,13 @@ The state around the diff: the changed files in the repo, the file being shown, 
 
 ## Why
 
-`jetdiff-viewmodel` knows everything about the diff of one file, but nothing about where the file comes from. What happens around it, like the selected file being kept after a reload, or a commit that doesn't exist giving a warning and Local changes again, used to live in `jetdiff-ui` together with GPUI. A new UI would then have had to write it again and keep it the same by hand. Here it lives once, with tests.
+`jetdiff-viewmodel` knows everything about the diff of one file, but nothing about where the file comes from. What happens around it, like the selected file being kept after an autoreload, or a commit that doesn't exist giving a warning and Local changes again, used to live in `jetdiff-ui` together with GPUI. A new UI would then have had to write it again and keep it the same by hand. Here it lives once, with tests.
 
 ## What the crate owns
 
 | Owns                                                                                                    | Module    |
 | ------------------------------------------------------------------------------------------------------- | --------- |
-| The repo, the commit being shown, the changed files and the file being shown. Reload, and which file is selected afterwards | `changes` |
+| The repo source: the commit being shown, the changed files and the file being shown. Reading it again on each trigger, and which file is selected afterwards | `repo_source` |
 | From the content git gives to `FileDiff`: binary file, too big, identical content and syntax          | `content` |
 | The file tree's rows and cursor, and folders being open or closed                                       | `files`   |
 | The commit list's rows, cursor and selection, and the age like "3 hours ago"                          | `commits` |
@@ -37,38 +37,39 @@ The crate starts no threads and has no timers. Work that takes time comes as a j
 ## Usage
 
 ```rust
-use jetdiff_app::{Changes, Reloaded, Show, Watcher};
+use jetdiff_app::{Applied, RepoSource, Show, Watcher};
 
-let mut changes = Changes::new(repo, changed_files);
-let mut selected = changes.first();
+let mut repo_source = RepoSource::new(repo, changed_files);
+let mut selected = repo_source.first();
 
 // The selected file
-match changes.load(selected) {
+match repo_source.load(selected) {
     Show::Diff(shown) => { /* show shown.diff, pin shown.notice */ }
     Show::Empty(notice) => { /* empty diff and the message */ }
     Show::Unchanged => {}
 }
 
 // The watcher is asked every `watcher::POLL`
-let watcher = Watcher::new(changes.repo().root())?;
+let watcher = Watcher::new(repo_source.repo().root())?;
 if let Some(paths) = watcher.take() {
-    let job = changes.reload();          // Send, can run on another thread
-    let loaded = job.run();
-    match changes.reloaded(loaded, &paths) {
-        Reloaded::Done { commits, changed_files, file, notice } => selected = file,
-        Reloaded::Failed { shown, error } => { /* the commit list shows `shown` */ }
+    // Also `select_commit` and `rolled_back`, each with its own trigger
+    let job = repo_source.files_changed(paths);   // Send, can run on another thread
+    let read = job.run();
+    match repo_source.apply(read) {
+        Applied::Done { commits, changed_files, file, notice } => selected = file,
+        Applied::Failed { shown, error } => { /* the commit list shows `shown` */ }
     }
 }
 ```
 
 ```mermaid
 graph TD
-    ui[The UI] -- load / reload / rollback --> changes[changes: Changes]
-    changes -- ReloadJob --> ui
-    changes -- Show --> ui
-    changes --> content[content: build_diff]
+    ui[The UI] -- load / trigger / rollback --> source[repo_source: RepoSource]
+    source -- ReadJob --> ui
+    source -- Show --> ui
+    source --> content[content: build_diff]
     content --> view[jetdiff-viewmodel: FileDiff]
-    changes --> git[jetdiff-git: Repo]
+    source --> git[jetdiff-git: Repo]
     ui --> files[files: Files]
     ui --> commits[commits: Commits]
     ui --> watcher[watcher: Watcher]
@@ -83,4 +84,4 @@ graph TD
 cargo test -p jetdiff-app
 ```
 
-The tests for `changes` create a temporary git repo and require `git` on the PATH.
+The tests for `repo_source` create a temporary git repo and require `git` on the PATH.

@@ -19,7 +19,7 @@ let next = tree.step(first.unwrap(), true);
 tree.toggle("src");                     // open or close the folder
 ```
 
-Files are referred to by index in the list of changed files. `touched` counts how many files changed between two lists, and is used for the message after a reload.
+Files are referred to by index in the list of changed files. `touched` counts how many files changed between two lists, and is used for the message after an autoreload.
 
 ```mermaid
 graph LR

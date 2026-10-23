@@ -47,7 +47,7 @@ On the left is a file tree of changed files. Added and deleted files are always 
 
 For Local changes, the commit list sits under the tree: the branch's commits against `origin/main`, or the latest ones when the branch has none of its own. At most 50. Click a commit to see it, and the top row to go back. Click «Files» or «Commits» to collapse the section.
 
-Local changes are reloaded when files change on disk. The selected file is kept, and the diff starts at the top if the content has changed.
+Local changes are read again automatically when files change on disk. The selected file is kept, and the diff starts at the top if the content has changed.
 
 Unchanged lines are folded, with 4 lines of context. Click a fold to open it. Unified has no folding.
 
@@ -115,7 +115,7 @@ GPUI is built with `runtime_shaders`, so the Metal shaders are compiled at start
 
 How the code is organized is in [CODING_STANDARDS.md](CODING_STANDARDS.md). The domain language is in [GLOSSARY.md](GLOSSARY.md).
 
-The code is split into crates with one responsibility each. Only `jetdiff-ui` and the binary know GPUI, and only `jetdiff-tui` knows the terminal. All the logic for scroll, folding and geometry is in `jetdiff-viewmodel`, and the state around the diff (changes, reload, tree and commits) is in `jetdiff-app`. Both are tested without a window.
+The code is split into crates with one responsibility each. Only `jetdiff-ui` and the binary know GPUI, and only `jetdiff-tui` knows the terminal. All the logic for scroll, folding and geometry is in `jetdiff-viewmodel`, and the state around the diff (the repo source, tree and commits) is in `jetdiff-app`. Both are tested without a window.
 
 ```mermaid
 graph TD
@@ -144,7 +144,7 @@ graph TD
 | [`jetdiff`](crates/jetdiff)                     | The binary: arguments, config and window                          |
 | [`jetdiff-ui`](crates/jetdiff-ui)               | The GPUI view                                                     |
 | [`jetdiff-tui`](crates/jetdiff-tui)             | The terminal view                                                 |
-| [`jetdiff-app`](crates/jetdiff-app)             | The state around the diff, without a GUI: changes, reload, tree, commits |
+| [`jetdiff-app`](crates/jetdiff-app)             | The state around the diff, without a GUI: repo source, tree, commits |
 | [`jetdiff-viewmodel`](crates/jetdiff-viewmodel) | View model without a GUI: scroll, folding, cursor, keys           |
 | [`jetdiff-core`](crates/jetdiff-core)           | The diff algorithm, ported from IntelliJ                          |
 | [`jetdiff-syntax`](crates/jetdiff-syntax)       | Syntax colors with tree-sitter                                    |

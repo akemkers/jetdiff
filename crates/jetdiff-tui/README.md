@@ -13,11 +13,11 @@ The rows are made by `UnifiedDiff::with_layout` with `RowLayout::Split`, so Spli
 ## Usage
 
 ```rust
-use jetdiff_tui::{Settings, run_changes, run_file};
+use jetdiff_tui::{Settings, run_file_pair, run_repo_source};
 
 let settings = Settings { theme, unified: false, side_panel_open: false, icons: true };
-run_file(diff, paths, &title, settings)?;          // a file pair
-run_changes(repo, changes, &title, settings)?;     // a repo or a commit
+run_file_pair(diff, paths, &title, settings)?;           // a file pair
+run_repo_source(repo, changed_files, &title, settings)?; // a repo source
 ```
 
 Differences from the GPUI view:
@@ -34,7 +34,7 @@ graph TD
     app[app: the loop] --> diff[diff_view: DiffView]
     app --> panel[panel: tree and commits]
     app --> widgets[widgets: path, keys, message, help]
-    app --> changes[jetdiff-app: Changes, Watcher]
+    app --> source[jetdiff-app: RepoSource, Watcher]
     app --> backend[backend: sends only the colors that change]
     diff --> viewer[code_viewer: Split and Unified]
     viewer --> text[text: one line]
