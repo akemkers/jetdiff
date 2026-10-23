@@ -82,7 +82,7 @@ impl DiffState {
         self.scroll.y = t.scroll_y;
         self.scroll.x = t.scroll_x;
         let side = self.cursor.side;
-        self.cursor = Cursor::new(side, self.clamp_line(side, t.caret_lines[idx(side)]));
+        self.cursor = Cursor::new(side, self.clamp_line(side, t.cursor_lines[idx(side)]));
     }
 
     fn layout(&self, side: Side, vp: Viewport) -> LineLayout<'_> {
@@ -96,7 +96,7 @@ impl DiffState {
     /// A valid line outside collapsed folds.
     fn clamp_line(&self, side: Side, line: usize) -> usize {
         let line = line.min(self.diff.line_count(side) - 1);
-        self.folding.caret_after(side, line)
+        self.folding.cursor_after(side, line)
     }
 
     fn cursor_visual(&self, vp: Viewport) -> usize {
@@ -243,7 +243,7 @@ impl DiffState {
             return Outcome::default();
         };
         let t = target_for_hunk(&self.diff, &self.folding, hunk, vp);
-        let line = self.clamp_line(side, t.caret_lines[idx(side)]);
+        let line = self.clamp_line(side, t.cursor_lines[idx(side)]);
         self.cursor = Cursor::new(side, line);
         self.master = side;
         self.scroll.y = t.scroll_y;
@@ -256,7 +256,7 @@ impl DiffState {
     }
 
     /// The line on the other side, via `BaseSyncScrollable.transfer`.
-    fn transferred_line(&self) -> usize {
+    fn mirrored_line(&self) -> usize {
         let c = self.cursor;
         let other = c.side.other();
         let line = self.diff.mapping().transfer(c.side, c.line);
@@ -264,8 +264,8 @@ impl DiffState {
     }
 
     /// `TwosideTextDiffViewer.transferPosition`, without a column.
-    pub fn transferred_cursor(&self) -> Cursor {
-        Cursor::new(self.cursor.side.other(), self.transferred_line())
+    pub fn mirrored_cursor(&self) -> Cursor {
+        Cursor::new(self.cursor.side.other(), self.mirrored_line())
     }
 
     /// The hunk the cursor is in. `None` on a collapsed fold.
@@ -308,7 +308,7 @@ impl DiffState {
         if self.cursor.side == Side::Right {
             self.cursor
         } else {
-            self.transferred_cursor()
+            self.mirrored_cursor()
         }
     }
 
@@ -318,27 +318,28 @@ impl DiffState {
         if self.cursor.side == side {
             return Outcome::default();
         }
-        self.cursor = self.transferred_cursor();
+        self.cursor = self.mirrored_cursor();
         self.follow(vp, false);
         Outcome::animated()
     }
 
-    /// `runBatchFoldingOperation` with `PositionKeeper`. The other side's caret is
-    /// the transferred position, since we only have one cursor.
+    /// `runBatchFoldingOperation` with `PositionKeeper`. The other side uses
+    /// the mirrored cursor, since we only have one cursor.
     fn change_folding(
         &mut self,
         vp: Viewport,
         op: impl FnOnce((Side, usize), &mut Folding) -> bool,
     ) -> Outcome {
         let side = self.cursor.side;
-        let mut carets = [0; 2];
-        carets[idx(side)] = self.cursor.line;
-        carets[idx(side.other())] = self.transferred_line();
-        let keeper = PositionKeeper::save(&self.scroll, &self.folding, carets, vp);
+        let mut cursor_lines = [0; 2];
+        cursor_lines[idx(side)] = self.cursor.line;
+        cursor_lines[idx(side.other())] = self.mirrored_line();
+        let keeper = PositionKeeper::save(&self.scroll, &self.folding, cursor_lines, vp);
         if !op((side, self.cursor.line), Rc::make_mut(&mut self.folding)) {
             return Outcome::default();
         }
-        let after = [Side::Left, Side::Right].map(|s| self.folding.caret_after(s, carets[idx(s)]));
+        let after = [Side::Left, Side::Right]
+            .map(|side| self.folding.cursor_after(side, cursor_lines[idx(side)]));
         self.set_line(after[idx(side)]);
         keeper.restore(&mut self.scroll, &self.diff, &self.folding, after, vp);
         Outcome {
@@ -580,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn switching_side_transfers_the_line() {
+    fn switching_side_moves_to_the_mirrored_cursor() {
         // Left has three more lines in the hunk
         let a = "x\nnew1\nnew2\nnew3\ncommon æøå\ny\n";
         let b = "x\ncommon æøå\ny\n";
@@ -629,7 +630,7 @@ mod tests {
         assert!(out.folding_changed);
         assert_eq!(s.cursor.line, 45);
         assert_eq!(top(&s), y);
-        assert!((45..86).all(|line| s.folding.caret_after(R, line) == line));
+        assert!((45..86).all(|line| s.folding.cursor_after(R, line) == line));
         run(&mut s, ToggleFolds);
         assert_eq!(s.folding.visible(R).count(), 0);
         times(&mut s, MoveDown, 20);

@@ -14,6 +14,9 @@ use jetdiff_viewmodel::{InlineHighlight, SideGeometry, StripeMarker, thumb_range
 use crate::text::TextStyle;
 use crate::theme::{UiDiffColors, UiTheme};
 
+/// The mirrored cursor, or the cursor when the diff doesn't have focus.
+const INACTIVE_CURSOR_ROW_OPACITY: f32 = 0.4;
+
 pub fn rect(x: Range<f32>, top: f32, bottom: f32) -> Bounds<Pixels> {
     Bounds::new(
         point(px(x.start), px(top)),
@@ -79,7 +82,7 @@ pub fn paint_hunk(
 
 /// The cursor's line, over the diff backgrounds so it doesn't disappear in hunks. With focus
 /// the number is also highlighted, which is easiest to find again after a jump.
-pub fn paint_caret_row(
+pub fn paint_cursor_row(
     geom: &SideGeometry,
     top: f32,
     bottom: f32,
@@ -88,14 +91,16 @@ pub fn paint_caret_row(
     window: &mut Window,
 ) {
     let color = if active {
-        theme.row_highlight
+        theme.cursor_row_background
     } else {
-        theme.row_highlight.opacity(0.4)
+        theme
+            .cursor_row_background
+            .opacity(INACTIVE_CURSOR_ROW_OPACITY)
     };
     window.paint_quad(fill(rect(geom.text.clone(), top, bottom), color));
     if active {
         let numbers = geom.gutter_x(0.0..geom.gutter_layout.separator);
-        window.paint_quad(fill(rect(numbers, top, bottom), theme.gutter_highlight));
+        window.paint_quad(fill(rect(numbers, top, bottom), theme.cursor_row_gutter));
     }
 }
 

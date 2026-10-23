@@ -29,7 +29,7 @@ pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
             }
         }
         if visible.marked {
-            painter.caret(columns, y);
+            painter.cursor_row(columns, y);
         }
     }
     cells.scrollbar

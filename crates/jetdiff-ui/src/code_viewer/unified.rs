@@ -9,10 +9,10 @@ use jetdiff_core::side::Side;
 use jetdiff_viewmodel::{InlineHighlight, UnifiedDiff, UnifiedGeometry};
 
 use super::code_paint::{
-    ShapedText, StripeRects, mask, paint_caret_row, paint_code_background, paint_hunk, rect,
+    ShapedText, StripeRects, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
     shape_number,
 };
-use super::split_side::CaretRow;
+use super::split_side::CursorRow;
 use crate::cache::LineCache;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
@@ -33,7 +33,7 @@ pub struct UnifiedPainter {
     pub scroll_y: f32,
     pub scroll_x: f32,
     /// `line` is the row.
-    pub caret: CaretRow,
+    pub cursor_row: CursorRow,
 }
 
 /// The geometry and the rows that are visible in this frame.
@@ -77,7 +77,7 @@ impl UnifiedPainter {
         let widest = window.with_content_mask(mask(frame.area(code.bounds())), |window| {
             paint_code_background(code, frame.top, frame.bottom, &self.theme, window);
             frame.paint_hunks(window);
-            frame.paint_caret_row(window);
+            frame.paint_cursor_row(window);
             let widest = frame.paint_text(cache, window, cx);
             frame.paint_line_numbers(cache, window, cx);
             stripe.paint(
@@ -105,7 +105,7 @@ impl UnifiedPainter {
         );
         // The default color disappears against the diff background
         let color = if row.hunk.is_some() {
-            self.theme.line_number_caret_row
+            self.theme.cursor_row_line_number
         } else {
             self.theme.line_number
         };
@@ -180,15 +180,22 @@ impl Frame<'_> {
         }
     }
 
-    fn paint_caret_row(&self, window: &mut Window) {
-        let caret = self.painter.caret;
-        if !self.visible.contains(&caret.line) {
+    fn paint_cursor_row(&self, window: &mut Window) {
+        let cursor_row = self.painter.cursor_row;
+        if !self.visible.contains(&cursor_row.line) {
             return;
         }
-        let top = self.row_top(caret.line);
+        let top = self.row_top(cursor_row.line);
         let bottom = top + self.painter.style.line_height();
         let theme = &self.painter.theme;
-        paint_caret_row(&self.geom.code, top, bottom, caret.active, theme, window);
+        paint_cursor_row(
+            &self.geom.code,
+            top,
+            bottom,
+            cursor_row.active,
+            theme,
+            window,
+        );
     }
 
     /// Inline highlights and text, clipped so the text doesn't flow into the gutter on sideways scroll.
@@ -241,11 +248,11 @@ impl Frame<'_> {
         window.with_content_mask(mask(self.area(self.geom.code.gutter.clone())), |window| {
             for row_index in self.visible.clone() {
                 let y = self.row_top(row_index) + painter.style.number_dy;
-                let caret_numbers;
-                let numbers = if row_index == painter.caret.line {
-                    let color = painter.theme.line_number_caret_row;
-                    caret_numbers = painter.shape_numbers(row_index, color, window);
-                    &caret_numbers
+                let cursor_numbers;
+                let numbers = if row_index == painter.cursor_row.line {
+                    let color = painter.theme.cursor_row_line_number;
+                    cursor_numbers = painter.shape_numbers(row_index, color, window);
+                    &cursor_numbers
                 } else {
                     &cache
                         .get_or_insert_with(row_index, || painter.shape(row_index, window))

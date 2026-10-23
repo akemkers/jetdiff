@@ -140,7 +140,7 @@ impl Folding {
         changed
     }
 
-    /// `ExpandRegionAction` at the caret: the closed fold that contains the line.
+    /// `ExpandRegionAction` at the cursor: the closed fold that contains the line.
     pub fn expand_at(&mut self, side: Side, line: usize) -> bool {
         let found = self.folds.iter().position(|fold| {
             !fold.expanded && fold.lines(side).is_some_and(|lines| lines.contains(&line))
@@ -148,9 +148,9 @@ impl Folding {
         found.is_some_and(|id| self.set_expanded(id, true))
     }
 
-    /// `FoldingModelImpl.onFoldProcessingEnd`: a caret inside a collapsed fold is moved to
+    /// `FoldingModelImpl.onFoldProcessingEnd`: a cursor inside a collapsed fold is moved to
     /// its start.
-    pub fn caret_after(&self, side: Side, line: usize) -> usize {
+    pub fn cursor_after(&self, side: Side, line: usize) -> usize {
         let folds = &self.visible[idx(side)];
         let k = folds.partition_point(|f| f.lines.start <= line);
         match k.checked_sub(1).map(|k| &folds[k]) {
@@ -366,13 +366,13 @@ mod tests {
     }
 
     #[test]
-    fn caret_in_collapsed_fold_moves_to_start() {
+    fn cursor_in_collapsed_fold_moves_to_start() {
         let d = three_hunks();
         let f = Folding::new(&d);
-        assert_eq!(f.caret_after(L, 50), 45);
-        assert_eq!(f.caret_after(L, 45), 45);
-        assert_eq!(f.caret_after(L, 40), 40);
-        assert_eq!(f.caret_after(L, 3), 0);
+        assert_eq!(f.cursor_after(L, 50), 45);
+        assert_eq!(f.cursor_after(L, 45), 45);
+        assert_eq!(f.cursor_after(L, 40), 40);
+        assert_eq!(f.cursor_after(L, 3), 0);
     }
 
     #[test]

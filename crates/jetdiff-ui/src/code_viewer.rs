@@ -16,7 +16,7 @@ use jetdiff_viewmodel::{DiffMode, ScrollState, StripeMarker, Viewport};
 
 use self::code_paint::StripeRects;
 use self::split::SplitPainter;
-use self::split_side::{CaretRow, SideCache};
+use self::split_side::{CursorRow, SideCache};
 use self::unified::{RowCache, UnifiedPainter};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
@@ -154,14 +154,18 @@ impl Painter {
         let scroll_x = snap(shown.x, scale);
         match mode {
             DiffMode::Split(state) => {
-                // The other side shows the transferred line more faintly, so you see where H and L land.
-                // IntelliJ has a caret row only on the active side.
+                // The other side shows the mirrored cursor more faintly, so you see where H and L land.
+                // IntelliJ paints the cursor row only on the active side.
                 let cursor = state.cursor;
-                let other = state.transferred_cursor();
-                let carets = SIDES.map(|side| {
-                    let caret = if side == cursor.side { cursor } else { other };
-                    CaretRow {
-                        line: caret.line,
+                let mirrored = state.mirrored_cursor();
+                let cursor_rows = SIDES.map(|side| {
+                    let side_cursor = if side == cursor.side {
+                        cursor
+                    } else {
+                        mirrored
+                    };
+                    CursorRow {
+                        line: side_cursor.line,
                         active: focused && side == cursor.side,
                     }
                 });
@@ -173,7 +177,7 @@ impl Painter {
                     markers: markers.clone(),
                     scroll_y: shown.y.map(|y| snap(y, scale)),
                     scroll_x,
-                    carets,
+                    cursor_rows,
                 })
             }
             DiffMode::Unified(state) => Self::Unified(UnifiedPainter {
@@ -182,7 +186,7 @@ impl Painter {
                 style,
                 scroll_y: snap(shown.y[0], scale),
                 scroll_x,
-                caret: CaretRow {
+                cursor_row: CursorRow {
                     line: state.row,
                     active: focused,
                 },

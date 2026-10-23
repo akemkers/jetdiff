@@ -13,7 +13,7 @@ use crate::geometry::{self, Columns};
 use crate::text::{LineText, fill, paint_line, tint};
 
 /// The cursor's row when the diff doesn't have focus, as in GPUI.
-const UNFOCUSED_CARET: f32 = 0.4;
+const UNFOCUSED_CURSOR_ROW_OPACITY: f32 = 0.4;
 
 pub(super) struct Painter<'a> {
     state: &'a UnifiedState,
@@ -124,7 +124,7 @@ impl<'a> Painter<'a> {
         marked: bool,
     ) {
         let number_color = if hunk_color.is_some() || marked {
-            self.theme.line_number_caret_row
+            self.theme.cursor_row_line_number
         } else {
             self.theme.line_number
         };
@@ -145,15 +145,18 @@ impl<'a> Painter<'a> {
     }
 
     /// The cursor's row. Fainter when the diff doesn't have focus.
-    pub(super) fn caret(&mut self, columns: &Columns, y: u16) {
-        let highlight = if self.focused {
-            self.theme.row_highlight
+    pub(super) fn cursor_row(&mut self, columns: &Columns, y: u16) {
+        let background = if self.focused {
+            self.theme.cursor_row_background
         } else {
-            faded(self.theme.row_highlight, UNFOCUSED_CARET)
+            faded(
+                self.theme.cursor_row_background,
+                UNFOCUSED_CURSOR_ROW_OPACITY,
+            )
         };
-        tint(columns.text(y), highlight, self.buf);
+        tint(columns.text(y), background, self.buf);
         if self.focused {
-            let style = Style::default().bg(color(self.theme.gutter_highlight));
+            let style = Style::default().bg(color(self.theme.cursor_row_gutter));
             self.buf.set_style(columns.gutter(y), style);
         }
     }

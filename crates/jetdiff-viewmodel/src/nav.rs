@@ -10,39 +10,39 @@ use crate::model::FileDiff;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NavTarget {
-    /// The caret is moved to the start of the hunk on both sides.
-    pub caret_lines: [usize; 2],
+    /// The cursor is moved to the start of the hunk on both sides.
+    pub cursor_lines: [usize; 2],
     pub scroll_y: [f32; 2],
     /// `doMakeVisible` scrolls the master to x = 0, and x is shared.
     pub scroll_x: f32,
 }
 
-/// `canGoNext` and `goNext`: the first hunk that starts below the caret.
-pub fn next_hunk(diff: &FileDiff, side: Side, caret_line: usize) -> Option<usize> {
+/// `canGoNext` and `goNext`: the first hunk that starts below the cursor.
+pub fn next_hunk(diff: &FileDiff, side: Side, cursor_line: usize) -> Option<usize> {
     let hunks = diff.hunks();
     let last = hunks.last()?;
-    if caret_line == diff.line_count(side) - 1 || last.lines(side).start <= caret_line {
+    if cursor_line == diff.line_count(side) - 1 || last.lines(side).start <= cursor_line {
         return None;
     }
     hunks
         .iter()
-        .position(|hunk| hunk.lines(side).start > caret_line)
+        .position(|hunk| hunk.lines(side).start > cursor_line)
 }
 
-/// `canGoPrev` and `goPrev`: the last hunk that lies entirely above the caret. If the caret is inside a
+/// `canGoPrev` and `goPrev`: the last hunk that lies entirely above the cursor. If the cursor is inside a
 /// hunk, it is the previous hunk, not the one you are in.
-pub fn previous_hunk(diff: &FileDiff, side: Side, caret_line: usize) -> Option<usize> {
+pub fn previous_hunk(diff: &FileDiff, side: Side, cursor_line: usize) -> Option<usize> {
     let hunks = diff.hunks();
     let first = hunks.first()?;
     let first = first.lines(side);
-    if caret_line == 0 || first.end > caret_line || first.start >= caret_line {
+    if cursor_line == 0 || first.end > cursor_line || first.start >= cursor_line {
         return None;
     }
     (0..hunks.len()).find(|&i| match hunks.get(i + 1) {
         None => true,
         Some(next) => {
             let next = next.lines(side);
-            next.end > caret_line || next.start >= caret_line
+            next.end > cursor_line || next.start >= cursor_line
         }
     })
 }
@@ -59,7 +59,7 @@ pub fn target_for_hunk(
     let starts = [lines[0].start, lines[1].start];
     let ends = [lines[0].end, lines[1].end];
     NavTarget {
-        caret_lines: starts,
+        cursor_lines: starts,
         scroll_y: target_offsets(&layouts, starts, ends, viewport.height),
         scroll_x: 0.,
     }
@@ -158,7 +158,7 @@ mod tests {
                     layout.line_top(start) < Folding::none(&d).layout(side, 20.).line_top(start)
                 );
             }
-            let Some(next) = next_hunk(&d, Side::Right, t.caret_lines[1]) else {
+            let Some(next) = next_hunk(&d, Side::Right, t.cursor_lines[1]) else {
                 break;
             };
             seen.push(next);
@@ -166,13 +166,13 @@ mod tests {
         }
         assert_eq!(seen, [0, 1, 2]);
         // Hunk 2 on line 90 is visual line 25 with three folds above
-        assert_eq!(t.caret_lines, [90, 90]);
+        assert_eq!(t.cursor_lines, [90, 90]);
         assert_eq!(t.scroll_y, [400., 400.]);
-        assert_eq!(previous_hunk(&d, Side::Right, t.caret_lines[1]), Some(1));
+        assert_eq!(previous_hunk(&d, Side::Right, t.cursor_lines[1]), Some(1));
     }
 
     #[test]
-    fn next_and_previous_from_caret() {
+    fn next_and_previous_from_cursor() {
         let d = three_hunks();
         let s = Side::Right;
         assert_eq!(next_hunk(&d, s, 0), Some(0));
@@ -184,15 +184,15 @@ mod tests {
         assert_eq!(previous_hunk(&d, s, 0), None);
         assert_eq!(previous_hunk(&d, s, 10), None);
         assert_eq!(previous_hunk(&d, s, 11), Some(0));
-        // Caret in hunk 1 gives hunk 0
+        // Cursor in hunk 1 gives hunk 0
         assert_eq!(previous_hunk(&d, s, 40), Some(0));
         assert_eq!(previous_hunk(&d, s, 41), Some(1));
         assert_eq!(previous_hunk(&d, s, 99), Some(2));
     }
 
     #[test]
-    fn caret_on_last_line_cannot_go_further() {
-        // A hunk on the last line with content, caret on the empty line after it
+    fn cursor_on_last_line_cannot_go_further() {
+        // A hunk on the last line with content, cursor on the empty line after it
         let d = FileDiff::new("a\nb\n", "a\nc\n", ComparisonPolicy::Default).unwrap();
         assert_eq!(next_hunk(&d, Side::Left, 0), Some(0));
         assert_eq!(next_hunk(&d, Side::Left, 2), None);
@@ -209,7 +209,7 @@ mod tests {
     fn small_hunk_lands_a_third_down() {
         let d = three_hunks();
         let t = target_for_hunk(&d, &Folding::none(&d), 1, VP);
-        assert_eq!(t.caret_lines, [40, 40]);
+        assert_eq!(t.cursor_lines, [40, 40]);
         // shift = min(300 - 40 - 40, 100) = 100
         assert_eq!(t.scroll_y, [700., 700.]);
     }

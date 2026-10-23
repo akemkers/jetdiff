@@ -237,43 +237,46 @@ impl ScrollState {
     }
 }
 
-/// `EditorScrollingPositionKeeper` per side: keeps the caret, or the top line if the caret is
+/// `EditorScrollingPositionKeeper` per side: keeps the cursor, or the top line if the cursor is
 /// outside, at the same place on screen through a fold change.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PositionKeeper {
     /// Logical line and distance from the top of the viewport.
     anchors: [(usize, f32); 2],
-    caret: [bool; 2],
+    keeps_cursor: [bool; 2],
 }
 
 impl PositionKeeper {
     pub fn save(
         state: &ScrollState,
         folding: &Folding,
-        carets: [usize; 2],
+        cursor_lines: [usize; 2],
         viewport: Viewport,
     ) -> Self {
         let mut anchors = [(0, 0.); 2];
-        let mut caret = [false; 2];
+        let mut keeps_cursor = [false; 2];
         for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
             let layout = folding.layout(side, viewport.line_height);
             let top = state.y[i];
-            let caret_y = layout.line_top(carets[i]);
+            let cursor_y = layout.line_top(cursor_lines[i]);
             let off_screen =
-                caret_y + layout.line_height() <= top || caret_y >= top + viewport.height;
+                cursor_y + layout.line_height() <= top || cursor_y >= top + viewport.height;
             anchors[i] = if off_screen {
                 // `xyToLogicalPosition`: the first line of the fold if the top is on one
                 let line = layout.y_to_logical_line(top).min(layout.line_count() - 1);
                 (line, layout.line_top(line) - top)
             } else {
-                (carets[i], caret_y - top)
+                (cursor_lines[i], cursor_y - top)
             };
-            caret[i] = !off_screen;
+            keeps_cursor[i] = !off_screen;
         }
-        Self { anchors, caret }
+        Self {
+            anchors,
+            keeps_cursor,
+        }
     }
 
-    /// `carets` are after the change, moved out of collapsed folds. Left is restored
+    /// `cursor_lines` are after the change, moved out of collapsed folds. Left is restored
     /// first without sync, since Right is still in the batch. If Right moves, it syncs
     /// Left as in `runBatchOperation`.
     pub fn restore(
@@ -281,14 +284,18 @@ impl PositionKeeper {
         state: &mut ScrollState,
         diff: &FileDiff,
         folding: &Folding,
-        carets: [usize; 2],
+        cursor_lines: [usize; 2],
         viewport: Viewport,
     ) {
         let before = state.y[1];
         for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
             let layout = folding.layout(side, viewport.line_height);
             let (line, shift) = self.anchors[i];
-            let line = if self.caret[i] { carets[i] } else { line };
+            let line = if self.keeps_cursor[i] {
+                cursor_lines[i]
+            } else {
+                line
+            };
             state.y[i] = layout.clamp_scroll(layout.line_top(line) - shift, viewport.height);
         }
         if state.y[1] != before {
@@ -464,39 +471,39 @@ mod tests {
     }
 
     #[test]
-    fn expand_keeps_caret_in_place() {
+    fn expand_keeps_cursor_in_place() {
         let d = three_hunks();
         let mut f = folded(&d);
         let mut s = ScrollState::default();
         s.scroll_to(&d, &f, L, 400., VP);
         assert_eq!(s.y, [400., 400.]);
-        let carets = [90, 90];
+        let cursor_lines = [90, 90];
         let screen = |f: &Folding, s: &ScrollState| {
             [L, R].map(|side| f.layout(side, 20.).line_top(90) - s.y(side))
         };
         let before = screen(&f, &s);
-        let keeper = PositionKeeper::save(&s, &f, carets, VP);
+        let keeper = PositionKeeper::save(&s, &f, cursor_lines, VP);
         let id = f.fold_at_line(L, 45).unwrap();
         f.set_expanded(id, true);
-        keeper.restore(&mut s, &d, &f, carets, VP);
-        // 45..86 opened completely, so 40 more visual lines above the caret
+        keeper.restore(&mut s, &d, &f, cursor_lines, VP);
+        // 45..86 opened completely, so 40 more visual lines above the cursor
         assert_eq!(s.y, [1200., 1200.]);
         assert_eq!(screen(&f, &s), before);
     }
 
     #[test]
-    fn caret_outside_keeps_top_line() {
+    fn cursor_outside_keeps_top_line() {
         let d = three_hunks();
         let mut f = folded(&d);
         let mut s = ScrollState::default();
         // Visual line 11 is logical 36
         s.scroll_to(&d, &f, L, 220., VP);
-        let carets = [0, 0];
-        let keeper = PositionKeeper::save(&s, &f, carets, VP);
+        let cursor_lines = [0, 0];
+        let keeper = PositionKeeper::save(&s, &f, cursor_lines, VP);
         // 0..6 opens, so five more visual lines
         let id = f.fold_at_line(R, 0).unwrap();
         f.set_expanded(id, true);
-        keeper.restore(&mut s, &d, &f, carets, VP);
+        keeper.restore(&mut s, &d, &f, cursor_lines, VP);
         assert_eq!(s.y, [320., 320.]);
         assert_eq!(f.layout(L, 20.).y_to_logical_line(s.y[0]), 36);
 
@@ -504,26 +511,26 @@ mod tests {
         let mut s = ScrollState::default();
         s.scroll_to(&d, &f, L, 500., VP);
         assert_eq!(f.layout(L, 20.).y_to_logical_line(500.), 45);
-        let keeper = PositionKeeper::save(&s, &f, carets, VP);
+        let keeper = PositionKeeper::save(&s, &f, cursor_lines, VP);
         f.expand_at(L, 45);
-        keeper.restore(&mut s, &d, &f, carets, VP);
+        keeper.restore(&mut s, &d, &f, cursor_lines, VP);
         assert_eq!(s.y, [500., 500.]);
     }
 
     #[test]
-    fn collapse_moves_caret_to_the_fold() {
+    fn collapse_moves_cursor_to_the_fold() {
         let d = three_hunks();
         let mut f = folded(&d);
         f.expand_all(true);
         let mut s = ScrollState::default();
         s.scroll_to(&d, &f, L, 1000., VP);
-        let carets = [60, 60];
-        let keeper = PositionKeeper::save(&s, &f, carets, VP);
+        let cursor_lines = [60, 60];
+        let keeper = PositionKeeper::save(&s, &f, cursor_lines, VP);
         f.expand_all(false);
-        let carets = carets.map(|c| f.caret_after(L, c));
-        assert_eq!(carets, [45, 45]);
-        keeper.restore(&mut s, &d, &f, carets, VP);
-        // The fold ends up where the caret line was
+        let cursor_lines = cursor_lines.map(|line| f.cursor_after(L, line));
+        assert_eq!(cursor_lines, [45, 45]);
+        keeper.restore(&mut s, &d, &f, cursor_lines, VP);
+        // The fold ends up where the cursor line was
         assert_eq!(f.layout(L, 20.).line_top(45) - s.y[0], 1200. - 1000.);
     }
 

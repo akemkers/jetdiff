@@ -9,7 +9,7 @@ use jetdiff_viewmodel::{FileDiff, Folding, SideGeometry, StripeMarker, Viewport}
 
 use super::code_paint::StripeRects;
 use super::divider::Divider;
-use super::split_side::{CaretRow, SideCache, SplitSide};
+use super::split_side::{CursorRow, SideCache, SplitSide};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -24,7 +24,7 @@ pub struct SplitPainter {
     pub markers: Rc<[Vec<StripeMarker>; 2]>,
     pub scroll_y: [f32; 2],
     pub scroll_x: f32,
-    pub carets: [CaretRow; 2],
+    pub cursor_rows: [CursorRow; 2],
 }
 
 impl SplitPainter {
@@ -59,7 +59,7 @@ impl SplitPainter {
                 height,
                 scroll_y: self.scroll_y[index],
                 scroll_x: self.scroll_x,
-                caret: self.carets[index],
+                cursor_row: self.cursor_rows[index],
                 stripe: &stripes[index],
             };
             widest = widest.max(split_side.paint(&mut caches[index], window, cx));

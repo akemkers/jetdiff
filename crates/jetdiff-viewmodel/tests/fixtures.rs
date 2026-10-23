@@ -189,11 +189,11 @@ fn navigation_visits_all_hunks() {
         let f = Folding::none(&d);
         // The start position is the first hunk, as in `InitialScrollPositionSupport`
         let mut seen = vec![0];
-        let mut caret = target_for_hunk(&d, &f, 0, VP).caret_lines[1];
-        while let Some(hunk) = next_hunk(&d, R, caret) {
+        let mut cursor_line = target_for_hunk(&d, &f, 0, VP).cursor_lines[1];
+        while let Some(hunk) = next_hunk(&d, R, cursor_line) {
             seen.push(hunk);
             let t = target_for_hunk(&d, &f, hunk, VP);
-            caret = t.caret_lines[1];
+            cursor_line = t.cursor_lines[1];
             for (i, side) in [L, R].into_iter().enumerate() {
                 assert!(t.scroll_y[i] >= 0., "{name}");
                 assert!(
@@ -206,9 +206,9 @@ fn navigation_visits_all_hunks() {
         assert_eq!(seen, expected, "{name}");
         // And back again
         let mut back = vec![];
-        while let Some(hunk) = previous_hunk(&d, R, caret) {
+        while let Some(hunk) = previous_hunk(&d, R, cursor_line) {
             back.push(hunk);
-            caret = target_for_hunk(&d, &f, hunk, VP).caret_lines[1];
+            cursor_line = target_for_hunk(&d, &f, hunk, VP).cursor_lines[1];
         }
         back.reverse();
         assert_eq!(back, expected[..expected.len() - 1], "{name}");
@@ -279,7 +279,7 @@ fn opening_a_fold_shows_the_whole_run() {
             assert_eq!(f.fold_at_line(side, lines.start), Some(id), "{name}");
             assert!(f.set_expanded(id, true), "{name}");
             assert!(
-                lines.clone().all(|line| f.caret_after(side, line) == line),
+                lines.clone().all(|line| f.cursor_after(side, line) == line),
                 "{name} {lines:?}: still folded"
             );
         }
@@ -324,12 +324,12 @@ fn scroll_and_navigation_with_folds() {
                     let layout = &layouts[i];
                     let line = d.hunks()[hunk].lines(side).start;
                     // Hunks never lie in a fold
-                    assert_eq!(f.caret_after(side, line), line, "{name}");
+                    assert_eq!(f.cursor_after(side, line), line, "{name}");
                     assert!(t.scroll_y[i] <= layout.max_scroll(VP.height), "{name}");
                     let top = layout.line_top(line) - t.scroll_y[i];
                     assert!((0. ..VP.height).contains(&top), "{name} {t:?}");
                 }
-                let Some(next) = next_hunk(&d, R, t.caret_lines[1]) else {
+                let Some(next) = next_hunk(&d, R, t.cursor_lines[1]) else {
                     break;
                 };
                 hunk = next;
@@ -340,19 +340,19 @@ fn scroll_and_navigation_with_folds() {
     }
 }
 
-/// The same order as the UI: save position, change folds, move the caret and restore.
+/// The same order as the UI: save position, change folds, move the cursor and restore.
 #[test]
 fn fold_operations_stay_within_bounds() {
     for (name, d) in all() {
         let mut f = Folding::new(&d);
         let mut state = ScrollState::default();
-        let mut carets = [0, 0];
+        let mut cursor_lines = [0, 0];
         let lines = d.line_count(L).max(d.line_count(R));
         for step in 0..40usize {
             let side = if step % 2 == 0 { L } else { R };
             let line = (step * 7) % lines.min(d.line_count(side));
-            carets[step % 2] = line;
-            let keeper = PositionKeeper::save(&state, &f, carets, VP);
+            cursor_lines[step % 2] = line;
+            let keeper = PositionKeeper::save(&state, &f, cursor_lines, VP);
             match step % 4 {
                 0 => {
                     f.expand_at(side, line);
@@ -369,13 +369,18 @@ fn fold_operations_stay_within_bounds() {
                     }
                 }
             }
-            carets = [L, R].map(|s| f.caret_after(s, carets[if s == L { 0 } else { 1 }]));
-            keeper.restore(&mut state, &d, &f, carets, VP);
+            cursor_lines = [L, R]
+                .map(|side| f.cursor_after(side, cursor_lines[if side == L { 0 } else { 1 }]));
+            keeper.restore(&mut state, &d, &f, cursor_lines, VP);
             for (i, s) in [L, R].into_iter().enumerate() {
                 let layout = f.layout(s, VP.line_height);
                 assert!(state.y[i] >= 0. && state.y[i] <= layout.max_scroll(VP.height));
-                // The caret is never hidden in a fold
-                assert_eq!(f.caret_after(s, carets[i]), carets[i], "{name}");
+                // The cursor is never hidden in a fold
+                assert_eq!(
+                    f.cursor_after(s, cursor_lines[i]),
+                    cursor_lines[i],
+                    "{name}"
+                );
                 assert_eq!(
                     stripe_markers(&d, &f, s, VP.line_height).len(),
                     d.hunks().len(),
@@ -398,12 +403,15 @@ fn assert_cursor_valid(name: &str, s: &DiffState, vp: Viewport, cmd: Command) {
         c.line
     );
     assert_eq!(
-        s.folding.caret_after(c.side, c.line),
+        s.folding.cursor_after(c.side, c.line),
         c.line,
         "{name} {cmd:?}: in fold"
     );
-    let t = s.transferred_cursor();
-    assert!(t.line < d.line_count(t.side), "{name} {cmd:?}: transferred");
+    let mirrored = s.mirrored_cursor();
+    assert!(
+        mirrored.line < d.line_count(mirrored.side),
+        "{name} {cmd:?}: mirrored"
+    );
     for side in [L, R] {
         let layout = s.folding.layout(side, vp.line_height);
         let y = s.scroll.y(side);

@@ -71,12 +71,12 @@ pub struct Theme {
     pub editor_bg: Rgba,
     pub editor_fg: Rgba,
     pub line_number: Rgba,
-    pub line_number_caret_row: Rgba,
+    pub cursor_row_line_number: Rgba,
     /// The cursor's line. Transparent and stronger than `CARET_ROW_COLOR`, since it is
     /// the only highlight and must show over the diff backgrounds.
-    pub row_highlight: Rgba,
-    /// The line number of the cursor's line. Yellow, since no diff color is yellow.
-    pub gutter_highlight: Rgba,
+    pub cursor_row_background: Rgba,
+    /// The fill behind the line numbers on the cursor's line. Yellow, since no diff color is yellow.
+    pub cursor_row_gutter: Rgba,
     pub indent_guide: Rgba,
     /// `DIFF_SEPARATOR_WAVE`, the stroke over folded areas.
     pub separator_wave: Rgba,
@@ -113,9 +113,9 @@ impl Theme {
             editor_bg: bg,
             editor_fg: rgb(fg),
             line_number: rgb(0x4B5059),
-            line_number_caret_row: rgb(0xA1A3AB),
-            row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
-            gutter_highlight: rgb(0x8A6D2F),
+            cursor_row_line_number: rgb(0xA1A3AB),
+            cursor_row_background: [0xFF, 0xFF, 0xFF, 0x12],
+            cursor_row_gutter: rgb(0x8A6D2F),
             indent_guide: rgb(0x323438),
             separator_wave: rgb(0x555555),
             scrollbar_thumb: [0x80, 0x80, 0x80, 0x59],
@@ -171,9 +171,9 @@ impl Theme {
             editor_bg: bg,
             editor_fg: rgb(fg),
             line_number: rgb(0xAEB3C2),
-            line_number_caret_row: rgb(0x767A8A),
-            row_highlight: [0x2E, 0x6B, 0xE6, 0x1A],
-            gutter_highlight: rgb(0xF5D98B),
+            cursor_row_line_number: rgb(0x767A8A),
+            cursor_row_background: [0x2E, 0x6B, 0xE6, 0x1A],
+            cursor_row_gutter: rgb(0xF5D98B),
             indent_guide: rgb(0xEBECF0),
             separator_wave: rgb(0xD0D0D0),
             scrollbar_thumb: [0x00, 0x00, 0x00, 0x33],
@@ -245,11 +245,11 @@ impl Theme {
             editor_bg: base,
             editor_fg: rgb(TEXT),
             line_number: rgb(OVERLAY0),
-            line_number_caret_row: rgb(LAVENDER),
+            cursor_row_line_number: rgb(LAVENDER),
             // Like Islands Dark
-            row_highlight: [0xFF, 0xFF, 0xFF, 0x12],
+            cursor_row_background: [0xFF, 0xFF, 0xFF, 0x12],
             // Yellow with 0.5
-            gutter_highlight: rgb(0x8C806E),
+            cursor_row_gutter: rgb(0x8C806E),
             indent_guide: rgb(SURFACE0),
             // Inherited from Darcula
             separator_wave: rgb(0x555555),
