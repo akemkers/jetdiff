@@ -4,11 +4,11 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, Context, Entity, FocusHandle, Focusable, Hsla, ImageSource, KeyDownEvent, Render,
-    Resource, ScrollStrategy, Subscription, UniformListScrollHandle, Window, div, img, prelude::*,
-    px, uniform_list,
+    App, Context, Entity, EventEmitter, FocusHandle, Focusable, Hsla, ImageSource, KeyDownEvent,
+    Render, Resource, ScrollStrategy, Subscription, UniformListScrollHandle, Window, div, img,
+    prelude::*, px, uniform_list,
 };
-use jetdiff_app::{Files, count_label, file_name};
+use jetdiff_app::{FileRollbackRequest, Files, count_label, file_name};
 use jetdiff_files::{ChangedFile, FileStatus, RowKind, Tree};
 use jetdiff_viewmodel::columns::display_width;
 
@@ -33,8 +33,16 @@ impl Selection {
     }
 }
 
+/// `r` on a row. `RepoView` checks it and answers with `confirm_file_rollback`.
+pub struct AskFileRollback;
+
+/// The user confirmed the file rollback.
+pub struct FileRollback(pub FileRollbackRequest);
+
 pub struct FileTree {
     files: Files,
+    /// Waiting for confirmation of the file rollback. Enter confirms, anything else cancels.
+    file_rollback: Option<FileRollbackRequest>,
     selection: Entity<Selection>,
     scroll: UniformListScrollHandle,
     /// Follows the zoom in the diff, like the whole UI in IntelliJ.
@@ -54,6 +62,7 @@ impl FileTree {
         let observe = cx.observe(&selection, |this, _, cx| this.reveal(cx));
         Self {
             files: Files::new(changed_files),
+            file_rollback: None,
             selection,
             scroll: UniformListScrollHandle::new(),
             scale: 1.,
@@ -61,6 +70,22 @@ impl FileTree {
             focus: cx.focus_handle(),
             _selection: observe,
         }
+    }
+
+    pub fn files(&self) -> &Files {
+        &self.files
+    }
+
+    pub fn confirm_file_rollback(&mut self, request: FileRollbackRequest, cx: &mut Context<Self>) {
+        self.file_rollback = Some(request);
+        cx.notify();
+    }
+
+    /// While the file rollback waits for an answer.
+    pub fn file_rollback_question(&self) -> Option<String> {
+        self.file_rollback
+            .as_ref()
+            .map(FileRollbackRequest::question)
     }
 
     pub fn set_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
@@ -119,6 +144,21 @@ impl FileTree {
     }
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let keystroke = &ev.keystroke;
+        let plain = !keystroke.modifiers.modified();
+        if let Some(request) = self.file_rollback.take() {
+            if keystroke.key == "enter" && plain {
+                cx.emit(FileRollback(request));
+            }
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        if keystroke.key == "r" && plain {
+            cx.emit(AskFileRollback);
+            cx.stop_propagation();
+            return;
+        }
         let Some(key) = list_key(ev) else {
             return;
         };
@@ -207,6 +247,9 @@ impl FileTree {
         }
     }
 }
+
+impl EventEmitter<AskFileRollback> for FileTree {}
+impl EventEmitter<FileRollback> for FileTree {}
 
 impl Focusable for FileTree {
     fn focus_handle(&self, _: &App) -> FocusHandle {

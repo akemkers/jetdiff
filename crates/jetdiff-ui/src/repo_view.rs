@@ -1,11 +1,13 @@
 //! File tree and diff next to each other, with the commit list under the tree. Loads the selected file, and reads
-//! the repo source again when a commit is selected, a hunk is rolled back or files change on disk.
+//! the repo source again when a commit is selected, a hunk or a file is rolled back or files change on disk.
 
 use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
     Window, actions, div, prelude::*, px,
 };
-use jetdiff_app::{Applied, Notification, ReadJob, RepoSource, Show, Shown, empty_diff};
+use jetdiff_app::{
+    Applied, Notification, ReadJob, RepoSource, Show, Shown, empty_diff, file_rollback_request,
+};
 use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::metrics::FONT_SIZE;
@@ -15,10 +17,11 @@ use crate::file_diff::{
     FileDiffView, ResetZoom, Rollback, ToggleDiffMode, ZoomIn, ZoomOut, Zoomed,
 };
 use crate::file_header::file_header;
-use crate::file_tree::{FileTree, Selection};
+use crate::file_tree::{AskFileRollback, FileRollback, FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::notification_slot_view::NotificationSlotView;
+use crate::rollback_dialog::rollback_dialog;
 use crate::settings::Settings;
 use crate::side_panel_size::{SectionHeight, SidePanelWidth};
 use crate::text::FAMILY;
@@ -80,6 +83,12 @@ impl RepoView {
                 this.zoomed(e.font_size, cx)
             }),
             cx.subscribe(&diff, |this, _, e: &Rollback, cx| this.rollback(e, cx)),
+            cx.subscribe(&files, |this, _, _: &AskFileRollback, cx| {
+                this.ask_file_rollback(cx)
+            }),
+            cx.subscribe(&files, |this, _, e: &FileRollback, cx| {
+                this.rollback_file(e, cx)
+            }),
         ];
 
         let (mut commits, mut watcher) = (None, None);
@@ -146,6 +155,32 @@ impl RepoView {
                 self.read(job, cx);
             }
             Some(Err(text)) => self.notification_slot.update(cx, |slot, cx| {
+                slot.show_brief(Notification::warning(text), cx)
+            }),
+        }
+    }
+
+    /// Opens the dialog in the file tree, or says why the file can't be rolled back.
+    fn ask_file_rollback(&mut self, cx: &mut Context<Self>) {
+        let can_rollback = self.repo_source.repo().is_local_changes();
+        match file_rollback_request(self.files.read(cx).files(), can_rollback) {
+            Ok(request) => self.files.update(cx, |file_tree, cx| {
+                file_tree.confirm_file_rollback(request, cx)
+            }),
+            Err(text) => self.notification_slot.update(cx, |slot, cx| {
+                slot.show_brief(Notification::warning(text), cx)
+            }),
+        }
+    }
+
+    /// Reads the repo source again, without waiting for the watcher.
+    fn rollback_file(&mut self, e: &FileRollback, cx: &mut Context<Self>) {
+        match self.repo_source.rollback_file(e.0.file) {
+            Ok(()) => {
+                let job = self.repo_source.rolled_back();
+                self.read(job, cx);
+            }
+            Err(text) => self.notification_slot.update(cx, |slot, cx| {
                 slot.show_brief(Notification::warning(text), cx)
             }),
         }
@@ -398,7 +433,13 @@ impl Focusable for RepoView {
 
 impl Render for RepoView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let file_rollback_dialog = self
+            .files
+            .read(cx)
+            .file_rollback_question()
+            .map(|question| rollback_dialog(question, &cx.global::<Settings>().theme));
         div()
+            .relative()
             .size_full()
             .flex()
             .on_action(cx.listener(Self::focus_left))
@@ -447,5 +488,6 @@ impl Render for RepoView {
                     }))
                     .child(div().flex_1().min_h_0().child(self.diff.clone())),
             )
+            .children(file_rollback_dialog)
     }
 }

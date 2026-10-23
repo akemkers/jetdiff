@@ -93,6 +93,7 @@ A small, vim-inspired keymap for reading. The cursor is a whole line, with no co
 | `v`                                 | Switch between Split and Unified for all files. The cursor stays where it is                         |
 | `y`                                 | Copy the cursor location (`file:line`). The line is in the newest version, also from Left            |
 | `r`                                 | Roll back the hunk at the cursor to Left, after Enter. Local changes only                            |
+| `r` in the file tree                | Roll back the whole file to HEAD, after Enter: content, path and index. An added file is deleted     |
 | Cmd/Ctrl+Plus, Minus, 0             | Zoom in, out and back to 14pt. The tree follows                                                      |
 | `?`                                 | Show or hide all the keys. Esc also closes                                                           |
 | `q`, Cmd/Ctrl+Q, Cmd/Ctrl+W         | Quit                                                                                                 |

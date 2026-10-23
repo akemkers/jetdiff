@@ -8,7 +8,9 @@ use gpui::{
     MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window,
     actions, canvas, div, prelude::*, px,
 };
-use jetdiff_app::{Notification, RollbackRequest, cursor_location, rollback_request};
+use jetdiff_app::{
+    Notification, ROLLBACK_QUESTION, RollbackRequest, cursor_location, rollback_request,
+};
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::metrics::zoomed;
 use jetdiff_viewmodel::{
@@ -559,7 +561,7 @@ impl Render for FileDiffView {
             .child(self.notification_slot.clone());
         let overlay = self.overlay.as_ref().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
-            Overlay::Confirm(_) => rollback_dialog(&theme),
+            Overlay::Confirm(_) => rollback_dialog(ROLLBACK_QUESTION.into(), &theme),
         });
 
         div()

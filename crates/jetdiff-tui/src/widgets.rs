@@ -103,10 +103,11 @@ pub fn help(area: Rect, theme: &Theme, buf: &mut Buffer) {
     popup(HELP_WIDTH, lines, area, theme, buf);
 }
 
-pub fn confirm_rollback(area: Rect, theme: &Theme, buf: &mut Buffer) {
+/// `question` names what is rolled back: a hunk or a file.
+pub fn confirm_rollback(question: &str, area: Rect, theme: &Theme, buf: &mut Buffer) {
     let lines = vec![
         Line::styled(
-            "Roll back this hunk?",
+            question.to_owned(),
             Style::default().fg(color(theme.editor_fg)),
         ),
         Line::styled(

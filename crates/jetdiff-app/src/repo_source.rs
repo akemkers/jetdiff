@@ -8,7 +8,7 @@ use std::rc::Rc;
 use jetdiff_files::{ChangedFile, Tree};
 use jetdiff_git::Repo;
 
-use crate::actions::RollbackRequest;
+use crate::actions::{ONLY_LOCAL_CHANGES, RollbackRequest};
 use crate::content::build_diff;
 use crate::notification::Notification;
 use read::Trigger;
@@ -166,6 +166,15 @@ impl RepoSource {
                 .map(|after| self.show(file, Ok([left_side, after]))),
         )
     }
+
+    /// File rollback of `file` in the changed files. Run `rolled_back` afterwards, so the list
+    /// keeps up.
+    pub fn rollback_file(&self, file: usize) -> Result<(), String> {
+        if !self.repo.is_local_changes() {
+            return Err(ONLY_LOCAL_CHANGES.into());
+        }
+        self.repo.rollback_file(&self.changed_files[file])
+    }
 }
 
 #[cfg(test)]
@@ -205,6 +214,20 @@ mod tests {
 
         fn write(&self, path: &str, text: &str) {
             std::fs::write(self.0.join(path), text).unwrap();
+        }
+
+        fn read(&self, path: &str) -> Option<String> {
+            std::fs::read_to_string(self.0.join(path)).ok()
+        }
+
+        /// `git status --short`, with untracked files.
+        fn status(&self) -> String {
+            let out = Command::new("git")
+                .args(["status", "--short", "--untracked-files=all"])
+                .current_dir(&self.0)
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&out.stdout).into_owned()
         }
 
         fn repo_source(&self) -> RepoSource {
@@ -354,5 +377,116 @@ mod tests {
             Applied::Done { file: None, .. }
         ));
         assert!(matches!(source.load(None), Show::Empty { .. }));
+    }
+
+    /// Rolls back the file at `path` and reads Local changes again, as the UI does.
+    fn file_rollback(source: &mut RepoSource, path: &str) -> Applied {
+        let file = position(source, path).unwrap();
+        source.rollback_file(file).unwrap();
+        let job = source.rolled_back();
+        apply(source, job)
+    }
+
+    #[test]
+    fn file_rollback_of_modified_file_resets_disk_and_index() {
+        let temp_repo = TempRepo::new("file-rollback-modified");
+        temp_repo.write("a.rs", "a\n");
+        temp_repo.git(&["add", "-A"]);
+        temp_repo.git(&["commit", "-q", "-m", "c"]);
+        temp_repo.write("a.rs", "a2\n");
+        temp_repo.git(&["add", "a.rs"]);
+        temp_repo.write("a.rs", "a3\n");
+        let mut source = temp_repo.repo_source();
+
+        let Applied::Done { file, .. } = file_rollback(&mut source, "a.rs") else {
+            panic!("read failed");
+        };
+        assert_eq!(temp_repo.read("a.rs").as_deref(), Some("a\n"));
+        assert_eq!(temp_repo.status(), "");
+        assert!(source.changed_files().is_empty());
+        assert_eq!(file, None);
+    }
+
+    #[test]
+    fn file_rollback_of_deleted_file_restores_it() {
+        let temp_repo = TempRepo::new("file-rollback-deleted");
+        temp_repo.write("a.rs", "a\n");
+        temp_repo.git(&["add", "-A"]);
+        temp_repo.git(&["commit", "-q", "-m", "c"]);
+        std::fs::remove_file(temp_repo.0.join("a.rs")).unwrap();
+        let mut source = temp_repo.repo_source();
+
+        file_rollback(&mut source, "a.rs");
+        assert_eq!(temp_repo.read("a.rs").as_deref(), Some("a\n"));
+        assert_eq!(temp_repo.status(), "");
+    }
+
+    #[test]
+    fn file_rollback_of_renamed_file_moves_it_back() {
+        let temp_repo = TempRepo::new("file-rollback-renamed");
+        std::fs::create_dir(temp_repo.0.join("src")).unwrap();
+        temp_repo.write("src/a.rs", "a\nb\nc\nd\n");
+        temp_repo.git(&["add", "-A"]);
+        temp_repo.git(&["commit", "-q", "-m", "c"]);
+        std::fs::create_dir(temp_repo.0.join("lib")).unwrap();
+        temp_repo.git(&["mv", "src/a.rs", "lib/b.rs"]);
+        temp_repo.write("lib/b.rs", "a\nb\nc\nd\ne\n");
+        let mut source = temp_repo.repo_source();
+
+        file_rollback(&mut source, "lib/b.rs");
+        assert_eq!(temp_repo.read("src/a.rs").as_deref(), Some("a\nb\nc\nd\n"));
+        assert!(!temp_repo.0.join("lib").exists());
+        assert_eq!(temp_repo.status(), "");
+    }
+
+    #[test]
+    fn file_rollback_of_staged_added_file_deletes_it() {
+        let temp_repo = TempRepo::new("file-rollback-staged");
+        temp_repo.write("a.rs", "a\n");
+        temp_repo.git(&["add", "-A"]);
+        temp_repo.git(&["commit", "-q", "-m", "c"]);
+        temp_repo.write("b.rs", "b\n");
+        temp_repo.git(&["add", "b.rs"]);
+        let mut source = temp_repo.repo_source();
+
+        file_rollback(&mut source, "b.rs");
+        assert_eq!(temp_repo.read("b.rs"), None);
+        assert_eq!(temp_repo.status(), "");
+    }
+
+    #[test]
+    fn file_rollback_of_untracked_file_deletes_it() {
+        let temp_repo = TempRepo::new("file-rollback-untracked");
+        temp_repo.write("a.rs", "a\n");
+        temp_repo.git(&["add", "-A"]);
+        temp_repo.git(&["commit", "-q", "-m", "c"]);
+        temp_repo.write("a.rs", "a2\n");
+        temp_repo.write("b.rs", "b\n");
+        let mut source = temp_repo.repo_source();
+
+        let Applied::Done { file, .. } = file_rollback(&mut source, "b.rs") else {
+            panic!("read failed");
+        };
+        assert_eq!(temp_repo.read("b.rs"), None);
+        assert_eq!(temp_repo.status(), " M a.rs\n");
+        assert_eq!(path(&source, file), "a.rs");
+    }
+
+    #[test]
+    fn file_rollback_only_in_local_changes() {
+        let temp_repo = TempRepo::new("file-rollback-commit");
+        temp_repo.write("a.rs", "a\n");
+        temp_repo.git(&["add", "-A"]);
+        temp_repo.git(&["commit", "-q", "-m", "c"]);
+        let mut source = temp_repo.repo_source();
+        let job = source.select_commit(Some("HEAD".into()));
+        apply(&mut source, job);
+
+        let a = position(&source, "a.rs").unwrap();
+        assert_eq!(
+            source.rollback_file(a),
+            Err("Only Local changes can be rolled back".into())
+        );
+        assert_eq!(temp_repo.read("a.rs").as_deref(), Some("a\n"));
     }
 }

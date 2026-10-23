@@ -82,6 +82,14 @@ impl Files {
         }
     }
 
+    /// `None` on a folder row.
+    pub fn file_at_cursor(&self) -> Option<usize> {
+        match self.rows.get(self.cursor)?.kind {
+            RowKind::File(file) => Some(file),
+            RowKind::Dir { .. } => None,
+        }
+    }
+
     pub fn select_at_cursor(&mut self) -> Option<usize> {
         if self.rows.is_empty() {
             return None;

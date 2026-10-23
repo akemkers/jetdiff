@@ -260,6 +260,42 @@ impl Repo {
         Ok(String::from_utf8_lossy(&after).into_owned())
     }
 
+    /// File rollback: puts the whole file in Local changes back to how it is in HEAD, on disk and
+    /// in the index, with both paths of a rename.
+    pub fn rollback_file(&self, file: &ChangedFile) -> Result<(), String> {
+        if !self.is_local_changes() {
+            return Err("a commit can't be changed".into());
+        }
+        if self.is_untracked(file)? {
+            let full = self.root.join(&file.path);
+            return std::fs::remove_file(full).map_err(|e| format!("{}: {e}", file.path));
+        }
+        let source = format!("--source={}", self.left_side);
+        let mut args = vec![
+            "--literal-pathspecs",
+            "restore",
+            &source,
+            "--staged",
+            "--worktree",
+            "--",
+        ];
+        args.extend(file.renamed_from.as_deref());
+        args.push(&file.path);
+        git(&self.root, &args).map(|_| ())
+    }
+
+    /// Neither in HEAD nor in the index, so `git restore` doesn't know the path.
+    fn is_untracked(&self, file: &ChangedFile) -> Result<bool, String> {
+        if file.status != FileStatus::Added {
+            return Ok(false);
+        }
+        let in_index = git(
+            &self.root,
+            &["--literal-pathspecs", "ls-files", "-z", "--", &file.path],
+        )?;
+        Ok(in_index.is_empty())
+    }
+
     fn blob(&self, rev: &str, path: &str) -> Result<String, String> {
         let bytes = self.blob_bytes(rev, path)?;
         Ok(String::from_utf8_lossy(&bytes).into_owned())

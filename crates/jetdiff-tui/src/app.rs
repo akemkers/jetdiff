@@ -7,12 +7,13 @@ use std::time::{Duration, Instant};
 
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
-    AppCommand, Applied, Commits, Files, Notification, NotificationSlot, ReadJob, RepoRead,
-    RepoSource, Show, Shown, Watcher, app_command, empty_diff,
+    AppCommand, Applied, Commits, FileRollbackRequest, Files, Notification, NotificationSlot,
+    ROLLBACK_QUESTION, ReadJob, RepoRead, RepoSource, Show, Shown, Watcher, app_command,
+    empty_diff, file_rollback_request,
 };
 use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
-use jetdiff_viewmodel::{FileDiff, Theme};
+use jetdiff_viewmodel::{FileDiff, KeyCode, Theme};
 use ratatui::Frame;
 use ratatui::crossterm::event::{self, Event, KeyEventKind, MouseButton, MouseEventKind};
 use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
@@ -43,6 +44,8 @@ struct Repository {
     side_panel: SidePanel,
     selected: Option<usize>,
     side_panel_open: bool,
+    /// Waiting for confirmation of the file rollback. Enter confirms, anything else cancels.
+    file_rollback: Option<FileRollbackRequest>,
     watcher: Option<Watcher>,
     read_sender: Sender<ReadAnswer>,
     read_receiver: Receiver<ReadAnswer>,
@@ -123,6 +126,7 @@ impl App {
             side_panel,
             selected,
             side_panel_open: settings.side_panel_open,
+            file_rollback: None,
             watcher,
             read_sender,
             read_receiver,
@@ -281,6 +285,17 @@ impl App {
 
     /// As in GPUI: the keys in `jetdiff_app::keys` first, then whatever has focus.
     fn key(&mut self, key: jetdiff_viewmodel::Key) -> io::Result<()> {
+        if let Some(request) = self
+            .repository
+            .as_mut()
+            .and_then(|repo| repo.file_rollback.take())
+        {
+            let plain = !key.ctrl && !key.shift && !key.cmd;
+            if key.code == KeyCode::Enter && plain {
+                self.rollback_file(&request);
+            }
+            return Ok(());
+        }
         if let Some(cmd) = app_command(key)
             && self.app_command(cmd)?
         {
@@ -359,6 +374,15 @@ impl App {
         let Some(repo) = &mut self.repository else {
             return;
         };
+        let plain = !key.ctrl && !key.cmd;
+        if section == Section::Files && key.code == KeyCode::Char('r') && plain {
+            let can_rollback = repo.repo_source.repo().is_local_changes();
+            match file_rollback_request(&repo.side_panel.files, can_rollback) {
+                Ok(request) => repo.file_rollback = Some(request),
+                Err(text) => self.show_brief(Notification::warning(text)),
+            }
+            return;
+        }
         match list_key(key) {
             Some(ListKey::Down) => repo.side_panel.move_cursor(section, true),
             Some(ListKey::Up) => repo.side_panel.move_cursor(section, false),
@@ -378,6 +402,20 @@ impl App {
                 }
             },
             None => {}
+        }
+    }
+
+    /// Reads the repo source again afterwards, without waiting for the watcher.
+    fn rollback_file(&mut self, request: &FileRollbackRequest) {
+        let Some(repo) = &mut self.repository else {
+            return;
+        };
+        match repo.repo_source.rollback_file(request.file) {
+            Ok(()) => {
+                let job = repo.repo_source.rolled_back();
+                repo.read(job);
+            }
+            Err(text) => self.show_brief(Notification::warning(text)),
         }
     }
 
@@ -495,8 +533,17 @@ impl App {
         }
         match &self.diff.overlay {
             Some(Overlay::Help) => widgets::help(area, &theme, buf),
-            Some(Overlay::Confirm(_)) => widgets::confirm_rollback(main, &theme, buf),
+            Some(Overlay::Confirm(_)) => {
+                widgets::confirm_rollback(ROLLBACK_QUESTION, main, &theme, buf)
+            }
             None => {}
+        }
+        if let Some(request) = self
+            .repository
+            .as_ref()
+            .and_then(|repo| repo.file_rollback.as_ref())
+        {
+            widgets::confirm_rollback(&request.question(), main, &theme, buf);
         }
     }
 }

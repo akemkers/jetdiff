@@ -11,7 +11,10 @@ pub mod notification_slot;
 pub mod repo_source;
 pub mod watcher;
 
-pub use actions::{RollbackRequest, cursor_location, rollback_request};
+pub use actions::{
+    FileRollbackRequest, ROLLBACK_QUESTION, RollbackRequest, cursor_location,
+    file_rollback_request, rollback_request,
+};
 pub use commits::{Commits, LOCAL_CHANGES, age};
 pub use content::{build_diff, empty_diff};
 pub use files::{Files, count_label, file_name};

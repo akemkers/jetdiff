@@ -1,11 +1,11 @@
-//! Asks whether the hunk should be rolled back. `FileDiffView` handles Enter and Esc.
+//! Asks whether a hunk or a file should be rolled back. The view that opened it handles Enter and Esc.
 
 use gpui::{Div, div, prelude::*, px, relative};
 
 use crate::text::FAMILY;
 use crate::theme::UiTheme;
 
-pub fn rollback_dialog(theme: &UiTheme) -> Div {
+pub fn rollback_dialog(question: String, theme: &UiTheme) -> Div {
     div()
         .absolute()
         .inset_0()
@@ -28,7 +28,7 @@ pub fn rollback_dialog(theme: &UiTheme) -> Div {
                 .font_family(FAMILY)
                 .text_size(px(13.))
                 .text_color(theme.editor_fg)
-                .child("Roll back this hunk?")
+                .child(question)
                 .child(
                     div()
                         .text_color(theme.line_number)
