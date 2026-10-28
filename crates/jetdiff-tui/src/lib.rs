@@ -15,8 +15,7 @@ mod widgets;
 
 use std::io::{self, BufWriter, Stdout};
 
-use jetdiff_files::ChangedFile;
-use jetdiff_git::Repo;
+use jetdiff_app::{Commits, RepoSource};
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Terminal;
 use ratatui::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
@@ -46,13 +45,14 @@ pub fn run_file_pair(
     run(App::file(diff, paths, &settings), title)
 }
 
+/// `commits` only for a folder, not for a commit or a PR.
 pub fn run_repo_source(
-    repo: Repo,
-    changed_files: Vec<ChangedFile>,
+    repo_source: RepoSource,
+    commits: Option<Commits>,
     title: &str,
     settings: Settings,
 ) -> io::Result<()> {
-    run(App::repo_source(repo, changed_files, &settings), title)
+    run(App::repo_source(repo_source, commits, &settings), title)
 }
 
 /// The whole frame in one write, and the terminal shows it only when it is done. Without this

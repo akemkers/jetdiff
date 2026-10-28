@@ -2,7 +2,7 @@
 
 A fast diff viewer for macOS, with the diff from the JetBrains IDEs. Rendered on the GPU with [GPUI](https://www.gpui.rs), or in the terminal over SSH.
 
-It shows Local changes, a commit or a file pair in Split, with the two sides next to each other and the diff divider between them, inline highlights, folding of unchanged lines and syntax colors. `v` switches to Unified, where deleted lines sit above the added ones in a single code view. The diff algorithm is ported from IntelliJ and gives the same result. Everything is read-only; nothing can be edited.
+It shows a branch, Local changes, a commit or a file pair in Split, with the two sides next to each other and the diff divider between them, inline highlights, folding of unchanged lines and syntax colors. `v` switches to Unified, where deleted lines sit above the added ones in a single code view. The diff algorithm is ported from IntelliJ and gives the same result. Everything is read-only; nothing can be edited.
 
 ![Local changes with the file tree and commits](docs/screenshots/local-changes.png)
 
@@ -34,7 +34,7 @@ Without such a font, the icons show as empty squares. Turn them off with `icons 
 jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]
 ```
 
-- No arguments: everything not yet committed, including new files git doesn't know about. Always against HEAD
+- No arguments: Branch, everything on the current branch that is not on its base branch, committed or not and including new files git doesn't know about. Against the merge base, as in a pull request. The base branch is `origin/HEAD`, else `main`, else `master`
 - `<folder>`: as without arguments, but for the repo or worktree the folder is in
 - `<commit>`: the commit against its parent, e.g. `HEAD~2`
 - `<pr-link>`: a pull request on GitHub, e.g. `https://github.com/owner/repo/pull/12`, as it is shown there. Must be run in the repo the PR belongs to, and fetches it from `origin`. Requires `gh`
@@ -45,9 +45,9 @@ The title of the window, or the terminal, starts with the repo's folder name, so
 
 On the left is a file tree of changed files. Added and deleted files are always shown Unified; binary files are not shown. Drag the edge to change the width, and double-click to go back.
 
-For Local changes, the commit list sits under the tree: the branch's commits against `origin/main`, or the latest ones when the branch has none of its own. At most 50. Click a commit to see it, and the top row to go back. Click «Files» or «Commits» to open or close the section.
+Without arguments or with a folder, the commit list sits under the tree. Branch is the top row, with the branch name, and jetdiff starts there. Under it are its slices: Local changes, everything not yet committed against HEAD, and the branch's own commits, at most 50. Click a row to see it. On a branch without commits of its own, such as `main` with everything pushed, Branch is the same as Local changes, so only Local changes is shown. Click «Files» or «Commits» to open or close the section.
 
-Local changes are read again automatically when files change on disk. The selected file is kept, and the diff starts at the top if the content has changed.
+Branch and Local changes are read again automatically when files change on disk, and so is the commit list when HEAD moves, after a commit, amend, reset or rebase. This also works in a worktree. The selected file is kept, and the diff starts at the top if the content has changed.
 
 Unchanged lines are folded, with 4 lines of context. Click a fold to open it. Unified has no folding.
 

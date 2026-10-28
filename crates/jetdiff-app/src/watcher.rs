@@ -1,10 +1,11 @@
-//! Collects changed paths until it has been quiet. The UI asks with `take`.
+//! Collects changed paths, and whether HEAD moved, until it has been quiet. The UI asks with `take`.
 
 use std::mem;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use jetdiff_git::{GitDirs, Repo};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher as _};
 
 /// A save step gives many events close together.
@@ -16,6 +17,7 @@ pub const POLL: Duration = Duration::from_millis(100);
 #[derive(Default)]
 struct Pending {
     paths: Vec<PathBuf>,
+    head_moved: bool,
     first: Option<Instant>,
     last: Option<Instant>,
 }
@@ -29,6 +31,15 @@ impl Pending {
     }
 }
 
+/// What the watcher saw.
+#[derive(Debug, PartialEq, Eq)]
+pub enum DiskChange {
+    /// Relative to the root, with `/` as separator, as git writes them.
+    Files(Vec<String>),
+    /// A commit, amend, reset or rebase. Files that changed at the same time are read too.
+    HeadMoved,
+}
+
 pub struct Watcher {
     root: PathBuf,
     pending: Arc<Mutex<Pending>>,
@@ -36,52 +47,75 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    /// `.git` is ignored, since git itself writes there when we read.
-    pub fn new(root: &Path) -> Result<Self, String> {
+    /// The git folders are ignored, since git itself writes there when we read, except for HEAD and
+    /// the current branch. In a worktree they are outside the root, so they are watched too.
+    pub fn new(repo: &Repo) -> Result<Self, String> {
+        let root = repo.root().to_owned();
+        let git_dirs = repo.git_dirs()?;
         let pending = Arc::new(Mutex::new(Pending::default()));
         let sink = pending.clone();
-        let git_dir = root.join(".git");
+        let folders = watched(&root, &git_dirs);
+        // The `.git` file of a worktree
+        let dot_git = root.join(".git");
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let Ok(event) = res else { return };
             // inotify reports reads, and our own reading would cause a new autoreload
             if event.kind.is_access() {
                 return;
             }
-            let paths: Vec<_> = event
+            let (git_paths, paths): (Vec<_>, Vec<_>) = event
                 .paths
                 .into_iter()
-                .filter(|p| !p.starts_with(&git_dir))
-                .collect();
-            if paths.is_empty() {
+                .partition(|path| path.starts_with(&dot_git) || git_dirs.contains(path));
+            let head_moved = !git_paths.is_empty() && git_dirs.head_moved(&git_paths);
+            if paths.is_empty() && !head_moved {
                 return;
             }
             let now = Instant::now();
-            let mut p = sink.lock().unwrap();
-            p.paths.extend(paths);
-            p.first.get_or_insert(now);
-            p.last = Some(now);
+            let mut pending = sink.lock().unwrap();
+            pending.paths.extend(paths);
+            pending.head_moved |= head_moved;
+            pending.first.get_or_insert(now);
+            pending.last = Some(now);
         })
         .map_err(|e| e.to_string())?;
-        watcher
-            .watch(root, RecursiveMode::Recursive)
-            .map_err(|e| e.to_string())?;
+        for folder in folders {
+            watcher
+                .watch(&folder, RecursiveMode::Recursive)
+                .map_err(|e| e.to_string())?;
+        }
         Ok(Self {
-            root: root.to_owned(),
+            root,
             pending,
             _watcher: watcher,
         })
     }
 
-    pub fn take(&self) -> Option<Vec<String>> {
-        let paths = {
-            let mut p = self.pending.lock().unwrap();
-            if !p.ready(Instant::now()) {
+    pub fn take(&self) -> Option<DiskChange> {
+        let pending = {
+            let mut pending = self.pending.lock().unwrap();
+            if !pending.ready(Instant::now()) {
                 return None;
             }
-            mem::take(&mut *p).paths
+            mem::take(&mut *pending)
         };
-        Some(relative(&self.root, paths))
+        Some(if pending.head_moved {
+            DiskChange::HeadMoved
+        } else {
+            DiskChange::Files(relative(&self.root, pending.paths))
+        })
     }
+}
+
+/// The root, and the git folders that are not inside a folder already watched.
+fn watched(root: &Path, git_dirs: &GitDirs) -> Vec<PathBuf> {
+    let mut folders = vec![root.to_owned()];
+    for folder in git_dirs.folders() {
+        if !folders.iter().any(|watched| folder.starts_with(watched)) {
+            folders.push(folder.to_owned());
+        }
+    }
+    folders
 }
 
 /// With `/` as separator, as git writes them.

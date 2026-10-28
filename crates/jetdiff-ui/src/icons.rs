@@ -1,6 +1,6 @@
-//! File type icons from New UI in IntelliJ (`expui/fileTypes`), Apache 2.0. The Rust icon is from
-//! intellij-rust (MIT, see `icons/LICENSE-intellij-rust.txt`). Go has an icon only in GoLand, so
-//! the Go icon is from Seti UI (MIT, see `icons/LICENSE-seti-ui.txt`).
+//! File type icons and the branch icon from New UI in IntelliJ (`expui/fileTypes`, `expui/general/vcs`),
+//! Apache 2.0. The Rust icon is from intellij-rust (MIT, see `icons/LICENSE-intellij-rust.txt`). Go
+//! has an icon only in GoLand, so the Go icon is from Seti UI (MIT, see `icons/LICENSE-seti-ui.txt`).
 
 use std::borrow::Cow;
 
@@ -16,7 +16,8 @@ macro_rules! icons {
     };
 }
 
-const ICONS: [(&str, &[u8]); 30] = icons!(
+const ICONS: [(&str, &[u8]); 32] = icons!(
+    "branch",
     "chevronDown",
     "chevronRight",
     "folder",
@@ -72,6 +73,10 @@ pub fn chevron_icon(open: bool, dark: bool) -> String {
     icon(if open { "chevronDown" } else { "chevronRight" }, dark)
 }
 
+pub fn branch_icon(dark: bool) -> String {
+    icon("branch", dark)
+}
+
 pub fn folder_icon(dark: bool) -> String {
     icon("folder", dark)
 }
@@ -93,6 +98,7 @@ mod tests {
         assert_eq!(file_icon("main.go", false), "go.svg");
         assert_eq!(file_icon("Makefile", true), "text_dark.svg");
         assert_eq!(folder_icon(true), "folder_dark.svg");
+        assert_eq!(branch_icon(false), "branch.svg");
     }
 
     #[test]
@@ -107,6 +113,9 @@ mod tests {
                     "{path}"
                 );
             }
+        }
+        for dark in [false, true] {
+            assert!(Assets.load(&branch_icon(dark)).unwrap().is_some());
         }
     }
 }

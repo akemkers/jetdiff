@@ -39,7 +39,7 @@ jetdiff-viewmodel
 jetdiff-files    ChangedFile { path, renamed_from, status } and the tree model: folders first,
                  merged single-child folders, open and closed folders
 
-jetdiff-git      git CLI: changed files for Local changes, a commit or a pull request,
+jetdiff-git      git CLI: changed files for Branch, Local changes, a commit or a pull request,
                  file content and commits
 
 jetdiff-app      the state around the diff, still without a GUI. Shared by all UIs

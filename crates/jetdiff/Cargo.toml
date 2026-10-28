@@ -12,7 +12,6 @@ tui = ["dep:jetdiff-tui"]
 [dependencies]
 gpui = { workspace = true, optional = true }
 jetdiff-app = { path = "../jetdiff-app" }
-jetdiff-files = { path = "../jetdiff-files" }
 jetdiff-git = { path = "../jetdiff-git" }
 jetdiff-ui = { path = "../jetdiff-ui", optional = true }
 jetdiff-tui = { path = "../jetdiff-tui", optional = true }

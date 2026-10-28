@@ -1,7 +1,8 @@
 //! jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]
 //!
-//! Without arguments, Local changes are shown, on a branch against where it branched off main.
-//! A folder shows Local changes there. With one commit, it is shown against its parent.
+//! Without arguments, Branch is shown: everything on the branch against where it branched off the
+//! base branch, with Local changes and the branch's commits in the commit list. A folder does the
+//! same there. With one commit, it is shown against its parent.
 //! A PR link is fetched into the repo you are in. The settings
 //! are in the config file; see `config.rs`. `--tui` shows the diff in the terminal.
 
@@ -21,12 +22,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use jetdiff_app::LOCAL_CHANGES;
+use jetdiff_app::{Commits, RepoSource};
 use jetdiff_git::{PullRequest, Repo};
 use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
 
 enum Source {
-    LocalChanges(PathBuf),
+    Branch(PathBuf),
     Commit(String),
     PullRequest(PullRequest),
     FilePair(String, String),
@@ -69,11 +70,11 @@ fn frontend(tui: bool) -> Result<Frontend, String> {
 
 fn parse_source(paths: &[String]) -> Result<Source, String> {
     match paths {
-        [] => Ok(Source::LocalChanges(".".into())),
+        [] => Ok(Source::Branch(".".into())),
         [url] if url.starts_with("https://") => PullRequest::parse(url)
             .map(Source::PullRequest)
             .ok_or_else(|| format!("not a PR link: {url}")),
-        [dir] if Path::new(dir).is_dir() => Ok(Source::LocalChanges(dir.into())),
+        [dir] if Path::new(dir).is_dir() => Ok(Source::Branch(dir.into())),
         [rev] => Ok(Source::Commit(rev.clone())),
         [left_side, right_side] => Ok(Source::FilePair(left_side.clone(), right_side.clone())),
         _ => Err(
@@ -92,29 +93,41 @@ fn read(path: &str) -> Result<String, String> {
 /// What the window should show, ready before the app starts so errors can be written to the terminal.
 pub enum Content {
     FilePair(Box<FileDiff>, [String; 2]),
-    Repo(Repo, Vec<jetdiff_files::ChangedFile>),
+    /// The commit list only for a folder, not for a commit or a PR.
+    Repo(Box<RepoSource>, Option<Commits>),
 }
 
 fn read_source(source: &Source) -> Result<(Content, String), String> {
-    let (repo, title) = match source {
+    let (repo_source, commits, title) = match source {
         Source::FilePair(left_side, right_side) => {
             let diff = file_diff(left_side, right_side)?;
             let title = format!("{left_side} ↔ {right_side}");
             let paths = [left_side.clone(), right_side.clone()];
             return Ok((Content::FilePair(Box::new(diff), paths), title));
         }
-        Source::Commit(rev) => (Repo::commit(Path::new("."), rev)?, rev.clone()),
+        Source::Commit(rev) => {
+            let repo = Repo::commit(Path::new("."), rev)?;
+            (repo_source(repo)?, None, rev.clone())
+        }
         Source::PullRequest(pr) => {
             let text = format!("Fetching PR #{} from {}", pr.number, pr.slug);
             let repo = with_progress(&text, || Repo::pull_request(Path::new("."), pr))?;
-            (repo, format!("PR #{}", pr.number))
+            (repo_source(repo)?, None, format!("PR #{}", pr.number))
         }
-        Source::LocalChanges(dir) => (Repo::local_changes(dir)?, LOCAL_CHANGES.to_owned()),
+        Source::Branch(dir) => {
+            let (repo_source, commits) = RepoSource::open(dir)?;
+            let title = commits.branch_label().to_owned();
+            (repo_source, Some(commits), title)
+        }
     };
     // Several windows open at the same time must be told apart in the title
-    let title = format!("{}: {title}", repo.name());
+    let title = format!("{}: {title}", repo_source.repo().name());
+    Ok((Content::Repo(Box::new(repo_source), commits), title))
+}
+
+fn repo_source(repo: Repo) -> Result<RepoSource, String> {
     let changed_files = repo.changed_files()?;
-    Ok((Content::Repo(repo, changed_files), title))
+    Ok(RepoSource::new(repo, changed_files))
 }
 
 /// Shows that `work` is working, with a spinner and time in a terminal.

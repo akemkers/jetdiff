@@ -33,9 +33,9 @@ pub fn run(content: Content, title: String, config: Config) {
                 Content::FilePair(diff, paths) => open(cx, title, move |cx| {
                     FileDiffView::standalone(*diff, paths, cx)
                 }),
-                Content::Repo(repo, changed_files) => {
-                    open(cx, title, move |cx| RepoView::new(repo, changed_files, cx))
-                }
+                Content::Repo(repo_source, commits) => open(cx, title, move |cx| {
+                    RepoView::new(*repo_source, commits, cx)
+                }),
             }
             cx.on_window_closed(|cx| cx.quit()).detach();
             cx.activate(true);

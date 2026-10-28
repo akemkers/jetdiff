@@ -6,19 +6,24 @@ use jetdiff_files::ChangedFile;
 use jetdiff_git::Commit;
 use jetdiff_viewmodel::FileDiff;
 
+use crate::commits::Selected;
 use crate::notification::Notification;
 
 pub enum Applied {
     Failed {
-        selected_commit: Option<String>,
+        /// Still what is shown.
+        selected: Selected,
         brief: Notification,
     },
     Done {
+        /// For the commit list, which shows what was read.
+        branch_name: Option<String>,
         commits: Vec<Commit>,
+        selected: Selected,
         /// Only when the list has changed.
         changed_files: Option<Rc<[ChangedFile]>>,
         file: Option<usize>,
-        /// Only after files changed on disk.
+        /// Only after files changed on disk, not after HEAD moved.
         brief: Option<Notification>,
     },
 }
@@ -33,7 +38,7 @@ pub struct Shown {
     pub diff: FileDiff,
     pub pinned: Option<Notification>,
     pub paths: [String; 2],
-    /// Only Local changes can be written to, not a commit.
+    /// Only in Local changes, so rollback always goes back to HEAD.
     pub can_rollback: bool,
     pub same_file: bool,
 }

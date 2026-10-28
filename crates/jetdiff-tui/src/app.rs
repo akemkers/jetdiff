@@ -8,10 +8,8 @@ use std::time::{Duration, Instant};
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
     AppCommand, Applied, Commits, Files, Notification, NotificationSlot, ReadJob, RepoRead,
-    RepoSource, Show, Shown, Watcher, app_command, empty_diff,
+    RepoSource, Selected, Show, Shown, Watcher, app_command, empty_diff,
 };
-use jetdiff_files::ChangedFile;
-use jetdiff_git::Repo;
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Frame;
 use ratatui::crossterm::event::{self, Event, KeyEventKind, MouseButton, MouseEventKind};
@@ -96,18 +94,15 @@ impl App {
         }
     }
 
-    pub fn repo_source(repo: Repo, changed_files: Vec<ChangedFile>, settings: &Settings) -> Self {
+    pub fn repo_source(
+        repo_source: RepoSource,
+        commits: Option<Commits>,
+        settings: &Settings,
+    ) -> Self {
         let mut app = Self::file(empty_diff(), Default::default(), settings);
-        let repo_source = RepoSource::new(repo, changed_files);
-        let mut commits = None;
         let mut watcher = None;
-        let repo = repo_source.repo();
-        if repo.is_local_changes() {
-            commits = Some(Commits::new(repo.commits().unwrap_or_else(|e| {
-                app.show_brief(Notification::warning(e));
-                Vec::new()
-            })));
-            match Watcher::new(repo.root()) {
+        if commits.is_some() {
+            match Watcher::new(repo_source.repo()) {
                 Ok(started) => watcher = Some(started),
                 Err(e) => app.show_brief(Notification::warning(format!(
                     "Can't watch for file changes: {e}"
@@ -151,8 +146,8 @@ impl App {
         let Some(repo) = &mut self.repository else {
             return;
         };
-        if let Some(paths) = repo.watcher.as_ref().and_then(|watcher| watcher.take()) {
-            let job = repo.repo_source.files_changed(paths);
+        if let Some(change) = repo.watcher.as_ref().and_then(|watcher| watcher.take()) {
+            let job = repo.repo_source.changed_on_disk(change);
             repo.read(job);
         }
         if let Some(answer) = repo.latest_read() {
@@ -166,23 +161,22 @@ impl App {
             return;
         };
         match applied {
-            Applied::Failed {
-                selected_commit,
-                brief,
-            } => {
+            Applied::Failed { selected, brief } => {
                 if let Some(commits) = &mut repo.side_panel.commits {
-                    commits.set_selected(selected_commit);
+                    commits.set_selected(selected);
                 }
                 self.show_brief(brief);
             }
             Applied::Done {
+                branch_name,
                 commits,
+                selected,
                 changed_files,
                 file,
                 brief,
             } => {
                 if let Some(list) = &mut repo.side_panel.commits {
-                    list.set_commits(commits);
+                    list.set_commits(branch_name, commits, selected);
                 }
                 if let Some(changed_files) = changed_files {
                     repo.side_panel.files.set_changed_files(changed_files);
@@ -369,21 +363,21 @@ impl App {
                     }
                 }
                 Section::Commits => {
-                    let hash = repo
+                    let selected = repo
                         .side_panel
                         .commits
                         .as_mut()
                         .and_then(|commits| commits.select_at_cursor());
-                    self.select_commit(hash);
+                    self.select_in_commit_list(selected);
                 }
             },
             None => {}
         }
     }
 
-    fn select_commit(&mut self, hash: Option<Option<String>>) {
-        if let (Some(hash), Some(repo)) = (hash, &mut self.repository) {
-            let job = repo.repo_source.select_commit(hash);
+    fn select_in_commit_list(&mut self, selected: Option<Selected>) {
+        if let (Some(selected), Some(repo)) = (selected, &mut self.repository) {
+            let job = repo.repo_source.select(selected);
             repo.read(job);
         }
     }
@@ -419,12 +413,12 @@ impl App {
             }
             Some(Click::Commit(row)) => {
                 self.focus = Focus::SidePanel(Section::Commits);
-                let hash = repo
+                let selected = repo
                     .side_panel
                     .commits
                     .as_mut()
                     .and_then(|commits| commits.select(row));
-                self.select_commit(hash);
+                self.select_in_commit_list(selected);
             }
             None => {}
         }

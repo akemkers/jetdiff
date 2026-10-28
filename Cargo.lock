@@ -3108,7 +3108,6 @@ version = "0.1.0"
 dependencies = [
  "gpui",
  "jetdiff-app",
- "jetdiff-files",
  "jetdiff-git",
  "jetdiff-tui",
  "jetdiff-ui",
@@ -3171,7 +3170,6 @@ version = "0.1.0"
 dependencies = [
  "jetdiff-app",
  "jetdiff-files",
- "jetdiff-git",
  "jetdiff-viewmodel",
  "ratatui",
  "unicode-width",

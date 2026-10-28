@@ -22,6 +22,11 @@ pub fn folder_icon(dark: bool) -> Icon {
     Icon::new('\u{e5ff}', 0x6C707E, 0xCED0D6, dark)
 }
 
+/// `nf-dev-git_branch`, in the color of `branch.svg`.
+pub fn branch_icon(dark: bool) -> Icon {
+    Icon::new('\u{e725}', 0x6C707E, 0xCED0D6, dark)
+}
+
 pub fn file_icon(path: &str, dark: bool) -> Icon {
     use Language::*;
     let (glyph, light, dark_color) = match Language::from_path(path) {
@@ -53,6 +58,7 @@ mod tests {
             assert_eq!(file_icon(path, true).glyph.width(), Some(1), "{path}");
         }
         assert_eq!(folder_icon(true).glyph.width(), Some(1));
+        assert_eq!(branch_icon(true).glyph.width(), Some(1));
     }
 
     #[test]

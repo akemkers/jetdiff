@@ -3,37 +3,77 @@
 mod read;
 mod show;
 
+use std::path::Path;
 use std::rc::Rc;
 
 use jetdiff_files::{ChangedFile, Tree};
 use jetdiff_git::Repo;
 
 use crate::actions::RollbackRequest;
+use crate::commits::{Commits, Selected};
 use crate::content::build_diff;
 use crate::notification::Notification;
+use crate::watcher::DiskChange;
 use read::Trigger;
 pub use read::{ReadJob, RepoRead};
 pub use show::{Applied, Show, Shown};
 
+#[derive(Clone, PartialEq)]
+struct ShownFile {
+    file: ChangedFile,
+    content: Result<[String; 2], String>,
+    /// Part of what is shown, so switching from Branch to Local changes is not `Show::Unchanged`.
+    can_rollback: bool,
+}
+
 pub struct RepoSource {
     repo: Repo,
-    commit: Option<String>,
-    /// The commit `changed_files` is from. Becomes equal to `commit` when a read is applied.
-    last_read_commit: Option<String>,
+    /// What the commit list has selected. A commit or pull request opened directly has no commit list
+    /// and is never read again.
+    selected: Selected,
+    /// What `changed_files` is from. Becomes equal to `selected` when a read is applied.
+    last_read_selected: Selected,
     changed_files: Rc<[ChangedFile]>,
-    /// What the diff shows now. The same content after a read leaves the position alone.
-    shown: Option<(ChangedFile, Result<[String; 2], String>)>,
+    /// What the diff shows now. The same after a read leaves the position alone.
+    shown: Option<ShownFile>,
 }
 
 impl RepoSource {
+    /// A commit or a pull request.
     pub fn new(repo: Repo, changed_files: Vec<ChangedFile>) -> Self {
         Self {
             repo,
-            commit: None,
-            last_read_commit: None,
+            selected: Selected::Branch,
+            last_read_selected: Selected::Branch,
             changed_files: changed_files.into(),
             shown: None,
         }
+    }
+
+    /// The repo or worktree `dir` is in, with the commit list. Starts on Branch, or on Local changes
+    /// when the branch has no commits of its own.
+    pub fn open(dir: &Path) -> Result<(Self, Commits), String> {
+        let job = ReadJob {
+            root: dir.to_owned(),
+            selected: Selected::Branch,
+            trigger: Trigger::SelectionChanged,
+        };
+        let RepoRead {
+            selected,
+            repo,
+            changed_files,
+            branch_name,
+            commits,
+            ..
+        } = job.run()?;
+        let source = Self {
+            repo,
+            selected: selected.clone(),
+            last_read_selected: selected,
+            changed_files: changed_files.into(),
+            shown: None,
+        };
+        Ok((source, Commits::new(branch_name, commits)))
     }
 
     pub fn repo(&self) -> &Repo {
@@ -45,22 +85,24 @@ impl RepoSource {
     }
 
     pub fn shown(&self) -> Option<&ChangedFile> {
-        self.shown.as_ref().map(|(file, _)| file)
+        self.shown.as_ref().map(|shown| &shown.file)
     }
 
     pub fn first(&self) -> Option<usize> {
         Tree::new(&self.changed_files).first()
     }
 
-    /// `paths` are the files the watcher saw change.
-    pub fn files_changed(&self, paths: Vec<String>) -> ReadJob {
-        self.read(Trigger::FilesChanged(paths))
+    pub fn changed_on_disk(&self, change: DiskChange) -> ReadJob {
+        self.read(match change {
+            DiskChange::Files(paths) => Trigger::FilesChanged(paths),
+            DiskChange::HeadMoved => Trigger::HeadMoved,
+        })
     }
 
-    /// `None` is Local changes. Shown when the read is applied.
-    pub fn select_commit(&mut self, hash: Option<String>) -> ReadJob {
-        self.commit = hash;
-        self.read(Trigger::CommitSelected)
+    /// Shown when the read is applied.
+    pub fn select(&mut self, selected: Selected) -> ReadJob {
+        self.selected = selected;
+        self.read(Trigger::SelectionChanged)
     }
 
     /// After `rollback`, so the list keeps up.
@@ -71,7 +113,7 @@ impl RepoSource {
     fn read(&self, trigger: Trigger) -> ReadJob {
         ReadJob {
             root: self.repo.root().to_owned(),
-            commit: self.commit.clone(),
+            selected: self.selected.clone(),
             trigger,
         }
     }
@@ -79,37 +121,42 @@ impl RepoSource {
     pub fn apply(&mut self, read: Result<RepoRead, String>) -> Applied {
         let RepoRead {
             trigger,
-            commit,
+            selected,
             repo,
             changed_files,
+            branch_name,
             commits,
         } = match read {
             Ok(read) => read,
             Err(error) => {
-                self.commit = self.last_read_commit.clone();
+                self.selected = self.last_read_selected.clone();
                 return Applied::Failed {
-                    selected_commit: self.commit.clone(),
+                    selected: self.selected.clone(),
                     brief: Notification::warning(error),
                 };
             }
         };
-        // Files are only counted when Local changes are read again as Local changes. A commit doesn't change.
-        let same_local_changes = commit.is_none() && self.last_read_commit.is_none();
+        // Files are only counted when the working tree is read again as the same source. A commit doesn't change.
+        let same_source = selected == self.last_read_selected && repo.reads_working_tree();
         let touched = match &trigger {
-            Trigger::FilesChanged(paths) if same_local_changes => {
+            Trigger::FilesChanged(paths) if same_source => {
                 jetdiff_files::touched(&self.changed_files, &changed_files, paths)
             }
-            Trigger::FilesChanged(_) | Trigger::CommitSelected | Trigger::RolledBack => 0,
+            Trigger::FilesChanged(_)
+            | Trigger::HeadMoved
+            | Trigger::SelectionChanged
+            | Trigger::RolledBack => 0,
         };
-        let selected = self.shown().map(|file| file.path.clone());
+        let shown_path = self.shown().map(|file| file.path.clone());
         self.repo = repo;
-        self.last_read_commit = commit;
+        self.selected = selected.clone();
+        self.last_read_selected = selected.clone();
         let changed = (*changed_files != *self.changed_files).then(|| {
             self.changed_files = changed_files.into();
             self.changed_files.clone()
         });
         // The selected file is kept as long as it is included
-        let file = selected
+        let file = shown_path
             .and_then(|path| self.changed_files.iter().position(|file| file.path == path))
             .or_else(|| self.first());
         let brief = match touched {
@@ -118,7 +165,9 @@ impl RepoSource {
             n => Some(Notification::info(format!("{n} files changed"))),
         };
         Applied::Done {
+            branch_name,
             commits,
+            selected,
             changed_files: changed,
             file,
             brief,
@@ -137,7 +186,12 @@ impl RepoSource {
     }
 
     fn show(&mut self, file: ChangedFile, content: Result<[String; 2], String>) -> Show {
-        let shown = Some((file.clone(), content.clone()));
+        let can_rollback = self.repo.can_rollback();
+        let shown = Some(ShownFile {
+            file: file.clone(),
+            content: content.clone(),
+            can_rollback,
+        });
         if shown == self.shown {
             return Show::Unchanged;
         }
@@ -150,14 +204,19 @@ impl RepoSource {
             diff,
             pinned,
             paths: [file.left_side_path().to_owned(), file.path.clone()],
-            can_rollback: self.repo.is_local_changes(),
+            can_rollback,
             same_file,
         }))
     }
 
     /// Run `rolled_back` afterwards, so the list keeps up.
     pub fn rollback(&mut self, request: &RollbackRequest) -> Option<Result<Show, String>> {
-        let Some((file, Ok([left_side, _]))) = self.shown.clone() else {
+        let Some(ShownFile {
+            file,
+            content: Ok([left_side, _]),
+            ..
+        }) = self.shown.clone()
+        else {
             return None;
         };
         Some(
@@ -169,190 +228,4 @@ impl RepoSource {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::{Path, PathBuf};
-    use std::process::Command;
-
-    use super::*;
-
-    struct TempRepo(PathBuf);
-
-    impl TempRepo {
-        fn new(name: &str) -> Self {
-            let dir =
-                std::env::temp_dir().join(format!("jetdiff-app-{name}-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).unwrap();
-            let repo = Self(dir);
-            repo.git(&["init", "-q", "-b", "main"]);
-            repo.git(&["config", "user.email", "t@t"]);
-            repo.git(&["config", "user.name", "t"]);
-            repo
-        }
-
-        fn git(&self, args: &[&str]) {
-            let out = Command::new("git")
-                .args(args)
-                .current_dir(&self.0)
-                .output()
-                .unwrap();
-            assert!(
-                out.status.success(),
-                "{}",
-                String::from_utf8_lossy(&out.stderr)
-            );
-        }
-
-        fn write(&self, path: &str, text: &str) {
-            std::fs::write(self.0.join(path), text).unwrap();
-        }
-
-        fn repo_source(&self) -> RepoSource {
-            let repo = Repo::local_changes(Path::new(&self.0)).unwrap();
-            let changed_files = repo.changed_files().unwrap();
-            RepoSource::new(repo, changed_files)
-        }
-    }
-
-    impl Drop for TempRepo {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    fn apply(source: &mut RepoSource, job: ReadJob) -> Applied {
-        let read = job.run();
-        source.apply(read)
-    }
-
-    fn files_changed(source: &mut RepoSource, paths: &[&str]) -> Applied {
-        let paths = paths.iter().map(|path| (*path).to_owned()).collect();
-        let job = source.files_changed(paths);
-        apply(source, job)
-    }
-
-    fn brief(applied: Applied) -> Option<Notification> {
-        match applied {
-            Applied::Done { brief, .. } => brief,
-            Applied::Failed { brief, .. } => panic!("read failed: {}", brief.text),
-        }
-    }
-
-    fn path(source: &RepoSource, file: Option<usize>) -> &str {
-        &source.changed_files()[file.unwrap()].path
-    }
-
-    fn position(source: &RepoSource, path: &str) -> Option<usize> {
-        source
-            .changed_files()
-            .iter()
-            .position(|file| file.path == path)
-    }
-
-    #[test]
-    fn source_autoreload_keeps_selected_file() {
-        let temp_repo = TempRepo::new("keeps");
-        temp_repo.write("a.rs", "a\n");
-        temp_repo.write("b.rs", "b\n");
-        temp_repo.git(&["add", "-A"]);
-        temp_repo.git(&["commit", "-q", "-m", "c"]);
-        temp_repo.write("a.rs", "a2\n");
-        temp_repo.write("b.rs", "b2\n");
-        let mut source = temp_repo.repo_source();
-        let b = position(&source, "b.rs");
-        assert!(
-            matches!(source.load(b), Show::Diff(shown) if !shown.same_file && shown.can_rollback)
-        );
-        assert!(matches!(source.load(b), Show::Unchanged));
-
-        temp_repo.write("b.rs", "b3\n");
-        temp_repo.write("c.rs", "c\n");
-        let Applied::Done {
-            changed_files,
-            file,
-            brief,
-            ..
-        } = files_changed(&mut source, &["b.rs", "c.rs"])
-        else {
-            panic!("read failed");
-        };
-        assert!(changed_files.is_some());
-        assert_eq!(path(&source, file), "b.rs");
-        assert_eq!(brief, Some(Notification::info("2 files changed")));
-        assert!(matches!(source.load(file), Show::Diff(shown) if shown.same_file));
-    }
-
-    #[test]
-    fn selecting_a_commit_says_nothing() {
-        let temp_repo = TempRepo::new("select");
-        temp_repo.write("a.rs", "a\n");
-        temp_repo.git(&["add", "-A"]);
-        temp_repo.git(&["commit", "-q", "-m", "c"]);
-        temp_repo.write("a.rs", "a2\n");
-        let mut source = temp_repo.repo_source();
-
-        let job = source.select_commit(Some("HEAD".into()));
-        assert_eq!(brief(apply(&mut source, job)), None);
-        temp_repo.write("a.rs", "a3\n");
-        let job = source.select_commit(None);
-        assert_eq!(brief(apply(&mut source, job)), None);
-        // Local changes selected again, after a file is added on disk
-        temp_repo.write("b.rs", "b\n");
-        let job = source.select_commit(None);
-        assert_eq!(brief(apply(&mut source, job)), None);
-    }
-
-    #[test]
-    fn rolling_back_says_nothing() {
-        let temp_repo = TempRepo::new("rollback");
-        temp_repo.write("a.rs", "a\n");
-        temp_repo.git(&["add", "-A"]);
-        temp_repo.git(&["commit", "-q", "-m", "c"]);
-        temp_repo.write("a.rs", "a2\n");
-        temp_repo.write("b.rs", "b\n");
-        let mut source = temp_repo.repo_source();
-        let a = position(&source, "a.rs");
-        assert!(matches!(source.load(a), Show::Diff(_)));
-
-        let request = RollbackRequest {
-            lines: [0..1, 0..1],
-            before: "a2\n".into(),
-        };
-        assert!(matches!(source.rollback(&request), Some(Ok(_))));
-        let job = source.rolled_back();
-        let Applied::Done {
-            changed_files,
-            file,
-            brief,
-            ..
-        } = apply(&mut source, job)
-        else {
-            panic!("read failed");
-        };
-        assert!(changed_files.is_some());
-        assert_eq!(path(&source, file), "b.rs");
-        assert_eq!(brief, None);
-    }
-
-    #[test]
-    fn unknown_commit_keeps_the_selected_commit() {
-        let temp_repo = TempRepo::new("unknown");
-        temp_repo.write("a.rs", "a\n");
-        temp_repo.git(&["add", "-A"]);
-        temp_repo.git(&["commit", "-q", "-m", "c"]);
-        let mut source = temp_repo.repo_source();
-        let job = source.select_commit(Some("missing".into()));
-        assert!(matches!(
-            apply(&mut source, job),
-            Applied::Failed {
-                selected_commit: None,
-                ..
-            }
-        ));
-        assert!(matches!(
-            files_changed(&mut source, &["a.rs"]),
-            Applied::Done { file: None, .. }
-        ));
-        assert!(matches!(source.load(None), Show::Empty { .. }));
-    }
-}
+mod tests;

@@ -1,16 +1,17 @@
 //! File tree and diff next to each other, with the commit list under the tree. Loads the selected file, and reads
-//! the repo source again when a commit is selected, a hunk is rolled back or files change on disk.
+//! the repo source again when a row in the commit list is selected, a hunk is rolled back, files change on disk
+//! or HEAD moves.
 
 use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
     Window, actions, div, prelude::*, px,
 };
-use jetdiff_app::{Applied, Notification, ReadJob, RepoSource, Show, Shown, empty_diff};
-use jetdiff_files::ChangedFile;
-use jetdiff_git::Repo;
+use jetdiff_app::{
+    Applied, Commits, DiskChange, Notification, ReadJob, RepoSource, Show, Shown, empty_diff,
+};
 use jetdiff_viewmodel::metrics::FONT_SIZE;
 
-use crate::commit_list::{CommitList, SelectCommit};
+use crate::commit_list::{CommitList, SelectRow};
 use crate::file_diff::{
     FileDiffView, ResetZoom, Rollback, ToggleDiffMode, ZoomIn, ZoomOut, Zoomed,
 };
@@ -44,7 +45,7 @@ pub struct RepoView {
     files: Entity<FileTree>,
     diff: Entity<FileDiffView>,
     notification_slot: Entity<NotificationSlotView>,
-    /// Only for Local changes.
+    /// Only for a folder, not for a commit or a PR.
     commits: Option<Entity<CommitList>>,
     scale: f32,
     side_panel_open: bool,
@@ -59,8 +60,7 @@ pub struct RepoView {
 }
 
 impl RepoView {
-    pub fn new(repo: Repo, changed_files: Vec<ChangedFile>, cx: &mut Context<Self>) -> Self {
-        let repo_source = RepoSource::new(repo, changed_files);
+    pub fn new(repo_source: RepoSource, commits: Option<Commits>, cx: &mut Context<Self>) -> Self {
         let first = repo_source.first();
         let selection = cx.new(|_| Selection(first));
         let files =
@@ -82,21 +82,15 @@ impl RepoView {
             cx.subscribe(&diff, |this, _, e: &Rollback, cx| this.rollback(e, cx)),
         ];
 
-        let (mut commits, mut watcher) = (None, None);
-        let repo = repo_source.repo();
-        if repo.is_local_changes() {
-            let list = repo.commits().unwrap_or_else(|e| {
-                notification_slot
-                    .update(cx, |slot, cx| slot.show_brief(Notification::warning(e), cx));
-                Vec::new()
-            });
-            let list = cx.new(|cx| CommitList::new(list, cx));
-            subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectCommit, cx| {
-                let job = this.repo_source.select_commit(e.0.clone());
+        let (mut commit_list, mut watcher) = (None, None);
+        if let Some(commits) = commits {
+            let list = cx.new(|cx| CommitList::new(commits, cx));
+            subscriptions.push(cx.subscribe(&list, |this, _, e: &SelectRow, cx| {
+                let job = this.repo_source.select(e.0.clone());
                 this.read(job, cx);
             }));
-            commits = Some(list);
-            match Watcher::new(repo.root(), cx, Self::files_changed) {
+            commit_list = Some(list);
+            match Watcher::new(repo_source.repo(), cx, Self::changed_on_disk) {
                 Ok(w) => watcher = Some(w),
                 Err(e) => {
                     let brief = Notification::warning(format!("Can't watch for file changes: {e}"));
@@ -111,7 +105,7 @@ impl RepoView {
             files,
             diff,
             notification_slot,
-            commits,
+            commits: commit_list,
             scale: 1.,
             side_panel_open: cx.global::<Settings>().side_panel_open,
             files_open: true,
@@ -151,8 +145,8 @@ impl RepoView {
         }
     }
 
-    fn files_changed(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
-        let job = self.repo_source.files_changed(paths);
+    fn changed_on_disk(&mut self, change: DiskChange, cx: &mut Context<Self>) {
+        let job = self.repo_source.changed_on_disk(change);
         self.read(job, cx);
     }
 
@@ -173,27 +167,26 @@ impl RepoView {
 
     fn show_applied(&mut self, applied: Applied, cx: &mut Context<Self>) {
         match applied {
-            Applied::Failed {
-                selected_commit,
-                brief,
-            } => {
-                // The list goes back to the commit that is still selected
+            Applied::Failed { selected, brief } => {
+                // The list goes back to what is still shown
                 if let Some(list) = &self.commits {
-                    list.update(cx, |commit_list, cx| {
-                        commit_list.set_selected(selected_commit, cx)
-                    });
+                    list.update(cx, |commit_list, cx| commit_list.set_selected(selected, cx));
                 }
                 self.notification_slot
                     .update(cx, |slot, cx| slot.show_brief(brief, cx));
             }
             Applied::Done {
+                branch_name,
                 commits,
+                selected,
                 changed_files,
                 file,
                 brief,
             } => {
                 if let Some(list) = &self.commits {
-                    list.update(cx, |commit_list, cx| commit_list.set_commits(commits, cx));
+                    list.update(cx, |commit_list, cx| {
+                        commit_list.set_commits(branch_name, commits, selected, cx)
+                    });
                 }
                 if let Some(changed_files) = changed_files {
                     self.files.update(cx, |file_tree, cx| {

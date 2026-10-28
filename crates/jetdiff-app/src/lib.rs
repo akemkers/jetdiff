@@ -12,14 +12,14 @@ pub mod repo_source;
 pub mod watcher;
 
 pub use actions::{RollbackRequest, cursor_location, rollback_request};
-pub use commits::{Commits, LOCAL_CHANGES, age};
+pub use commits::{CommitRow, Commits, LOCAL_CHANGES, Selected, age};
 pub use content::{build_diff, empty_diff};
 pub use files::{Files, count_label, file_name};
 pub use keys::{AppCommand, BINDINGS, app_command};
 pub use notification::{Notification, NotificationLevel};
 pub use notification_slot::NotificationSlot;
 pub use repo_source::{Applied, ReadJob, RepoRead, RepoSource, Show, Shown};
-pub use watcher::Watcher;
+pub use watcher::{DiskChange, Watcher};
 
 /// The row the cursor moves to, within `len` rows.
 pub fn step(row: usize, down: bool, len: usize) -> usize {

@@ -23,7 +23,6 @@ mod watcher;
 pub use file_diff::{FileDiffView, ResetZoom, ToggleDiffMode, ZoomIn, ZoomOut};
 pub use help::{HideHelp, ToggleHelp};
 pub use icons::Assets;
-pub use jetdiff_app::LOCAL_CHANGES;
 pub use repo_view::{
     FocusDown, FocusLeft, FocusRight, FocusUp, NextFile, PrevFile, RepoView, ToggleSidePanel,
 };

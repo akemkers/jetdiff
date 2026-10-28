@@ -43,8 +43,8 @@ graph TD
     rv --> watcher[Watcher]
     tree -- writes --> sel[(Selection)]
     sel -- observed --> rv
-    commits -- SelectCommit --> rv
-    watcher -- files changed --> rv
+    commits -- SelectRow --> rv
+    watcher -- files changed / HEAD moved --> rv
     fdv --> viewer[code_viewer]
     viewer --> split[split]
     viewer --> unified[unified]

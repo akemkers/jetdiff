@@ -2,7 +2,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use jetdiff_app::{Commits, Files, LOCAL_CHANGES, age, count_label, file_name};
+use jetdiff_app::{CommitRow, Commits, Files, LOCAL_CHANGES, age, count_label, file_name};
 use jetdiff_files::{FileStatus, RowKind};
 use jetdiff_viewmodel::columns::display_width;
 use jetdiff_viewmodel::{Key, KeyCode, Theme};
@@ -13,7 +13,7 @@ use ratatui::text::{Line, Span};
 
 use crate::WHEEL_ROWS;
 use crate::color::color;
-use crate::icons::{Icon, file_icon, folder_icon};
+use crate::icons::{Icon, branch_icon, file_icon, folder_icon};
 
 /// Width in columns.
 const MIN_WIDTH: u16 = 24;
@@ -22,6 +22,9 @@ const MAX_AUTO_FRACTION: f32 = 0.4;
 /// The commit list's share of the height when both sections are open.
 const COMMITS_FRACTION: f32 = 0.4;
 const MIN_COMMITS_HEIGHT: u16 = 3;
+
+/// Stands for the branch icon without a Nerd Font.
+const BRANCH_MARK: &str = " ⎇ ";
 
 /// The columns in a row in the tree: margin, indent per level, the arrow in front of a folder (or the same
 /// space in front of a file), and the edge to the right of the side panel.
@@ -381,14 +384,25 @@ impl SidePanel {
                 height: 1,
                 ..list.area
             };
-            let spans = match commits.commit(i) {
-                Some(commit) => vec![
+            let mut spans = vec![Span::raw(" ".repeat(INDENT * commits.indent(i)))];
+            match commits.row(i) {
+                CommitRow::Branch(label) => {
+                    if self.icons {
+                        spans.extend([Span::raw(" "), icon(branch_icon(theme.dark))]);
+                    } else {
+                        spans.push(Span::styled(BRANCH_MARK, graph));
+                    }
+                    spans.push(Span::raw(label.to_owned()));
+                }
+                CommitRow::LocalChanges => {
+                    spans.extend([Span::styled(" ○ ", graph), Span::raw(LOCAL_CHANGES)]);
+                }
+                CommitRow::Commit(commit) => spans.extend([
                     Span::styled(" ● ", graph),
                     Span::raw(commit.subject.clone()),
                     Span::styled(format!("  {}", age(now - commit.time)), dim),
-                ],
-                None => vec![Span::styled(" ○ ", graph), Span::raw(LOCAL_CHANGES)],
-            };
+                ]),
+            }
             if let Some(bg) =
                 Self::row_bg(theme, commits.is_cursor(i), commits.is_selected(i), focused)
             {

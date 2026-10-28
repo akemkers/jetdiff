@@ -40,8 +40,12 @@ _Avoid_: collapsed region, gap, collapsed, expanded
 ### Source
 
 **Source**:
-What the diff is taken from: Local changes, Commit, Pull request or File pair.
+What the diff is taken from: Branch, Local changes, Commit, Pull request or File pair.
 _Avoid_: target, input
+
+**Branch**:
+Everything on the current branch that is not on its base branch, committed or not, including untracked files, compared with the merge base. Local changes and the branch's own commits are slices of it.
+_Avoid_: whole branch, total diff, branch diff
 
 **Local changes**:
 Everything not yet committed in the repo, staged or not, including untracked files, compared with HEAD.
@@ -54,7 +58,7 @@ A single commit compared with its parent.
 A GitHub pull request compared with the merge base of its base branch.
 
 **Repo source**:
-A source read from a git repo: Local changes, Commit or Pull request. Shown with the side panel.
+A source read from a git repo: Branch, Local changes, Commit or Pull request. Shown with the side panel.
 _Avoid_: changes, multi file
 
 **File pair**:
@@ -62,7 +66,7 @@ Two files on disk compared directly, without a repo.
 _Avoid_: files, two files
 
 **Source autoreload**:
-Local changes read again automatically when files change on disk.
+Branch or Local changes read again automatically when files change on disk.
 _Avoid_: reload, refresh, update
 
 ### User Interface
@@ -88,7 +92,7 @@ The file path and line number of the cursor's line in the newest version of the 
 _Avoid_: location, reference, position
 
 **Side panel**:
-The panel left of the diff, holding the file tree, and for Local changes also the commit list.
+The panel left of the diff, holding the file tree, and for Branch and Local changes also the commit list.
 _Avoid_: left panel, sidebar, panel
 
 **File tree**:
@@ -96,7 +100,7 @@ The files in the current source, grouped in folders, each with its file status.
 _Avoid_: changes tree, file list
 
 **Commit list**:
-Local changes followed by commits, to pick between.
+Branch at the top, with Local changes and the branch's own commits under it as its slices, to pick between.
 
 **Keymap bar**:
 The most important keys, shown at the bottom.

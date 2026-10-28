@@ -1,6 +1,11 @@
 //! Changed files and their content from git. Calls `git` so the result is the same as in
 //! `git diff`, with the user's config and rename detection.
 
+mod branch;
+mod git_dirs;
+#[cfg(test)]
+mod temp_repo;
+
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -9,8 +14,7 @@ use std::thread;
 
 use jetdiff_files::{ChangedFile, FileStatus};
 
-/// The commit list never shows more, so an old default branch doesn't give thousands.
-const MAX_COMMITS: usize = 50;
+pub use git_dirs::GitDirs;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Commit {
@@ -51,9 +55,11 @@ pub struct Repo {
     root: PathBuf,
     /// The revision on Left. The empty tree if there is no parent.
     left_side: String,
-    /// The revision on Right. `None` is Local changes.
+    /// The revision on Right. `None` is the working tree.
     right_side: Option<String>,
-    /// The revisions the commit list shows. `None` for a commit and for a repo without commits.
+    /// Only Local changes, so rollback always means back to HEAD.
+    can_rollback: bool,
+    /// The branch's own commits as a revision range. Only for Branch, and `None` when it has none.
     history: Option<String>,
 }
 
@@ -70,6 +76,7 @@ impl Repo {
             root,
             left_side,
             right_side: Some(right_side),
+            can_rollback: false,
             history: None,
         })
     }
@@ -126,42 +133,29 @@ impl Repo {
             root,
             left_side: fork.trim_end().to_owned(),
             right_side: Some(right_side),
+            can_rollback: false,
             history: None,
         })
     }
 
-    /// Local changes, with files git doesn't track yet, against HEAD. The commit list has the commits on
-    /// the branch, or the latest ones when the branch has none of its own.
+    /// Local changes, with files git doesn't track yet, against HEAD.
     pub fn local_changes(dir: &Path) -> Result<Self, String> {
         // Each git call costs a process, so the independent ones run at the same time
-        let (root, head, branch) = thread::scope(|s| {
+        let (root, head) = thread::scope(|s| {
             let head = s.spawn(|| verify(dir, "HEAD"));
-            let branch = s.spawn(|| default_branch(dir));
-            (toplevel(dir), head.join().unwrap(), branch.join().unwrap())
+            (toplevel(dir), head.join().unwrap())
         });
         let root = root?;
-        let Some(head) = head else {
-            let left_side = empty_tree(&root)?;
-            return Ok(Self {
-                root,
-                left_side,
-                right_side: None,
-                history: None,
-            });
-        };
-        let fork = branch.and_then(|b| {
-            let out = git(&root, &["merge-base", "HEAD", &b]).ok()?;
-            Some(out.trim_end().to_owned())
-        });
-        let history = match fork {
-            Some(fork) if fork != head => format!("{fork}..HEAD"),
-            _ => "HEAD".to_owned(),
+        let left_side = match head {
+            Some(head) => head,
+            None => empty_tree(&root)?,
         };
         Ok(Self {
             root,
-            left_side: head,
+            left_side,
             right_side: None,
-            history: Some(history),
+            can_rollback: true,
+            history: None,
         })
     }
 
@@ -169,19 +163,13 @@ impl Repo {
         &self.root
     }
 
-    /// Local changes can change while they are shown; a commit can't.
-    pub fn is_local_changes(&self) -> bool {
+    /// Branch and Local changes can change while they are shown; a commit can't.
+    pub fn reads_working_tree(&self) -> bool {
         self.right_side.is_none()
     }
 
-    /// The commits on the branch, or the latest ones. Newest first. Empty for a commit.
-    pub fn commits(&self) -> Result<Vec<Commit>, String> {
-        let Some(history) = &self.history else {
-            return Ok(Vec::new());
-        };
-        let max = format!("-n{MAX_COMMITS}");
-        let args = ["log", "-z", "--format=%H%x1f%ct%x1f%s", &max, history, "--"];
-        Ok(parse_log(&git(&self.root, &args)?))
+    pub fn can_rollback(&self) -> bool {
+        self.can_rollback
     }
 
     /// The folder name of the repo or worktree.
@@ -242,8 +230,8 @@ impl Repo {
         before: &str,
     ) -> Result<String, String> {
         let path = &file.path;
-        if !self.is_local_changes() {
-            return Err("a commit can't be changed".into());
+        if !self.can_rollback {
+            return Err("only Local changes can be rolled back".into());
         }
         let full = self.root.join(path);
         let disk = std::fs::read(&full).map_err(|e| format!("{path}: {e}"))?;
@@ -284,25 +272,6 @@ fn verify(root: &Path, rev: &str) -> Option<String> {
     let spec = format!("{rev}^{{commit}}");
     let out = git(root, &["rev-parse", "--verify", "--quiet", &spec]).ok()?;
     Some(out.trim_end().to_owned())
-}
-
-/// `origin` first, so the commit list is the same as in the PR. Local main is often behind.
-fn default_branch(root: &Path) -> Option<String> {
-    let remote = git(
-        root,
-        &[
-            "symbolic-ref",
-            "--quiet",
-            "--short",
-            "refs/remotes/origin/HEAD",
-        ],
-    )
-    .ok()
-    .map(|s| s.trim_end().to_owned());
-    [remote, Some("main".into()), Some("master".into())]
-        .into_iter()
-        .flatten()
-        .find(|b| verify(root, b).is_some())
 }
 
 /// `owner/repo` from an SSH or HTTPS remote on GitHub.
@@ -433,63 +402,9 @@ fn parse_log(out: &str) -> Vec<Commit> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::temp_repo::TempRepo;
 
-    struct TempRepo(PathBuf);
-
-    impl TempRepo {
-        fn new(name: &str) -> Self {
-            let dir =
-                std::env::temp_dir().join(format!("jetdiff-git-{name}-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).unwrap();
-            let repo = Self(dir);
-            repo.git(&["init", "-q", "-b", "main"]);
-            repo.git(&["config", "user.email", "t@t"]);
-            repo.git(&["config", "user.name", "t"]);
-            repo
-        }
-
-        fn git(&self, args: &[&str]) -> String {
-            git(&self.0, args).unwrap()
-        }
-
-        fn write(&self, path: &str, text: &str) {
-            let p = self.0.join(path);
-            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-            std::fs::write(p, text).unwrap();
-        }
-
-        fn commit(&self) {
-            self.git(&["add", "-A"]);
-            self.git(&["commit", "-q", "-m", "c"]);
-        }
-
-        /// As after a fetch where `origin/main` is at HEAD.
-        fn origin_main(&self) {
-            self.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
-            self.git(&[
-                "symbolic-ref",
-                "refs/remotes/origin/HEAD",
-                "refs/remotes/origin/main",
-            ]);
-        }
-    }
-
-    impl Drop for TempRepo {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    fn subjects(repo: &Repo) -> Vec<String> {
-        repo.commits()
-            .unwrap()
-            .into_iter()
-            .map(|c| c.subject)
-            .collect()
-    }
-
-    fn summary(files: &[ChangedFile]) -> Vec<(FileStatus, &str, Option<&str>)> {
+    pub(crate) fn summary(files: &[ChangedFile]) -> Vec<(FileStatus, &str, Option<&str>)> {
         let mut summary: Vec<_> = files
             .iter()
             .map(|file| {
@@ -662,65 +577,6 @@ mod tests {
         assert_eq!(
             summary(&repo.changed_files().unwrap()),
             [(FileStatus::Modified, "a.rs", None)]
-        );
-    }
-
-    #[test]
-    fn commits_against_origin_ahead_of_local_main() {
-        let r = TempRepo::new("origin");
-        r.write("a.rs", "a\n");
-        r.commit();
-        // Someone else's change is merged into origin/main, but local main is not pulled
-        r.git(&["checkout", "-q", "-b", "other"]);
-        r.write("c.rs", "c\n");
-        r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "theirs"]);
-        r.origin_main();
-        r.git(&["checkout", "-q", "-b", "feature"]);
-        r.write("b.rs", "b\n");
-        r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "mine"]);
-        assert_eq!(subjects(&Repo::local_changes(&r.0).unwrap()), ["mine"]);
-    }
-
-    #[test]
-    fn main_with_unpushed_commits() {
-        let r = TempRepo::new("unpushed");
-        r.write("a.rs", "a\n");
-        r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "pushed"]);
-        r.origin_main();
-        r.write("b.rs", "b\n");
-        r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "unpushed"]);
-        assert_eq!(subjects(&Repo::local_changes(&r.0).unwrap()), ["unpushed"]);
-    }
-
-    #[test]
-    fn commits_on_the_branch_otherwise_the_latest() {
-        let r = TempRepo::new("commits");
-        assert!(
-            Repo::local_changes(&r.0)
-                .unwrap()
-                .commits()
-                .unwrap()
-                .is_empty()
-        );
-        r.write("a.rs", "a\n");
-        r.git(&["add", "-A"]);
-        r.git(&["commit", "-q", "-m", "first"]);
-        r.write("a.rs", "b\n");
-        r.git(&["commit", "-q", "-am", "second\n\nmore text"]);
-        assert_eq!(
-            subjects(&Repo::local_changes(&r.0).unwrap()),
-            ["second", "first"]
-        );
-        r.git(&["checkout", "-q", "-b", "feature"]);
-        r.write("a.rs", "c\n");
-        r.git(&["commit", "-q", "-am", "on the branch"]);
-        assert_eq!(
-            subjects(&Repo::local_changes(&r.0).unwrap()),
-            ["on the branch"]
         );
     }
 

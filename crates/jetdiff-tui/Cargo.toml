@@ -9,5 +9,4 @@ ratatui = { version = "0.30", features = ["unstable-backend-writer"] }
 unicode-width = "0.2"
 jetdiff-app = { path = "../jetdiff-app" }
 jetdiff-files = { path = "../jetdiff-files" }
-jetdiff-git = { path = "../jetdiff-git" }
 jetdiff-viewmodel = { path = "../jetdiff-viewmodel" }
