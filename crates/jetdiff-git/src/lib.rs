@@ -85,7 +85,8 @@ impl Repo {
     /// the repo in `dir` must be the one the PR belongs to.
     pub fn pull_request(dir: &Path, pr: &PullRequest) -> Result<Self, String> {
         let root = toplevel(dir).map_err(|_| "not in a git repo".to_owned())?;
-        let origin = git(&root, &["remote", "get-url", "origin"])
+        // As configured, since `get-url` applies `insteadOf` and can hide that it is GitHub
+        let origin = git(&root, &["config", "--get", "remote.origin.url"])
             .map_err(|_| "the repo has no origin".to_owned())?;
         let origin = origin.trim_end();
         if !github_slug(origin).is_some_and(|s| s.eq_ignore_ascii_case(&pr.slug)) {
