@@ -25,7 +25,7 @@ use crate::side_panel_size::{SectionHeight, SidePanelWidth};
 use crate::text::FAMILY;
 use crate::watcher::Watcher;
 
-// Vim's window keys and file switching. The tree and the commit list are on the left, the diff on the right.
+// Vim's window keys, and file and commit switching. The tree and the commit list are on the left, the diff on the right.
 actions!(
     jetdiff,
     [
@@ -35,7 +35,9 @@ actions!(
         FocusRight,
         ToggleSidePanel,
         NextFile,
-        PrevFile
+        PrevFile,
+        NextCommit,
+        PrevCommit
     ]
 );
 
@@ -404,6 +406,16 @@ impl Render for RepoView {
             }))
             .on_action(cx.listener(|this, _: &PrevFile, _, cx| {
                 this.files.update(cx, |t, cx| t.step(false, cx))
+            }))
+            .on_action(cx.listener(|this, _: &NextCommit, _, cx| {
+                if let Some(list) = &this.commits {
+                    list.update(cx, |c, cx| c.step(true, cx))
+                }
+            }))
+            .on_action(cx.listener(|this, _: &PrevCommit, _, cx| {
+                if let Some(list) = &this.commits {
+                    list.update(cx, |c, cx| c.step(false, cx))
+                }
             }))
             // Zoom, help and diff mode also work when the tree or the commit list has focus
             .on_action(cx.listener(|this, a: &ZoomIn, w, cx| {

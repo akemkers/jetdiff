@@ -24,7 +24,8 @@ pub use file_diff::{FileDiffView, ResetZoom, ToggleDiffMode, ZoomIn, ZoomOut};
 pub use help::{HideHelp, ToggleHelp};
 pub use icons::Assets;
 pub use repo_view::{
-    FocusDown, FocusLeft, FocusRight, FocusUp, NextFile, PrevFile, RepoView, ToggleSidePanel,
+    FocusDown, FocusLeft, FocusRight, FocusUp, NextCommit, NextFile, PrevCommit, PrevFile,
+    RepoView, ToggleSidePanel,
 };
 pub use settings::Settings;
 pub use text::load_font;

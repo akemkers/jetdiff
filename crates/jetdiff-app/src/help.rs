@@ -29,6 +29,7 @@ pub const ALL: [(&str, &[Keys]); 4] = [
         &[
             ("Tab Shift-Tab", "next/previous file"),
             ("J K", "next/previous file"),
+            ("N P", "next/previous commit"),
             ("C-hjkl", "move focus"),
             ("b", "toggle side panel"),
         ],

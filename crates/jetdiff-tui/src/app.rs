@@ -312,6 +312,13 @@ impl App {
                     self.select(Some(next));
                 }
             }
+            AppCommand::NextCommit | AppCommand::PrevCommit => {
+                let selected = self
+                    .repository
+                    .as_mut()
+                    .and_then(|repo| repo.side_panel.step_commit(cmd == AppCommand::NextCommit));
+                self.select_in_commit_list(selected);
+            }
             AppCommand::ToggleSidePanel => {
                 if let Some(repo) = &mut self.repository {
                     repo.side_panel_open = !repo.side_panel_open;

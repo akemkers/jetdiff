@@ -15,6 +15,8 @@ pub enum AppCommand {
     ToggleDiffMode,
     NextFile,
     PrevFile,
+    NextCommit,
+    PrevCommit,
     ToggleHelp,
     HideHelp,
     Quit,
@@ -37,6 +39,8 @@ pub const BINDINGS: &[(&str, AppCommand)] = &[
     ("J", AppCommand::NextFile),
     ("shift-tab", AppCommand::PrevFile),
     ("K", AppCommand::PrevFile),
+    ("N", AppCommand::NextCommit),
+    ("P", AppCommand::PrevCommit),
     ("?", AppCommand::ToggleHelp),
     ("escape", AppCommand::HideHelp),
     ("q", AppCommand::Quit),
@@ -122,6 +126,11 @@ mod tests {
             app_command(Key::new(KeyCode::Tab).shift()),
             Some(AppCommand::PrevFile)
         );
+        assert_eq!(
+            app_command(Key::char('N').shift()),
+            Some(AppCommand::NextCommit)
+        );
+        assert_eq!(app_command(Key::char('n')), None);
         assert_eq!(app_command(Key::ctrl('h')), Some(AppCommand::FocusLeft));
         assert_eq!(app_command(secondary('-')), Some(AppCommand::ZoomOut));
         assert_eq!(app_command(secondary('+')), Some(AppCommand::ZoomIn));

@@ -69,6 +69,14 @@ impl CommitList {
         cx.notify();
     }
 
+    /// Selects the row next to the selected one, also without focus.
+    pub fn step(&mut self, down: bool, cx: &mut Context<Self>) {
+        let row = self.commits.row_next_to_selected(down);
+        self.scroll.scroll_to_item(row, ScrollStrategy::Top);
+        let selected = self.commits.select(row);
+        self.selected(selected, cx);
+    }
+
     fn selected(&mut self, selected: Option<Selected>, cx: &mut Context<Self>) {
         if let Some(selected) = selected {
             cx.emit(SelectRow(selected));

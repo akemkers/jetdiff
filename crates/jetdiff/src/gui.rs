@@ -6,9 +6,9 @@ use gpui::{
 };
 use jetdiff_app::{AppCommand, BINDINGS};
 use jetdiff_ui::{
-    Assets, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextFile, PrevFile,
-    RepoView, ResetZoom, Settings, ToggleDiffMode, ToggleHelp, ToggleSidePanel, UiTheme, ZoomIn,
-    ZoomOut, load_font,
+    Assets, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextCommit,
+    NextFile, PrevCommit, PrevFile, RepoView, ResetZoom, Settings, ToggleDiffMode, ToggleHelp,
+    ToggleSidePanel, UiTheme, ZoomIn, ZoomOut, load_font,
 };
 
 use crate::Content;
@@ -61,6 +61,8 @@ fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
         AppCommand::ToggleDiffMode => KeyBinding::new(keys, ToggleDiffMode, None),
         AppCommand::NextFile => KeyBinding::new(keys, NextFile, None),
         AppCommand::PrevFile => KeyBinding::new(keys, PrevFile, None),
+        AppCommand::NextCommit => KeyBinding::new(keys, NextCommit, None),
+        AppCommand::PrevCommit => KeyBinding::new(keys, PrevCommit, None),
         AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),
         AppCommand::HideHelp => KeyBinding::new(keys, HideHelp, None),
         AppCommand::Quit => KeyBinding::new(keys, Quit, None),

@@ -130,6 +130,11 @@ impl Commits {
         self.select(self.row_of(&self.cursor))
     }
 
+    /// From the selection, not the cursor.
+    pub fn row_next_to_selected(&self, down: bool) -> usize {
+        step(self.row_of(&self.selected), down, self.len())
+    }
+
     fn has_branch_row(&self) -> bool {
         !self.commits.is_empty()
     }
@@ -250,6 +255,17 @@ mod tests {
         );
         assert_eq!(commits.select_at_cursor(), None);
         assert!(commits.is_selected(2) && commits.is_cursor(2));
+    }
+
+    #[test]
+    fn steps_from_the_selection() {
+        let mut commits = Commits::new(None, vec![commit("a"), commit("b")]);
+        commits.move_cursor(true);
+        commits.move_cursor(true);
+        assert_eq!(commits.row_next_to_selected(true), 1);
+        assert_eq!(commits.row_next_to_selected(false), 0);
+        commits.select(3);
+        assert_eq!(commits.row_next_to_selected(true), 3);
     }
 
     #[test]

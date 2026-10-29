@@ -2,7 +2,9 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use jetdiff_app::{CommitRow, Commits, Files, LOCAL_CHANGES, age, count_label, file_name};
+use jetdiff_app::{
+    CommitRow, Commits, Files, LOCAL_CHANGES, Selected, age, count_label, file_name,
+};
 use jetdiff_files::{FileStatus, RowKind};
 use jetdiff_viewmodel::columns::display_width;
 use jetdiff_viewmodel::{Key, KeyCode, Theme};
@@ -143,6 +145,14 @@ impl SidePanel {
                 }
             }
         }
+    }
+
+    /// Selects the commit next to the selected one, also without focus.
+    pub fn step_commit(&mut self, down: bool) -> Option<Selected> {
+        let commits = self.commits.as_mut()?;
+        let row = commits.row_next_to_selected(down);
+        self.commit_rows.reveal(row);
+        commits.select(row)
     }
 
     /// The width the content needs, within the limits.
