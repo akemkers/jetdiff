@@ -79,6 +79,7 @@ A small, vim-inspired keymap for reading. The cursor is a whole line, with no co
 | Key                                 | Does                                                                                                 |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `J` `K`, Tab Shift+Tab              | Next and previous file in the tree                                                                   |
+| `N` `P`                             | Next and previous row in the commit list                                                             |
 | Ctrl+h Ctrl+j Ctrl+k Ctrl+l         | Move focus between the diff, the tree and the commit list. There `j` `k` and the arrows move, and Enter or `l` selects |
 | `b`                                 | Hide or show the side panel                                                                          |
 | `j` `k`, arrow up and down          | Move the cursor. Skips closed folds                                                                  |
@@ -96,6 +97,16 @@ A small, vim-inspired keymap for reading. The cursor is a whole line, with no co
 | Cmd/Ctrl+Plus, Minus, 0             | Zoom in, out and back to 14pt. The tree follows                                                      |
 | `?`                                 | Show or hide all the keys. Esc also closes                                                           |
 | `q`, Cmd/Ctrl+Q, Cmd/Ctrl+W         | Quit                                                                                                 |
+
+## Claude Code
+
+`claude-plugin/` is a Claude Code plugin that adds `/jetdiff`. It opens jetdiff for the repo the session is in, and takes the same arguments as `jetdiff`. It also runs while Claude is working. Install it at the prompt of a Claude Code session:
+
+```
+/plugin install jetdiff --marketplace akemkers/jetdiff
+```
+
+The repo is private, so this needs read access on GitHub and an SSH key or `gh auth setup-git` for github.com.
 
 ## Development
 

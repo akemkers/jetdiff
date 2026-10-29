@@ -1,0 +1,5 @@
+{
+  "name": "jetdiff",
+  "owner": { "name": "akemkers" },
+  "plugins": [{ "name": "jetdiff", "source": "./claude-plugin" }]
+}
