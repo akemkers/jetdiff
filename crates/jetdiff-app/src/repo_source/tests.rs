@@ -228,6 +228,38 @@ fn source_autoreload_keeps_selected_file() {
 }
 
 #[test]
+fn another_commit_starts_from_the_first_file() {
+    let temp_repo = TempRepo::new("another");
+    temp_repo.write("a.rs", "a\n");
+    temp_repo.write("b.rs", "b\n");
+    temp_repo.commit();
+    temp_repo.git(&["checkout", "-q", "-b", "feature"]);
+    temp_repo.write("a.rs", "a2\n");
+    temp_repo.write("b.rs", "b2\n");
+    let first = temp_repo.commit();
+    temp_repo.write("a.rs", "a3\n");
+    temp_repo.write("b.rs", "b3\n");
+    let second = temp_repo.commit();
+    let (mut source, _) = temp_repo.open();
+
+    select(&mut source, Selected::Commit(first.clone()));
+    assert!(matches!(
+        source.load(position(&source, "b.rs")),
+        Show::Diff(_)
+    ));
+    let Applied::Done { file, .. } = select(&mut source, Selected::Commit(second)) else {
+        panic!("read failed");
+    };
+    assert_eq!(path(&source, file), "a.rs");
+    assert!(matches!(source.load(file), Show::Diff(_)));
+    // a.rs again, but from the top
+    let Applied::Done { file, .. } = select(&mut source, Selected::Commit(first)) else {
+        panic!("read failed");
+    };
+    assert!(matches!(source.load(file), Show::Diff(shown) if !shown.same_file));
+}
+
+#[test]
 fn selecting_says_nothing() {
     let temp_repo = TempRepo::feature_branch("select");
     let (mut source, _) = temp_repo.open();

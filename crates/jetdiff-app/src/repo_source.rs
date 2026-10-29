@@ -147,6 +147,10 @@ impl RepoSource {
             | Trigger::SelectionChanged
             | Trigger::RolledBack => 0,
         };
+        // Another source starts from the top, also when the shown file is in it
+        if selected != self.last_read_selected {
+            self.shown = None;
+        }
         let shown_path = self.shown().map(|file| file.path.clone());
         self.repo = repo;
         self.selected = selected.clone();
@@ -155,7 +159,7 @@ impl RepoSource {
             self.changed_files = changed_files.into();
             self.changed_files.clone()
         });
-        // The selected file is kept as long as it is included
+        // Within the same source the selected file is kept as long as it is included
         let file = shown_path
             .and_then(|path| self.changed_files.iter().position(|file| file.path == path))
             .or_else(|| self.first());
