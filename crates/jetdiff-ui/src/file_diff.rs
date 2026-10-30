@@ -4,7 +4,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
+    ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
     MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window,
     actions, canvas, div, prelude::*, px,
 };
@@ -58,6 +58,8 @@ pub struct FileDiffView {
     max_cols: usize,
     /// Split or Unified for all files, until `v` switches.
     unified: bool,
+    /// Folds closed for all files, until `f` switches.
+    fold_unchanged: bool,
     /// Right is a file in Local changes, so hunks can be rolled back.
     can_rollback: bool,
     overlay: Option<Overlay>,
@@ -82,11 +84,13 @@ impl FileDiffView {
         notification_slot: Entity<NotificationSlotView>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let unified = cx.global::<Settings>().unified;
+        let settings = cx.global::<Settings>();
+        let (unified, fold_unchanged) = (settings.unified, settings.fold_unchanged);
         Self {
             max_cols: diff.max_display_width(),
-            mode: diff_mode(diff, unified, cx),
+            mode: diff_mode(diff, unified, fold_unchanged),
             unified,
+            fold_unchanged,
             font_size: cx.global::<Settings>().font_size,
             style: None,
             scroll: ScrollAnimator::default(),
@@ -114,7 +118,7 @@ impl FileDiffView {
         }
         self.paths = paths;
         self.max_cols = diff.max_display_width();
-        self.mode = diff_mode(diff, self.unified, cx);
+        self.mode = diff_mode(diff, self.unified, self.fold_unchanged);
         self.scroll = ScrollAnimator::default();
         self.keys.reset();
         self.initialized = false;
@@ -132,7 +136,7 @@ impl FileDiffView {
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         self.stop_animation();
-        let folding = folding(&diff, cx);
+        let folding = folding(&diff, self.fold_unchanged);
         self.mode
             .replace_diff(Rc::new(diff), Rc::new(folding), self.unified, vp);
         self.shared.clear();
@@ -157,7 +161,7 @@ impl FileDiffView {
         self.unified = !self.unified;
         self.stop_animation();
         let diff = self.mode.diff().clone();
-        let folding = Rc::new(folding(&diff, cx));
+        let folding = Rc::new(folding(&diff, self.fold_unchanged));
         match self.viewport().filter(|_| self.initialized) {
             Some(vp) => self.mode.toggle(folding, vp),
             // Nothing is shown yet, so `step` lands on the first hunk
@@ -265,6 +269,7 @@ impl FileDiffView {
         if let (Command::ToggleFolds, true, DiffMode::Split(state)) = (cmd, out.changed, &self.mode)
         {
             let closed = state.folding.visible(Side::Left).next().is_some();
+            self.fold_unchanged = closed;
             self.show_brief(
                 if closed {
                     "Folds closed"
@@ -501,14 +506,14 @@ impl FileDiffView {
     }
 }
 
-fn diff_mode(diff: FileDiff, unified: bool, cx: &App) -> DiffMode {
-    let folding = folding(&diff, cx);
+fn diff_mode(diff: FileDiff, unified: bool, fold_unchanged: bool) -> DiffMode {
+    let folding = folding(&diff, fold_unchanged);
     DiffMode::new(Rc::new(diff), Rc::new(folding), unified)
 }
 
-fn folding(diff: &FileDiff, cx: &App) -> Folding {
+fn folding(diff: &FileDiff, fold_unchanged: bool) -> Folding {
     let mut folding = Folding::new(diff);
-    folding.set_all_open(!cx.global::<Settings>().fold_unchanged);
+    folding.set_all_open(!fold_unchanged);
     folding
 }
 

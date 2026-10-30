@@ -8,7 +8,7 @@ pub struct Settings {
     pub theme: UiTheme,
     /// Where zoom starts, and where `ResetZoom` goes back to.
     pub font_size: f32,
-    /// New files are shown with unchanged parts folded.
+    /// Where folding starts. `f` switches for the session.
     pub fold_unchanged: bool,
     /// The diff mode at startup. `v` switches.
     pub unified: bool,

@@ -90,7 +90,7 @@ A small, vim-inspired keymap for reading. The cursor is a whole line, with no co
 | `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Next and previous hunk                                                                               |
 | `H` `L`                             | To Left and Right. Split only                                                                        |
 | `o`                                 | Open the fold at the cursor. Split only                                                              |
-| `f`                                 | Open all folds, or close all if none are closed. Split only                                          |
+| `f`                                 | Open all folds, or close all if none are closed, for all files. Split only                           |
 | `v`                                 | Switch between Split and Unified for all files. The cursor stays where it is                         |
 | `y`                                 | Copy the cursor location (`file:line`). The line is in the newest version, also from Left            |
 | `r`                                 | Roll back the hunk at the cursor to Left, after Enter. Local changes only                            |
