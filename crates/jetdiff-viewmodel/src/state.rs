@@ -239,18 +239,24 @@ impl DiffState {
         } else {
             previous_hunk(&self.diff, side, self.cursor.line)
         };
-        let Some(hunk) = hunk else {
-            return Outcome::default();
-        };
-        let t = target_for_hunk(&self.diff, &self.folding, hunk, vp);
+        match hunk {
+            Some(hunk) => self.land_on_hunk(hunk, vp),
+            None => Outcome::default(),
+        }
+    }
+
+    /// The landing from `n` and `p`, for a hunk picked some other way.
+    pub fn land_on_hunk(&mut self, hunk: usize, viewport: Viewport) -> Outcome {
+        let side = self.cursor.side;
+        let t = target_for_hunk(&self.diff, &self.folding, hunk, viewport);
         let line = self.clamp_line(side, t.cursor_lines[idx(side)]);
         self.cursor = Cursor::new(side, line);
         self.master = side;
         self.scroll.y = t.scroll_y;
         self.scroll.x = t.scroll_x;
-        let y = self.follow_y(self.scroll.y(side), vp, false);
+        let y = self.follow_y(self.scroll.y(side), viewport, false);
         if y != self.scroll.y(side) {
-            self.scroll_cursor_side_to(y, vp);
+            self.scroll_cursor_side_to(y, viewport);
         }
         Outcome::animated()
     }

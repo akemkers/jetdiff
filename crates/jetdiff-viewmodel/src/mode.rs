@@ -96,6 +96,13 @@ impl DiffMode {
         }
     }
 
+    pub fn land_on_hunk(&mut self, hunk: usize, viewport: Viewport) -> Outcome {
+        match self {
+            Self::Split(state) => state.land_on_hunk(hunk, viewport),
+            Self::Unified(state) => state.land_on_hunk(hunk, viewport),
+        }
+    }
+
     /// The cursor's line in the newest version, for `y`.
     pub fn cursor_location(&self) -> Cursor {
         match self {

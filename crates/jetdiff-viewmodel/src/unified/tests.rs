@@ -246,3 +246,17 @@ fn split_pairs_lines_with_common_text() {
     assert_eq!(rows[4], [Some(4), Some(1)]);
     assert_eq!(rows[5], [Some(5), Some(2)]);
 }
+
+#[test]
+// One excerpt is a list with one range
+#[allow(clippy::single_range_in_vec_init)]
+fn excerpts_with_context_around_the_hunks() {
+    let diff = UnifiedDiff::new(three_hunks());
+    // Each hunk is a deleted and an added row, so hunk 0 is rows 10 and 11
+    assert_eq!(diff.excerpts(&[0], 3), [7..15]);
+    assert_eq!(diff.excerpts(&[1, 0], 3), [7..15, 38..46]);
+    // Overlapping context gives one excerpt, cut at the ends of the file
+    assert_eq!(diff.excerpts(&[0, 1], 20), [0..63]);
+    assert_eq!(diff.excerpts(&[2], 50), [42..diff.row_count()]);
+    assert_eq!(diff.excerpts(&[], 3), Vec::<Range<usize>>::new());
+}

@@ -2,10 +2,11 @@
 
 pub type Keys = (&'static str, &'static str);
 
-pub const KEYMAP_BAR: [Keys; 5] = [
+pub const KEYMAP_BAR: [Keys; 6] = [
     ("Tab Shift-Tab", "file"),
     ("j k", "up/down"),
     ("n p", "hunk"),
+    ("w", "walkthrough"),
     ("?", "all keys"),
     ("q", "quit"),
 ];
@@ -28,6 +29,7 @@ pub const ALL: [(&str, &[Keys]); 4] = [
         "Files",
         &[
             ("Tab Shift-Tab", "next/previous file"),
+            ("w", "walkthrough, in steps"),
             ("J K", "next/previous file"),
             ("N P", "next/previous commit"),
             ("C-hjkl", "move focus"),

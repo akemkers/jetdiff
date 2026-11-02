@@ -4,11 +4,12 @@ use gpui::{
     App, AppContext, Application, Bounds, Context, Focusable, KeyBinding, Render, WindowBounds,
     WindowOptions, actions, px, size,
 };
+use jetdiff_app::walkthrough::Writer;
 use jetdiff_app::{AppCommand, BINDINGS};
 use jetdiff_ui::{
     Assets, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextCommit,
     NextFile, PrevCommit, PrevFile, RepoView, ResetZoom, Settings, ToggleDiffMode, ToggleHelp,
-    ToggleSidePanel, UiTheme, ZoomIn, ZoomOut, load_font,
+    ToggleSidePanel, ToggleWalkthrough, UiTheme, ZoomIn, ZoomOut, load_font,
 };
 
 use crate::Content;
@@ -28,6 +29,11 @@ pub fn run(content: Content, title: String, config: Config) {
                 fold_unchanged: config.fold_unchanged,
                 unified: config.unified,
                 side_panel_open: config.side_panel.open,
+                walkthrough: Writer {
+                    command: config.walkthrough.command.clone(),
+                    model: config.walkthrough.model.clone(),
+                    language: config.walkthrough.language.clone(),
+                },
             });
             match content {
                 Content::FilePair(diff, paths) => open(cx, title, move |cx| {
@@ -62,6 +68,7 @@ fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
         AppCommand::NextFile => KeyBinding::new(keys, NextFile, None),
         AppCommand::PrevFile => KeyBinding::new(keys, PrevFile, None),
         AppCommand::NextCommit => KeyBinding::new(keys, NextCommit, None),
+        AppCommand::ToggleWalkthrough => KeyBinding::new(keys, ToggleWalkthrough, None),
         AppCommand::PrevCommit => KeyBinding::new(keys, PrevCommit, None),
         AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),
         AppCommand::HideHelp => KeyBinding::new(keys, HideHelp, None),

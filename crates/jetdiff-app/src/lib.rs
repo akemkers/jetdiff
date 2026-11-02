@@ -9,6 +9,7 @@ pub mod keys;
 pub mod notification;
 pub mod notification_slot;
 pub mod repo_source;
+pub mod walkthrough;
 pub mod watcher;
 
 pub use actions::{RollbackRequest, cursor_location, rollback_request};

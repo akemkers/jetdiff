@@ -16,6 +16,8 @@ pub enum AppCommand {
     NextFile,
     PrevFile,
     NextCommit,
+    /// The walkthrough mode, in and out.
+    ToggleWalkthrough,
     PrevCommit,
     ToggleHelp,
     HideHelp,
@@ -40,6 +42,7 @@ pub const BINDINGS: &[(&str, AppCommand)] = &[
     ("shift-tab", AppCommand::PrevFile),
     ("K", AppCommand::PrevFile),
     ("N", AppCommand::NextCommit),
+    ("w", AppCommand::ToggleWalkthrough),
     ("P", AppCommand::PrevCommit),
     ("?", AppCommand::ToggleHelp),
     ("escape", AppCommand::HideHelp),

@@ -312,6 +312,8 @@ impl App {
                     self.select(Some(next));
                 }
             }
+            // The walkthrough is only in the window so far
+            AppCommand::ToggleWalkthrough => return Ok(false),
             AppCommand::NextCommit | AppCommand::PrevCommit => {
                 let selected = self
                     .repository

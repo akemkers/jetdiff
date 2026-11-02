@@ -7,6 +7,8 @@ use jetdiff_git::Commit;
 use crate::step;
 
 pub const LOCAL_CHANGES: &str = "Local changes";
+/// Enough of a hash to tell commits apart, as git shows it.
+const SHORT_HASH: usize = 7;
 /// The Branch row when HEAD is detached.
 const BRANCH: &str = "Branch";
 
@@ -89,6 +91,24 @@ impl Commits {
 
     pub fn is_selected(&self, row: usize) -> bool {
         self.row_of(&self.selected) == row
+    }
+
+    /// What is selected, in words, for the model that writes a walkthrough.
+    pub fn describe_selected(&self) -> String {
+        match &self.selected {
+            Selected::Branch => format!(
+                "Branch {}, committed and not, against where it branched off its base branch",
+                self.branch_label()
+            ),
+            Selected::LocalChanges => {
+                "Local changes, everything not committed, against HEAD".into()
+            }
+            Selected::Commit(hash) => {
+                let commit = self.commits.iter().find(|commit| &commit.hash == hash);
+                let subject = commit.map_or("", |commit| commit.subject.as_str());
+                format!("Commit {}: {subject}", &hash[..hash.len().min(SHORT_HASH)])
+            }
+        }
     }
 
     /// After a read. `selected` is what the repo source shows now.

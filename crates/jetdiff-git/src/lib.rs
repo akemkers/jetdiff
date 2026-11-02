@@ -51,6 +51,7 @@ impl PullRequest {
     }
 }
 
+#[derive(Clone)]
 pub struct Repo {
     root: PathBuf,
     /// The revision on Left. The empty tree if there is no parent.

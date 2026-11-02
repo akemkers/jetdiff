@@ -6,6 +6,8 @@ license.workspace = true
 
 [dependencies]
 notify = "8"
+serde.workspace = true
+serde_json.workspace = true
 jetdiff-files = { path = "../jetdiff-files" }
 jetdiff-git = { path = "../jetdiff-git" }
 jetdiff-viewmodel = { path = "../jetdiff-viewmodel" }

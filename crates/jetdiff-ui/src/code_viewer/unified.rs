@@ -32,8 +32,10 @@ pub struct UnifiedPainter {
     pub style: TextStyle,
     pub scroll_y: f32,
     pub scroll_x: f32,
-    /// `line` is the row.
-    pub cursor_row: CursorRow,
+    /// `line` is the row. `None` in an excerpt, which has no cursor.
+    pub cursor_row: Option<CursorRow>,
+    /// An excerpt is too short for one.
+    pub hunk_minimap: bool,
 }
 
 /// The geometry and the rows that are visible in this frame.
@@ -80,14 +82,16 @@ impl UnifiedPainter {
             frame.paint_cursor_row(window);
             let widest = frame.paint_text(cache, window, cx);
             frame.paint_line_numbers(cache, window, cx);
-            hunk_minimap.paint(
-                code,
-                top,
-                self.scroll_y,
-                content_height,
-                &self.theme,
-                window,
-            );
+            if self.hunk_minimap {
+                hunk_minimap.paint(
+                    code,
+                    top,
+                    self.scroll_y,
+                    content_height,
+                    &self.theme,
+                    window,
+                );
+            }
             widest
         });
         cache.trim(first..last + 1);
@@ -181,7 +185,9 @@ impl Frame<'_> {
     }
 
     fn paint_cursor_row(&self, window: &mut Window) {
-        let cursor_row = self.painter.cursor_row;
+        let Some(cursor_row) = self.painter.cursor_row else {
+            return;
+        };
         if !self.visible.contains(&cursor_row.line) {
             return;
         }
@@ -249,7 +255,10 @@ impl Frame<'_> {
             for row_index in self.visible.clone() {
                 let y = self.row_top(row_index) + painter.style.number_dy;
                 let cursor_numbers;
-                let numbers = if row_index == painter.cursor_row.line {
+                let is_cursor_row = painter
+                    .cursor_row
+                    .is_some_and(|cursor_row| cursor_row.line == row_index);
+                let numbers = if is_cursor_row {
                     let color = painter.theme.cursor_row_line_number;
                     cursor_numbers = painter.shape_numbers(row_index, color, window);
                     &cursor_numbers

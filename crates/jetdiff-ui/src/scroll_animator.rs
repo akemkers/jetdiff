@@ -37,6 +37,10 @@ impl ScrollAnimator {
         self.animation = Some((animation, Instant::now()));
     }
 
+    pub fn is_animating(&self) -> bool {
+        self.animation.is_some()
+    }
+
     /// Stops an animation where it is. Gives the position, which must then become the new target.
     pub fn stop(&mut self) -> Option<ScrollState> {
         self.animation.take().map(|_| self.shown)

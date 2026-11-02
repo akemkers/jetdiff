@@ -171,6 +171,27 @@ impl UnifiedDiff {
         &self.hunk_rows
     }
 
+    /// The rows of `hunks` with `context` unchanged rows around each, in order. Excerpts that
+    /// overlap or touch become one.
+    pub fn excerpts(&self, hunks: &[usize], context: usize) -> Vec<Range<usize>> {
+        let mut rows: Vec<Range<usize>> = hunks
+            .iter()
+            .map(|&hunk| {
+                let rows = &self.hunk_rows[hunk];
+                rows.start.saturating_sub(context)..(rows.end + context).min(self.rows.len())
+            })
+            .collect();
+        rows.sort_by_key(|rows| rows.start);
+        let mut excerpts: Vec<Range<usize>> = Vec::with_capacity(rows.len());
+        for rows in rows {
+            match excerpts.last_mut() {
+                Some(last) if rows.start <= last.end => last.end = last.end.max(rows.end),
+                _ => excerpts.push(rows),
+            }
+        }
+        excerpts
+    }
+
     pub fn text(&self, row: usize) -> &str {
         let row = self.row(row);
         self.diff.line(row.side(), row.line())
@@ -491,9 +512,14 @@ impl UnifiedState {
         } else {
             hunks.iter().rposition(|rows| rows.end <= self.row)
         };
-        let Some(hunk) = hunk else {
-            return Outcome::default();
-        };
+        match hunk {
+            Some(hunk) => self.land_on_hunk(hunk, viewport),
+            None => Outcome::default(),
+        }
+    }
+
+    /// The landing from `n` and `p`, for a hunk picked some other way.
+    pub fn land_on_hunk(&mut self, hunk: usize, viewport: Viewport) -> Outcome {
         let (row, y) = self.target_for_hunk(hunk, viewport);
         self.row = row;
         self.scroll = ScrollState { y: [y, y], x: 0. };

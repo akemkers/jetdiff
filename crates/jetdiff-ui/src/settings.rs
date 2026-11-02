@@ -2,6 +2,8 @@
 
 use gpui::Global;
 
+use jetdiff_app::walkthrough::Writer;
+
 use crate::theme::UiTheme;
 
 pub struct Settings {
@@ -13,6 +15,7 @@ pub struct Settings {
     /// The diff mode at startup. `v` switches.
     pub unified: bool,
     pub side_panel_open: bool,
+    pub walkthrough: Writer,
 }
 
 impl Global for Settings {}

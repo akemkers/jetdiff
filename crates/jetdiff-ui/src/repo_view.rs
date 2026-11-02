@@ -1,6 +1,8 @@
 //! File tree and diff next to each other, with the commit list under the tree. Loads the selected file, and reads
 //! the repo source again when a row in the commit list is selected, a hunk is rolled back, files change on disk
-//! or HEAD moves.
+//! or HEAD moves. `w` shows the walkthrough mode in their place.
+
+mod walkthrough;
 
 use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
@@ -37,7 +39,8 @@ actions!(
         NextFile,
         PrevFile,
         NextCommit,
-        PrevCommit
+        PrevCommit,
+        ToggleWalkthrough
     ]
 );
 
@@ -49,6 +52,9 @@ pub struct RepoView {
     notification_slot: Entity<NotificationSlotView>,
     /// Only for a folder, not for a commit or a PR.
     commits: Option<Entity<CommitList>>,
+    walkthrough: Option<walkthrough::Walkthrough>,
+    /// The hunk the diff lands on once the file opened from the walkthrough is loaded.
+    landing: Option<usize>,
     scale: f32,
     side_panel_open: bool,
     /// The sections in the side panel can be closed to just the heading.
@@ -108,6 +114,8 @@ impl RepoView {
             diff,
             notification_slot,
             commits: commit_list,
+            walkthrough: None,
+            landing: None,
             scale: 1.,
             side_panel_open: cx.global::<Settings>().side_panel_open,
             files_open: true,
@@ -130,6 +138,7 @@ impl RepoView {
         if let Some(commits) = &self.commits {
             commits.update(cx, |c, cx| c.set_scale(scale, cx));
         }
+        self.walkthrough_zoomed(cx);
     }
 
     /// Shows the file after the rollback and reads the repo source again, without waiting for the watcher.
@@ -208,6 +217,9 @@ impl RepoView {
     fn load(&mut self, cx: &mut Context<Self>) {
         let show = self.repo_source.load(self.selection.read(cx).0);
         self.show(show, cx);
+        if let Some(hunk) = self.landing.take() {
+            self.diff.update(cx, |diff, cx| diff.land_on_hunk(hunk, cx));
+        }
     }
 
     /// If it is the same file as before, with new content, the cursor and scroll are kept.
@@ -393,9 +405,13 @@ impl Focusable for RepoView {
 
 impl Render for RepoView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let walkthrough = self.walkthrough_mode();
         div()
             .size_full()
             .flex()
+            .on_action(cx.listener(|this, _: &ToggleWalkthrough, window, cx| {
+                this.toggle_walkthrough(window, cx)
+            }))
             .on_action(cx.listener(Self::focus_left))
             .on_action(cx.listener(Self::focus_right))
             .on_action(cx.listener(Self::focus_down))
@@ -437,20 +453,24 @@ impl Render for RepoView {
                 this.diff
                     .update(cx, |diff, cx| diff.toggle_diff_mode(action, window, cx))
             }))
-            .when(self.side_panel_open, |d| {
-                d.child(self.side_panel(window, cx))
+            .map(|d| match walkthrough {
+                Some(walkthrough) => d.child(div().size_full().child(walkthrough)),
+                None => d
+                    .when(self.side_panel_open, |d| {
+                        d.child(self.side_panel(window, cx))
+                    })
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .children(self.repo_source.shown().map(|file| {
+                                file_header(&file.path, self.scale, &cx.global::<Settings>().theme)
+                            }))
+                            .child(div().flex_1().min_h_0().child(self.diff.clone())),
+                    ),
             })
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .flex()
-                    .flex_col()
-                    .children(self.repo_source.shown().map(|file| {
-                        file_header(&file.path, self.scale, &cx.global::<Settings>().theme)
-                    }))
-                    .child(div().flex_1().min_h_0().child(self.diff.clone())),
-            )
     }
 }

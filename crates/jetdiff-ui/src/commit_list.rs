@@ -63,6 +63,10 @@ impl CommitList {
         cx.notify();
     }
 
+    pub fn describe_selected(&self) -> String {
+        self.commits.describe_selected()
+    }
+
     /// Without `SelectRow`, for when the view could not switch.
     pub fn set_selected(&mut self, selected: Selected, cx: &mut Context<Self>) {
         self.commits.set_selected(selected);

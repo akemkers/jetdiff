@@ -52,6 +52,8 @@ pub struct FileDiffView {
     scroll: ScrollAnimator,
     keys: KeyParser,
     initialized: bool,
+    /// The hunk to land on when the file is shown for the first time.
+    landing: Option<usize>,
     viewport_height: f32,
     hunk_minimap_marks: Rc<[Vec<HunkMinimapMark>; 2]>,
     /// The longest line in characters, computed once. Gives max horizontal scroll without shaping everything.
@@ -96,6 +98,7 @@ impl FileDiffView {
             scroll: ScrollAnimator::default(),
             keys: KeyParser::default(),
             initialized: false,
+            landing: None,
             viewport_height: 0.,
             hunk_minimap_marks: Rc::new([Vec::new(), Vec::new()]),
             can_rollback: false,
@@ -111,6 +114,21 @@ impl FileDiffView {
         self.can_rollback = can_rollback;
     }
 
+    /// With the same landing as `n`. A file not shown yet lands there when it is.
+    pub fn land_on_hunk(&mut self, hunk: usize, cx: &mut Context<Self>) {
+        if hunk >= self.mode.diff().hunks().len() {
+            return;
+        }
+        let Some(viewport) = self.viewport().filter(|_| self.initialized) else {
+            self.landing = Some(hunk);
+            return;
+        };
+        self.stop_animation();
+        self.mode.land_on_hunk(hunk, viewport);
+        self.scroll.animate(self.mode.scroll());
+        cx.notify();
+    }
+
     /// A new file in the same view. Zoom is kept; cursor and scroll start over.
     pub fn set_diff(&mut self, diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) {
         if matches!(self.overlay, Some(Overlay::Confirm(_))) {
@@ -122,6 +140,7 @@ impl FileDiffView {
         self.scroll = ScrollAnimator::default();
         self.keys.reset();
         self.initialized = false;
+        self.landing = None;
         self.shared.clear();
         self.update_hunk_minimap_marks();
         cx.notify();
@@ -485,6 +504,9 @@ impl FileDiffView {
             self.initialized = true;
             // `InitialScrollPositionSupport` falls back to the first hunk
             self.mode.init(vp);
+            if let Some(hunk) = self.landing.take() {
+                self.mode.land_on_hunk(hunk, vp);
+            }
             self.scroll.jump(self.mode.scroll());
         }
         if self.scroll.step() {

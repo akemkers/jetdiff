@@ -31,8 +31,17 @@ pub struct Config {
     pub fold_unchanged: bool,
     #[serde(rename = "diff_mode", deserialize_with = "diff_mode")]
     pub unified: bool,
+    pub walkthrough: Walkthrough,
     pub side_panel: SidePanel,
     pub terminal: Terminal,
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Walkthrough {
+    pub command: Vec<String>,
+    pub model: String,
+    pub language: String,
 }
 
 #[derive(Debug, PartialEq, Deserialize)]

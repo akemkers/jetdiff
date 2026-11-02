@@ -3124,6 +3124,8 @@ dependencies = [
  "jetdiff-git",
  "jetdiff-viewmodel",
  "notify",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

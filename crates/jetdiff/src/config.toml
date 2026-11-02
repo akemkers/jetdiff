@@ -12,6 +12,14 @@ fold_unchanged = true
 # split or unified. v switches while the app is running.
 diff_mode = "split"
 
+[walkthrough]
+# The Claude Code program, with any arguments it needs first, like ["claude", "--team", "x"].
+command = ["claude"]
+# opus, sonnet or haiku, the model that writes a walkthrough on w. Haiku is faster and costs less.
+model = "opus"
+# The language a walkthrough is written in.
+language = "English"
+
 [side_panel]
 # true shows the file tree and the commit list at startup. b shows and hides them.
 open = false
