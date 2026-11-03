@@ -385,6 +385,23 @@ impl WalkthroughView {
         cx.emit(WalkthroughEvent::Open { path, hunk });
     }
 
+    /// A file's header opens the file on its first hunk on the page.
+    fn open_file(&mut self, item: usize, cx: &mut Context<Self>) {
+        let Item::File(file) = self.items[item] else {
+            return;
+        };
+        if let Some(Item::Excerpt { file: next, .. }) = self.items.get(item + 1)
+            && *next == file
+        {
+            self.cursor = Some(item + 1);
+            return self.open_at_cursor(cx);
+        }
+        if let Some(digest) = &self.digest {
+            let path = digest.files()[file].file.path.clone();
+            cx.emit(WalkthroughEvent::Open { path, hunk: None });
+        }
+    }
+
     /// Scrolled with smooth scroll from where the page is, also after the wheel moved it.
     fn scroll_to(&mut self, y: f32, cx: &mut Context<Self>) {
         let shown = -f32::from(self.scroll.offset().y);

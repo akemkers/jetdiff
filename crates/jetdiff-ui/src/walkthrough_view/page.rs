@@ -127,6 +127,7 @@ impl WalkthroughView {
                     None => (None, file.path.clone()),
                 };
                 div()
+                    .id(("file", item))
                     .mt(s(FILE_GAP))
                     .px(s(GAP))
                     .py(s(FILE_HEADER_PADDING))
@@ -136,6 +137,8 @@ impl WalkthroughView {
                     .border_1()
                     .border_color(color(BORDER))
                     .rounded(s(6.))
+                    .cursor_pointer()
+                    .hover(|d| d.bg(color(SELECTED)).border_color(color(ACCENT)))
                     .text_size(s(SMALL_SIZE))
                     .child(
                         div()
@@ -162,6 +165,7 @@ impl WalkthroughView {
                         status
                             .map(|status| div().flex_none().text_color(color(MUTED)).child(status)),
                     )
+                    .on_click(cx.listener(move |this, _, _, cx| this.open_file(item, cx)))
                     .into_any_element()
             }
             Item::Excerpt { excerpt, .. } => {
