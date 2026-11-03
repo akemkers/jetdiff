@@ -37,7 +37,7 @@ fn output(walkthrough: serde_json::Value) -> String {
 }
 
 fn step(title: &str, hunks: &[&str]) -> serde_json::Value {
-    json!({ "title": title, "hunks": hunks, "weight": "normal", "text": format!("Why {title}."), "notes": [] })
+    json!({ "title": title, "hunks": hunks, "weight": "normal", "points": [format!("Why {title}.")], "notes": [] })
 }
 
 #[test]
@@ -50,13 +50,13 @@ fn steps_point_at_the_hunks_in_the_digest() {
             "title": "Core",
             "blurb": "",
             "steps": [
-                { "title": "Queue", "hunks": ["h3", "h1"], "weight": "key", "text": "A queue.",
-                  "notes": [{ "kind": "choice", "text": "Kept in memory." }, { "kind": "opinion", "text": "Nice." }] },
+                { "title": "Queue", "hunks": ["h3", "h1"], "weight": "key", "points": [" A queue. ", "", "In memory."],
+                  "notes": [{ "kind": "decision", "text": "Kept in memory." }, { "kind": "opinion", "text": "Nice." }] },
                 step("Made up", &["h9"]),
                 step("Again", &["h1", "h2", "h2"]),
             ],
         }, { "title": "Empty", "blurb": "", "steps": [] }],
-        "skipped": [],
+        "not_covered": [],
     }));
     let walkthrough = Walkthrough::from_answer(&answer, &digest()).unwrap();
     assert_eq!(walkthrough.title, "Retry");
@@ -64,11 +64,11 @@ fn steps_point_at_the_hunks_in_the_digest() {
         walkthrough.before_you_review,
         ["The queue lives in memory."]
     );
-    assert_eq!(walkthrough.cost, Some(0.002));
     assert_eq!(walkthrough.parts.len(), 1);
     let steps = &walkthrough.parts[0].steps;
     assert_eq!(steps.len(), 2);
     assert_eq!(steps[0].weight, Weight::Key);
+    assert_eq!(steps[0].points, ["A queue.", "In memory."]);
     assert_eq!(
         steps[0].hunks,
         [HunkRef { file: 1, hunk: 0 }, HunkRef { file: 0, hunk: 0 }]
@@ -76,7 +76,7 @@ fn steps_point_at_the_hunks_in_the_digest() {
     assert_eq!(
         steps[0].notes,
         [Note {
-            kind: NoteKind::Choice,
+            kind: NoteKind::Decision,
             text: "Kept in memory.".into()
         }]
     );
@@ -89,7 +89,7 @@ fn not_covered_lists_every_file_with_hunks_left() {
     let answer = output(json!({
         "title": "T", "summary": "S",
         "parts": [{ "title": "P", "blurb": "", "steps": [step("One", &["h1"])] }],
-        "skipped": [{ "path": "a.rs", "note": "A comment" }, { "path": "nope.rs", "note": "?" }],
+        "not_covered": [{ "path": "a.rs", "note": "A comment" }, { "path": "nope.rs", "note": "?" }],
     }));
     let walkthrough = Walkthrough::from_answer(&answer, &digest()).unwrap();
     let not_covered: Vec<_> = walkthrough
@@ -112,12 +112,12 @@ fn answers_that_give_no_walkthrough() {
     let no_steps = output(json!({
         "title": "T", "summary": "S",
         "parts": [{ "title": "P", "blurb": "", "steps": [step("Made up", &["h7"])] }],
-        "skipped": [],
+        "not_covered": [],
     }));
     let error = |answer: &str| Walkthrough::from_answer(answer, &digest()).unwrap_err();
     assert_eq!(
         error(&no_steps),
-        "The model gave no steps that point at the change"
+        "The model gave no steps that point at the diff"
     );
     let failed = json!({ "is_error": true, "result": "Not logged in" }).to_string();
     assert_eq!(error(&failed), "Not logged in");
@@ -127,7 +127,7 @@ fn answers_that_give_no_walkthrough() {
         "is_error": false,
         "result": json!({ "title": "T", "summary": "S", "parts": [
             { "title": "P", "blurb": "", "steps": [step("One", &["h1"])] }
-        ], "skipped": [] }).to_string(),
+        ], "not_covered": [] }).to_string(),
     })
     .to_string();
     assert!(Walkthrough::from_answer(&as_text, &digest()).is_ok());

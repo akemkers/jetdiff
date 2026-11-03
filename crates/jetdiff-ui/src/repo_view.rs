@@ -1,6 +1,6 @@
 //! File tree and diff next to each other, with the commit list under the tree. Loads the selected file, and reads
 //! the repo source again when a row in the commit list is selected, a hunk is rolled back, files change on disk
-//! or HEAD moves. `w` shows the walkthrough mode in their place.
+//! or HEAD moves. `w` shows the walkthrough in their place.
 
 mod walkthrough;
 
@@ -14,6 +14,7 @@ use jetdiff_app::{
 use jetdiff_viewmodel::metrics::FONT_SIZE;
 
 use crate::commit_list::{CommitList, SelectRow};
+use crate::confirm_dialog::confirm_dialog;
 use crate::file_diff::{
     FileDiffView, ResetZoom, Rollback, ToggleDiffMode, ZoomIn, ZoomOut, Zoomed,
 };
@@ -52,9 +53,11 @@ pub struct RepoView {
     notification_slot: Entity<NotificationSlotView>,
     /// Only for a folder, not for a commit or a PR.
     commits: Option<Entity<CommitList>>,
-    walkthrough: Option<walkthrough::Walkthrough>,
+    walkthrough: Option<walkthrough::OpenWalkthrough>,
     /// The hunk the diff lands on once the file opened from the walkthrough is loaded.
     landing: Option<usize>,
+    /// The popup over the diff, about the walkthrough.
+    question: Option<walkthrough::Question>,
     scale: f32,
     side_panel_open: bool,
     /// The sections in the side panel can be closed to just the heading.
@@ -116,6 +119,7 @@ impl RepoView {
             commits: commit_list,
             walkthrough: None,
             landing: None,
+            question: None,
             scale: 1.,
             side_panel_open: cx.global::<Settings>().side_panel_open,
             files_open: true,
@@ -405,10 +409,16 @@ impl Focusable for RepoView {
 
 impl Render for RepoView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let walkthrough = self.walkthrough_mode();
+        let walkthrough = self.walkthrough_view();
+        let theme = cx.global::<Settings>().theme;
+        let question = self
+            .question
+            .map(|question| confirm_dialog(self.question_text(question, cx), &theme));
         div()
+            .relative()
             .size_full()
             .flex()
+            .capture_key_down(cx.listener(Self::answer))
             .on_action(cx.listener(|this, _: &ToggleWalkthrough, window, cx| {
                 this.toggle_walkthrough(window, cx)
             }))
@@ -447,6 +457,9 @@ impl Render for RepoView {
                 this.diff.update(cx, |d, cx| d.toggle_help(a, w, cx))
             }))
             .on_action(cx.listener(|this, a: &HideHelp, w, cx| {
+                if this.question.take().is_some() {
+                    return cx.notify();
+                }
                 this.diff.update(cx, |d, cx| d.hide_help(a, w, cx))
             }))
             .on_action(cx.listener(|this, action: &ToggleDiffMode, window, cx| {
@@ -472,5 +485,6 @@ impl Render for RepoView {
                             .child(div().flex_1().min_h_0().child(self.diff.clone())),
                     ),
             })
+            .children(question)
     }
 }

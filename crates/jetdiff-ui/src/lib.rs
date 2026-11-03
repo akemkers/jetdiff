@@ -3,6 +3,7 @@
 mod cache;
 mod code_viewer;
 mod commit_list;
+mod confirm_dialog;
 mod file_diff;
 mod file_header;
 mod file_tree;
@@ -12,13 +13,12 @@ mod keystroke;
 mod list;
 mod notification_slot_view;
 mod repo_view;
-mod rollback_dialog;
 mod scroll_animator;
 mod settings;
 mod side_panel_size;
 mod text;
 mod theme;
-mod walkthrough_mode;
+mod walkthrough_view;
 mod watcher;
 
 pub use file_diff::{FileDiffView, ResetZoom, ToggleDiffMode, ZoomIn, ZoomOut};

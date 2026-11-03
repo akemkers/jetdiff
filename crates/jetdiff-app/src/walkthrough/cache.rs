@@ -1,10 +1,9 @@
-//! Finished walkthroughs, by the exact digest, model and language they were written for. Putting the
-//! code back as it was brings the earlier walkthrough back without asking the model again.
+//! Finished walkthroughs, by the exact prompt and model they were written with. Putting the code
+//! back as it was brings the earlier walkthrough back without asking the model again, and a changed
+//! prompt writes a new one.
 
 use std::fs;
 use std::path::PathBuf;
-
-use super::prompt::PROMPT_VERSION;
 
 /// The newest are kept.
 const MAX_ENTRIES: usize = 200;
@@ -56,9 +55,9 @@ impl Cache {
     }
 }
 
-pub fn cache_key(model: &str, language: &str, digest: &str) -> String {
+pub fn cache_key(parts: &[&str]) -> String {
     let mut hash = Fnv::default();
-    for part in [&PROMPT_VERSION.to_string(), model, language, digest] {
+    for part in parts {
         hash.write(part.as_bytes());
         // Keeps "ab" + "c" apart from "a" + "bc"
         hash.write(&[0]);
@@ -88,13 +87,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_key_follows_model_language_and_digest() {
-        let key = cache_key("haiku", "English", "=== a.rs");
+    fn the_key_follows_every_part() {
+        let key = cache_key(&["haiku", "=== a.rs"]);
         assert_eq!(key.len(), 16);
-        assert_eq!(key, cache_key("haiku", "English", "=== a.rs"));
-        assert_ne!(key, cache_key("sonnet", "English", "=== a.rs"));
-        assert_ne!(key, cache_key("haiku", "Norwegian", "=== a.rs"));
-        assert_ne!(key, cache_key("haiku", "English", "=== b.rs"));
+        assert_eq!(key, cache_key(&["haiku", "=== a.rs"]));
+        assert_ne!(key, cache_key(&["opus", "=== a.rs"]));
+        assert_ne!(cache_key(&["ab", "c"]), cache_key(&["a", "bc"]));
     }
 
     #[test]

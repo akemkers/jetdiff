@@ -1,4 +1,4 @@
-//! The change as the model reads it: each file with its hunks, each hunk with an alias like `h3`
+//! The diff as the model reads it: each file with its hunks, each hunk with an alias like `h3`
 //! and a few unchanged lines around it. Generated files are listed but not sent, and files that
 //! can't be shown are listed but not read.
 
@@ -16,8 +16,8 @@ use generated::is_generated;
 
 /// Unchanged lines around each hunk, as in `git diff`.
 pub const CONTEXT: usize = 3;
-/// About 175k tokens. A larger change is refused rather than cut, since a walkthrough of half a
-/// change reads as confidently as one of the whole.
+/// About 175k tokens. A larger diff is refused rather than cut, since a walkthrough of half a
+/// diff reads as confidently as one of the whole.
 const MAX_CHARS: usize = 640_000;
 
 /// A hunk in one of the files.

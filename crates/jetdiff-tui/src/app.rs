@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
     AppCommand, Applied, Commits, Files, Notification, NotificationSlot, ReadJob, RepoRead,
-    RepoSource, Selected, Show, Shown, Watcher, app_command, empty_diff,
+    RepoSource, Selected, Show, Shown, SlotContent, Watcher, app_command, empty_diff,
 };
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Frame;
@@ -484,9 +484,10 @@ impl App {
         self.diff.layout(main);
         self.diff.render(focus == Focus::Diff, &theme, buf);
         widgets::keymap_bar(footer, &theme, buf);
-        if let Some(notification) = self
+        let now = Instant::now();
+        if let Some(content) = self
             .notification_slot
-            .current(Instant::now())
+            .current(now)
             .filter(|_| main.height > 0)
         {
             let row = Rect {
@@ -494,7 +495,13 @@ impl App {
                 height: 1,
                 ..main
             };
-            widgets::notification(notification, row, &theme, buf);
+            let notification = match content {
+                SlotContent::Notification(notification) => notification.clone(),
+                SlotContent::Progress(progress) => {
+                    Notification::info(format!("{} {}", progress.text, progress.elapsed(now)))
+                }
+            };
+            widgets::notification(&notification, row, &theme, buf);
         }
         match &self.diff.overlay {
             Some(Overlay::Help) => widgets::help(area, &theme, buf),

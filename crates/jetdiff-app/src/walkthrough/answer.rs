@@ -18,12 +18,12 @@ pub enum Weight {
     Skim,
 }
 
-/// Something the reader takes on by accepting the change.
+/// Something the reader takes on by accepting the diff.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NoteKind {
-    Choice,
+    Decision,
     Upkeep,
-    Gap,
+    Limitation,
     Divergence,
     Untested,
 }
@@ -37,7 +37,8 @@ pub struct Note {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Step {
     pub title: String,
-    pub text: String,
+    /// The explanation, as points that stand on their own.
+    pub points: Vec<String>,
     pub weight: Weight,
     pub notes: Vec<Note>,
     /// In the order the model gave them.
@@ -68,8 +69,6 @@ pub struct Walkthrough {
     pub before_you_review: Vec<String>,
     pub parts: Vec<Part>,
     pub not_covered: Vec<NotCovered>,
-    /// In dollars, when the model said.
-    pub cost: Option<f64>,
 }
 
 /// What `claude -p --output-format json` writes.
@@ -80,7 +79,6 @@ struct Output {
     #[serde(default)]
     result: String,
     structured_output: Option<RawWalkthrough>,
-    total_cost_usd: Option<f64>,
 }
 
 #[derive(Deserialize, Default)]
@@ -90,7 +88,7 @@ struct RawWalkthrough {
     summary: String,
     before_you_review: Vec<String>,
     parts: Vec<RawPart>,
-    skipped: Vec<RawSkipped>,
+    not_covered: Vec<RawNotCovered>,
 }
 
 #[derive(Deserialize, Default)]
@@ -107,7 +105,7 @@ struct RawStep {
     title: String,
     hunks: Vec<String>,
     weight: String,
-    text: String,
+    points: Vec<String>,
     notes: Vec<RawNote>,
 }
 
@@ -120,7 +118,7 @@ struct RawNote {
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
-struct RawSkipped {
+struct RawNotCovered {
     path: String,
     note: String,
 }
@@ -137,14 +135,14 @@ impl Walkthrough {
             Some(raw) => raw,
             None => serde_json::from_str(&output.result).map_err(|_| unreadable())?,
         };
-        let walkthrough = Self::normalize(raw, digest, output.total_cost_usd);
+        let walkthrough = Self::normalize(raw, digest);
         if walkthrough.parts.is_empty() {
-            return Err("The model gave no steps that point at the change".into());
+            return Err("The model gave no steps that point at the diff".into());
         }
         Ok(walkthrough)
     }
 
-    fn normalize(raw: RawWalkthrough, digest: &Digest, cost: Option<f64>) -> Self {
+    fn normalize(raw: RawWalkthrough, digest: &Digest) -> Self {
         let mut used = HashSet::new();
         let (mut steps, mut notes) = (0, 0);
         let mut parts = Vec::new();
@@ -170,7 +168,12 @@ impl Walkthrough {
                 notes += step_notes.len();
                 part_steps.push(Step {
                     title: raw_step.title.trim().to_owned(),
-                    text: raw_step.text.trim().to_owned(),
+                    points: raw_step
+                        .points
+                        .iter()
+                        .map(|point| point.trim().to_owned())
+                        .filter(|point| !point.is_empty())
+                        .collect(),
                     weight: weight(&raw_step.weight),
                     notes: step_notes,
                     hunks,
@@ -194,9 +197,8 @@ impl Walkthrough {
                 .filter(|point| !point.is_empty())
                 .take(MAX_BEFORE_YOU_REVIEW)
                 .collect(),
-            not_covered: not_covered(digest, &used, &raw.skipped),
+            not_covered: not_covered(digest, &used, &raw.not_covered),
             parts,
-            cost,
         }
     }
 }
@@ -212,9 +214,9 @@ fn weight(weight: &str) -> Weight {
 /// A note of a kind the schema doesn't have is dropped.
 fn note(raw: RawNote) -> Option<Note> {
     let kind = match raw.kind.as_str() {
-        "choice" => NoteKind::Choice,
+        "decision" => NoteKind::Decision,
         "upkeep" => NoteKind::Upkeep,
-        "gap" => NoteKind::Gap,
+        "limitation" => NoteKind::Limitation,
         "divergence" => NoteKind::Divergence,
         "untested" => NoteKind::Untested,
         _ => return None,
@@ -226,11 +228,11 @@ fn note(raw: RawNote) -> Option<Note> {
 fn not_covered(
     digest: &Digest,
     used: &HashSet<HunkRef>,
-    skipped: &[RawSkipped],
+    written: &[RawNotCovered],
 ) -> Vec<NotCovered> {
     let model_note = |path: &str| {
-        let skipped = skipped.iter().find(|skipped| skipped.path.trim() == path);
-        skipped.map_or(String::new(), |skipped| skipped.note.trim().to_owned())
+        let written = written.iter().find(|written| written.path.trim() == path);
+        written.map_or(String::new(), |written| written.note.trim().to_owned())
     };
     let mut not_covered = Vec::new();
     for (file, digest_file) in digest.files().iter().enumerate() {

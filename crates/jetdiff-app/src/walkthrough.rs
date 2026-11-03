@@ -1,4 +1,4 @@
-//! A walkthrough of the change being shown: its hunks grouped into steps in reading order, each
+//! A walkthrough of the diff being shown: its hunks grouped into steps in reading order, each
 //! explained, written by a model that reads the diff.
 
 pub mod answer;

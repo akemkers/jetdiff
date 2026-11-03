@@ -1,6 +1,6 @@
 //! One `claude -p` call, without tools, MCP servers, settings or skills: the model only reads the
 //! digest and answers in JSON. Without those flags a whole Claude Code setup rides along, and a small
-//! change costs a hundred times more.
+//! diff costs a hundred times more.
 
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -15,7 +15,7 @@ use super::prompt::{prompt, schema, system};
 
 /// How often the job looks at the process and the cancel flag.
 const POLL: Duration = Duration::from_millis(100);
-/// Opus can take minutes for a large change.
+/// Opus can take minutes for a large diff.
 const BASE_TIMEOUT: Duration = Duration::from_secs(300);
 const TIMEOUT_PER_HUNK: Duration = Duration::from_secs(1);
 const MAX_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -30,9 +30,16 @@ pub struct Writer {
 }
 
 impl Writer {
-    /// The cache key for a walkthrough of `digest`.
-    pub fn key(&self, digest: &Digest) -> String {
-        cache_key(&self.model, &self.language, digest.text())
+    /// The cache key for a walkthrough of `digest`: everything the model is given.
+    pub fn key(&self, digest: &Digest, what: &str) -> String {
+        let schema = schema().to_string();
+        let parts = [
+            self.model.as_str(),
+            &system(&self.language),
+            &schema,
+            &prompt(digest, what),
+        ];
+        cache_key(&parts)
     }
 }
 
@@ -52,7 +59,7 @@ impl Job {
     pub fn new(digest: &Digest, what: &str, writer: &Writer) -> Self {
         let hunks = u32::try_from(digest.hunk_count()).unwrap_or(u32::MAX);
         Self {
-            key: writer.key(digest),
+            key: writer.key(digest, what),
             command: writer.command.clone(),
             model: writer.model.clone(),
             system: system(&writer.language),

@@ -1,4 +1,4 @@
-//! Reading a walkthrough: the page being shown, which steps have been seen, and the rows in the
+//! Reading a walkthrough: the page being shown, which steps have been read, and the rows in the
 //! contents. The overview comes first, then a page per step, and after the last one the files no
 //! step covers.
 
@@ -17,7 +17,7 @@ pub enum Page {
 
 pub enum ContentsRow<'a> {
     Overview {
-        shown: bool,
+        selected: bool,
     },
     Part(&'a Part),
     Step {
@@ -25,13 +25,13 @@ pub enum ContentsRow<'a> {
         /// Counted from 1, across the parts.
         number: usize,
         step: &'a Step,
-        seen: bool,
-        shown: bool,
+        read: bool,
+        selected: bool,
     },
     NotCovered {
         page: usize,
         files: usize,
-        shown: bool,
+        selected: bool,
     },
 }
 
@@ -39,7 +39,7 @@ pub struct Reading {
     walkthrough: Walkthrough,
     pages: Vec<Page>,
     page: usize,
-    seen: Vec<bool>,
+    read: Vec<bool>,
 }
 
 impl Reading {
@@ -56,13 +56,13 @@ impl Reading {
         if !walkthrough.not_covered.is_empty() {
             pages.push(Page::NotCovered);
         }
-        let mut seen = vec![false; pages.len()];
-        seen[0] = true;
+        let mut read = vec![false; pages.len()];
+        read[0] = true;
         Self {
             walkthrough,
             pages,
             page: 0,
-            seen,
+            read,
         }
     }
 
@@ -99,9 +99,18 @@ impl Reading {
         self.pages.len() - 1 - usize::from(!self.walkthrough.not_covered.is_empty())
     }
 
-    pub fn seen_count(&self) -> usize {
-        let steps = &self.seen[1..=self.step_count()];
-        steps.iter().filter(|&&seen| seen).count()
+    pub fn read_count(&self) -> usize {
+        let steps = &self.read[1..=self.step_count()];
+        steps.iter().filter(|&&read| read).count()
+    }
+
+    pub fn is_read(&self, page: usize) -> bool {
+        self.read[page]
+    }
+
+    /// The first step not read yet, where reading goes on. `None` when all are read.
+    pub fn first_unread_step(&self) -> Option<usize> {
+        (1..=self.step_count()).find(|&page| !self.read[page])
     }
 
     /// The notes of every step, with the step's page, which is its number.
@@ -136,13 +145,13 @@ impl Reading {
             return false;
         }
         self.page = page;
-        self.seen[page] = true;
+        self.read[page] = true;
         true
     }
 
     pub fn contents(&self) -> Vec<ContentsRow<'_>> {
         let mut rows = vec![ContentsRow::Overview {
-            shown: self.page == 0,
+            selected: self.page == 0,
         }];
         let mut page = 1;
         for part in &self.walkthrough.parts {
@@ -152,8 +161,8 @@ impl Reading {
                     page,
                     number: page,
                     step,
-                    seen: self.seen[page],
-                    shown: self.page == page,
+                    read: self.read[page],
+                    selected: self.page == page,
                 });
                 page += 1;
             }
@@ -162,7 +171,7 @@ impl Reading {
             rows.push(ContentsRow::NotCovered {
                 page,
                 files: self.walkthrough.not_covered.len(),
-                shown: self.page == page,
+                selected: self.page == page,
             });
         }
         rows
@@ -199,7 +208,7 @@ mod tests {
     fn step(title: &str, hunks: &[(usize, usize)]) -> Step {
         Step {
             title: title.into(),
-            text: String::new(),
+            points: Vec::new(),
             weight: Weight::Normal,
             notes: Vec::new(),
             hunks: hunks
@@ -233,7 +242,6 @@ mod tests {
                     note: String::new(),
                 })
                 .collect(),
-            cost: None,
         })
     }
 
@@ -242,24 +250,26 @@ mod tests {
             .contents()
             .iter()
             .map(|row| match row {
-                ContentsRow::Overview { shown } => {
-                    format!("Overview{}", if *shown { " <" } else { "" })
+                ContentsRow::Overview { selected } => {
+                    format!("Overview{}", if *selected { " <" } else { "" })
                 }
                 ContentsRow::Part(part) => part.title.clone(),
                 ContentsRow::Step {
                     number,
                     step,
-                    seen,
-                    shown,
+                    read,
+                    selected,
                     ..
                 } => format!(
                     "{number} {}{}{}",
                     step.title,
-                    if *seen { " seen" } else { "" },
-                    if *shown { " <" } else { "" }
+                    if *read { " read" } else { "" },
+                    if *selected { " <" } else { "" }
                 ),
-                ContentsRow::NotCovered { files, shown, .. } => {
-                    format!("Not covered {files}{}", if *shown { " <" } else { "" })
+                ContentsRow::NotCovered {
+                    files, selected, ..
+                } => {
+                    format!("Not covered {files}{}", if *selected { " <" } else { "" })
                 }
             })
             .collect()
@@ -292,7 +302,7 @@ mod tests {
         assert_eq!(reading.page(), Page::NotCovered);
         assert!(reading.step().is_none() && reading.is_last());
         assert!(!reading.step_by(true));
-        assert_eq!(reading.seen_count(), 3);
+        assert_eq!(reading.read_count(), 3);
     }
 
     #[test]
@@ -303,7 +313,7 @@ mod tests {
         assert_eq!((step.title.as_str(), number, of), ("Three", 3, 3));
         assert_eq!(
             contents(&reading),
-            ["Overview", "Core", "1 One", "2 Two", "UI", "3 Three seen <"]
+            ["Overview", "Core", "1 One", "2 Two", "UI", "3 Three read <"]
         );
         assert!(!reading.go_to(4));
         assert!(reading.is_last());
@@ -313,7 +323,7 @@ mod tests {
     fn the_notes_of_all_steps_with_their_page() {
         let mut walkthrough = reading(0).walkthrough;
         let note = |text: &str| Note {
-            kind: NoteKind::Choice,
+            kind: NoteKind::Decision,
             text: text.into(),
         };
         walkthrough.parts[0].steps[1].notes = vec![note("a"), note("b")];
@@ -325,6 +335,18 @@ mod tests {
             .map(|(page, note)| (page, note.text.as_str()))
             .collect();
         assert_eq!(notes, [(2, "a"), (2, "b"), (3, "c")]);
+    }
+
+    #[test]
+    fn where_to_continue() {
+        let mut reading = reading(1);
+        assert_eq!(reading.first_unread_step(), Some(1));
+        reading.go_to(1);
+        reading.go_to(3);
+        assert_eq!(reading.first_unread_step(), Some(2));
+        assert!(reading.is_read(3) && !reading.is_read(2));
+        reading.go_to(2);
+        assert_eq!(reading.first_unread_step(), None);
     }
 
     #[test]

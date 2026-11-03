@@ -69,6 +69,60 @@ _Avoid_: files, two files
 Branch or Local changes read again automatically when files change on disk.
 _Avoid_: reload, refresh, update
 
+### Walkthrough
+
+**Walkthrough**:
+The hunks of a source grouped into steps in reading order and explained, written by a model that reads the diff. `w` shows it a page at a time, in place of the side panel and the diff.
+_Avoid_: walkthrough mode, tour, guide, review
+
+**Overview**:
+The first page of a walkthrough: what the diff does, what to know before reviewing it, the notes, and the parts.
+_Avoid_: front page, summary page
+
+**Step**:
+The hunks that serve one purpose, possibly across files, with a title and an explanation. A page of its own in the walkthrough.
+_Avoid_: section, chapter
+
+**Part**:
+A group of steps that belong together, with a short title and a blurb.
+_Avoid_: group, chapter
+
+**Key step**:
+A step the rest of the walkthrough depends on, or where the main behaviour lives.
+_Avoid_: key change, important step
+
+**Skim step**:
+A step that is safe to skim, like docs or wiring.
+_Avoid_: minor step, context step
+
+**Note**:
+Something the reader takes on by accepting the diff, attached to a step: a Decision, Upkeep, a Limitation, a Divergence or something Untested. It states a fact and never judges the code.
+_Avoid_: finding, warning, issue, remark
+
+**Not covered**:
+The changed files with hunks no step points to, and the files that weren't sent or read, each with a line on what changed there.
+_Avoid_: skipped, uncovered, left out
+
+**Contents**:
+The list of the overview, the parts with their steps, and Not covered, left of the page.
+_Avoid_: sidebar, side panel, table of contents
+
+**Read**:
+A step that has been shown.
+_Avoid_: seen, visited
+
+**Digest**:
+The diff as the model reads it, with each hunk named by an alias and shown with a few unchanged lines around it.
+_Avoid_: prompt, dump
+
+**Alias**:
+The name a hunk has in the digest, like `h3`, the only way the model points at a hunk.
+_Avoid_: hunk id, reference
+
+**Excerpt**:
+A hunk, or hunks close together, shown with the unchanged lines around them.
+_Avoid_: snippet, context lines, chunk
+
 ### User Interface
 
 **Diff mode**:
@@ -107,7 +161,7 @@ The most important keys, shown at the bottom.
 _Avoid_: key bar, status bar
 
 **Notification**:
-A short Info or Warning text above the keymap bar, either **Pinned** (about what the diff shows, such as an identical file or no changed files, stays until that changes) or **Brief** (about something that just happened, disappears by itself). A brief notification lies over the pinned one while it lasts.
+A short Info or Warning text above the keymap bar, either **Pinned** (about what the diff shows, such as an identical file or no changed files, stays until that changes), **Brief** (about something that just happened, disappears by itself) or **Progress** (about something going on in the background, such as a walkthrough being written, with a spinner and the time it has taken). A brief notification lies over a progress, and a progress over the pinned one.
 _Avoid_: message, notice, toast
 
 **Diff divider**:

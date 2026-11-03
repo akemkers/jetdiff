@@ -17,10 +17,10 @@ use jetdiff_viewmodel::{
 };
 
 use crate::code_viewer::{self, Hit, Painter, Shared};
+use crate::confirm_dialog::confirm_dialog;
 use crate::help::{HideHelp, KEYMAP_BAR_HEIGHT, KeyHelp, ToggleHelp};
 use crate::keystroke::to_key;
 use crate::notification_slot_view::NotificationSlotView;
-use crate::rollback_dialog::rollback_dialog;
 use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
 use crate::text::TextStyle;
@@ -586,7 +586,7 @@ impl Render for FileDiffView {
             .child(self.notification_slot.clone());
         let overlay = self.overlay.as_ref().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
-            Overlay::Confirm(_) => rollback_dialog(&theme),
+            Overlay::Confirm(_) => confirm_dialog("Roll back this hunk?", &theme),
         });
 
         div()

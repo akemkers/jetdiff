@@ -16,7 +16,7 @@ pub enum AppCommand {
     NextFile,
     PrevFile,
     NextCommit,
-    /// The walkthrough mode, in and out.
+    /// The walkthrough, in and out.
     ToggleWalkthrough,
     PrevCommit,
     ToggleHelp,

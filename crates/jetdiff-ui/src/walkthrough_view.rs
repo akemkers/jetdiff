@@ -1,16 +1,17 @@
-//! The walkthrough mode: the change read as steps, one page each, with the step's code under its
-//! explanation and the contents on the left. `w` opens it from the diff, and nothing is written until
-//! Enter is pressed on the intro. Writing goes on while the diff is shown.
+//! The walkthrough view: the diff read as steps, one page each, with the step's code under its
+//! explanation and the contents on the left. It reads the diff, and writes the walkthrough when asked
+//! to, while the diff is shown. Whoever shows it asks first and tells how it goes.
 
 mod contents;
-mod intro;
+mod notes;
 mod overview;
 mod page;
+mod palette;
+mod prose;
 
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
 
 use gpui::{
     App, Context, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Render, ScrollHandle, Task,
@@ -31,27 +32,42 @@ use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
 use crate::text::{FAMILY, TextStyle};
 
-/// How often the time on the progress is updated.
-const TICK: Duration = Duration::from_secs(1);
 /// Space above a hunk the page scrolls to, so its file header shows.
 const HUNK_MARGIN: f32 = 48.;
+/// A file with more rows than this on the Not covered page is only a card, so the page stays short.
+const MAX_NOT_COVERED_ROWS: usize = 200;
 
 pub enum WalkthroughEvent {
+    /// The diff is read, so `status` says what can be done.
+    Loaded,
+    Written,
+    Failed(String),
     /// Back to the diff.
     Close,
     /// Back to the diff, on this hunk. `None` is the first.
-    Open { path: String, hunk: Option<usize> },
+    Open {
+        path: String,
+        hunk: Option<usize>,
+    },
+}
+
+/// What the view can do now.
+pub enum Status {
+    Loading,
+    /// Why there can be no walkthrough of this diff.
+    CantWrite(&'static str),
+    CanWrite,
+    Writing,
+    Ready,
 }
 
 enum State {
     /// The files are read in the background.
     Loading,
-    Intro,
+    Unwritten,
     Writing {
-        started: Instant,
         cancel: Arc<AtomicBool>,
     },
-    Failed(String),
     Ready(Reading),
 }
 
@@ -64,18 +80,29 @@ enum Item {
         hunks: Vec<usize>,
         excerpt: Rc<Excerpt>,
     },
-    /// An index in the walkthrough's not covered files.
-    NotCovered(usize),
+    /// An index in the walkthrough's not covered files. Its hunks follow, unless they are too long to
+    /// show here.
+    NotCovered {
+        index: usize,
+        too_long: bool,
+    },
 }
 
 impl Item {
+    fn row_count(&self) -> usize {
+        match self {
+            Self::Excerpt { excerpt, .. } => excerpt.row_count(),
+            Self::Heading | Self::File(_) | Self::NotCovered { .. } => 0,
+        }
+    }
+
     /// `n` and `p` go between these, and Enter opens them in the diff.
     fn can_open(&self) -> bool {
-        matches!(self, Self::Excerpt { .. } | Self::NotCovered(_))
+        matches!(self, Self::Excerpt { .. } | Self::NotCovered { .. })
     }
 }
 
-pub struct WalkthroughMode {
+pub struct WalkthroughView {
     /// What is read, in words for the model.
     what: String,
     digest: Option<Rc<Digest>>,
@@ -84,7 +111,7 @@ pub struct WalkthroughMode {
     state: State,
     items: Vec<Item>,
     /// The item `n` and `p` are on.
-    current: Option<usize>,
+    cursor: Option<usize>,
     scroll: ScrollHandle,
     animator: ScrollAnimator,
     style: Option<TextStyle>,
@@ -92,12 +119,11 @@ pub struct WalkthroughMode {
     focus: FocusHandle,
     _load: Task<()>,
     _write: Option<Task<()>>,
-    _tick: Option<Task<()>>,
 }
 
-impl EventEmitter<WalkthroughEvent> for WalkthroughMode {}
+impl EventEmitter<WalkthroughEvent> for WalkthroughView {}
 
-impl WalkthroughMode {
+impl WalkthroughView {
     /// Reads `changed_files` in the background. A walkthrough written before for the same code is
     /// shown at once.
     pub fn new(
@@ -112,7 +138,7 @@ impl WalkthroughMode {
                 .background_executor()
                 .spawn(async move { Digest::read(&repo, &changed_files) })
                 .await;
-            this.update(cx, |mode, cx| mode.loaded(digest, cx)).ok();
+            this.update(cx, |view, cx| view.loaded(digest, cx)).ok();
         });
         Self {
             what,
@@ -120,7 +146,7 @@ impl WalkthroughMode {
             diffs: Vec::new(),
             state: State::Loading,
             items: Vec::new(),
-            current: None,
+            cursor: None,
             scroll: ScrollHandle::new(),
             animator: ScrollAnimator::default(),
             style: None,
@@ -128,7 +154,23 @@ impl WalkthroughMode {
             focus: cx.focus_handle(),
             _load: load,
             _write: None,
-            _tick: None,
+        }
+    }
+
+    pub fn status(&self) -> Status {
+        match &self.state {
+            State::Loading => Status::Loading,
+            State::Writing { .. } => Status::Writing,
+            State::Ready(_) => Status::Ready,
+            State::Unwritten => match &self.digest {
+                Some(digest) if digest.hunk_count() == 0 => {
+                    Status::CantWrite("Nothing to walk through")
+                }
+                Some(digest) if digest.is_too_large() => Status::CantWrite(
+                    "Too large for one walkthrough. Read a part of it, like a commit.",
+                ),
+                _ => Status::CanWrite,
+            },
         }
     }
 
@@ -153,33 +195,30 @@ impl WalkthroughMode {
             })
             .collect();
         let digest = Rc::new(digest);
-        let key = cx.global::<Settings>().walkthrough.key(&digest);
+        let key = cx.global::<Settings>().walkthrough.key(&digest, &self.what);
         let cached = Cache::new()
             .and_then(|cache| cache.read(&key))
             .and_then(|answer| Walkthrough::from_answer(&answer, &digest).ok());
         self.digest = Some(digest);
         match cached {
             Some(walkthrough) => self.show(walkthrough, cx),
-            None => self.state = State::Intro,
+            None => self.state = State::Unwritten,
         }
+        cx.emit(WalkthroughEvent::Loaded);
         cx.notify();
     }
 
-    /// Enter on the intro. The answer is cached on the other thread, so it is kept if the mode is
-    /// closed before it comes.
-    fn write(&mut self, cx: &mut Context<Self>) {
+    /// The answer is cached on the other thread, so it is kept if the view is gone before it comes.
+    pub fn write(&mut self, cx: &mut Context<Self>) {
         let Some(digest) = self.digest.clone() else {
             return;
         };
-        if digest.hunk_count() == 0 || digest.is_too_large() || self.is_writing() {
+        if !matches!(self.status(), Status::CanWrite) {
             return;
         }
         let job = Job::new(&digest, &self.what, &cx.global::<Settings>().walkthrough);
         let cancel = job.canceller();
-        self.state = State::Writing {
-            started: Instant::now(),
-            cancel,
-        };
+        self.state = State::Writing { cancel };
         self._write = Some(cx.spawn(async move |this, cx| {
             let answer = cx
                 .background_executor()
@@ -192,36 +231,33 @@ impl WalkthroughMode {
                     Ok::<_, String>(answer)
                 })
                 .await;
-            this.update(cx, |mode, cx| mode.written(answer, cx)).ok();
-        }));
-        self._tick = Some(cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(TICK).await;
-                if this.update(cx, |_, cx| cx.notify()).is_err() {
-                    break;
-                }
-            }
+            this.update(cx, |view, cx| view.written(answer, cx)).ok();
         }));
         cx.notify();
     }
 
     fn written(&mut self, answer: Result<String, String>, cx: &mut Context<Self>) {
-        self._tick = None;
         let Some(digest) = self.digest.clone() else {
             return;
         };
         match answer.and_then(|answer| Walkthrough::from_answer(&answer, &digest)) {
-            Ok(walkthrough) => self.show(walkthrough, cx),
-            Err(error) => self.state = State::Failed(error),
+            Ok(walkthrough) => {
+                self.show(walkthrough, cx);
+                cx.emit(WalkthroughEvent::Written);
+            }
+            Err(error) => {
+                self.state = State::Unwritten;
+                cx.emit(WalkthroughEvent::Failed(error));
+            }
         }
         cx.notify();
     }
 
-    fn cancel(&mut self, cx: &mut Context<Self>) {
-        if let State::Writing { cancel, .. } = &self.state {
+    pub fn cancel(&mut self, cx: &mut Context<Self>) {
+        if let State::Writing { cancel } = &self.state {
             cancel.store(true, Ordering::Relaxed);
-            self.state = State::Intro;
-            self._tick = None;
+            self.state = State::Unwritten;
+            self._write = None;
             cx.notify();
         }
     }
@@ -250,7 +286,7 @@ impl WalkthroughMode {
     /// The top of the page. Its items are made in `render`, which has the font.
     fn page_changed(&mut self, cx: &mut Context<Self>) {
         self.items = Vec::new();
-        self.current = None;
+        self.cursor = None;
         self.animator.jump(ScrollState::default());
         self.scroll.set_offset(point(px(0.), px(0.)));
         cx.notify();
@@ -264,54 +300,70 @@ impl WalkthroughMode {
         match reading.step() {
             Some((step, _, _)) => {
                 for (file, hunks) in step.hunks_by_file() {
-                    let Some(diff) = &self.diffs[file] else {
-                        continue;
-                    };
-                    items.push(Item::File(file));
-                    for rows in diff.excerpts(&hunks, CONTEXT) {
-                        let in_rows = |hunk: &usize| rows.contains(&diff.hunk_rows()[*hunk].start);
-                        items.push(Item::Excerpt {
-                            file,
-                            hunks: hunks.iter().copied().filter(in_rows).collect(),
-                            excerpt: Rc::new(Excerpt::new(diff.clone(), rows, style)),
-                        });
+                    if self.diffs[file].is_some() {
+                        items.push(Item::File(file));
+                        items.extend(self.excerpts(file, &hunks, style));
                     }
                 }
             }
             None if reading.page() == Page::NotCovered => {
-                items.extend((0..reading.not_covered().len()).map(Item::NotCovered));
+                for (index, not_covered) in reading.not_covered().iter().enumerate() {
+                    let excerpts = self.excerpts(not_covered.file, &not_covered.hunks, style);
+                    let rows: usize = excerpts.iter().map(Item::row_count).sum();
+                    let too_long = rows > MAX_NOT_COVERED_ROWS;
+                    items.push(Item::NotCovered { index, too_long });
+                    if !too_long {
+                        items.extend(excerpts);
+                    }
+                }
             }
             None => {}
         }
         items
     }
 
+    /// The hunks of a file with the unchanged lines around them. None for a file without a diff.
+    fn excerpts(&self, file: usize, hunks: &[usize], style: &TextStyle) -> Vec<Item> {
+        let Some(diff) = &self.diffs[file] else {
+            return Vec::new();
+        };
+        let excerpts = diff.excerpts(hunks, CONTEXT).into_iter().map(|rows| {
+            let in_rows = |hunk: &usize| rows.contains(&diff.hunk_rows()[*hunk].start);
+            Item::Excerpt {
+                file,
+                hunks: hunks.iter().copied().filter(in_rows).collect(),
+                excerpt: Rc::new(Excerpt::new(diff.clone(), rows, style)),
+            }
+        });
+        excerpts.collect()
+    }
+
     /// `n` and `p`.
     fn step_item(&mut self, forward: bool, cx: &mut Context<Self>) {
-        let Some(current) = self.current else {
+        let Some(cursor) = self.cursor else {
             return;
         };
         let next = if forward {
-            (current + 1..self.items.len()).find(|&i| self.items[i].can_open())
+            (cursor + 1..self.items.len()).find(|&i| self.items[i].can_open())
         } else {
-            (0..current).rev().find(|&i| self.items[i].can_open())
+            (0..cursor).rev().find(|&i| self.items[i].can_open())
         };
         if let Some(next) = next {
-            self.current = Some(next);
+            self.cursor = Some(next);
             self.scroll_to_item(next, cx);
         }
     }
 
-    fn open_current(&mut self, cx: &mut Context<Self>) {
-        let (Some(current), Some(digest), State::Ready(reading)) =
-            (self.current, &self.digest, &self.state)
+    fn open_at_cursor(&mut self, cx: &mut Context<Self>) {
+        let (Some(cursor), Some(digest), State::Ready(reading)) =
+            (self.cursor, &self.digest, &self.state)
         else {
             return;
         };
-        let (file, hunk) = match &self.items[current] {
+        let (file, hunk) = match &self.items[cursor] {
             Item::Excerpt { file, hunks, .. } => (*file, hunks.first().copied()),
-            Item::NotCovered(i) => {
-                let not_covered = &reading.not_covered()[*i];
+            Item::NotCovered { index, .. } => {
+                let not_covered = &reading.not_covered()[*index];
                 (not_covered.file, not_covered.hunks.first().copied())
             }
             Item::Heading | Item::File(_) => return,
@@ -362,12 +414,8 @@ impl WalkthroughMode {
         }
         let half_page = f32::from(self.scroll.bounds().size.height) / 2.;
         let handled = match (&self.state, keystroke.key.as_str()) {
-            (State::Intro | State::Failed(_), "enter") => {
-                self.write(cx);
-                true
-            }
             (State::Ready(_), "enter") => {
-                self.open_current(cx);
+                self.open_at_cursor(cx);
                 true
             }
             (State::Ready(_), "right") => {
@@ -425,7 +473,7 @@ impl WalkthroughMode {
             && let Some(style) = &self.style
         {
             self.items = self.page_items(style);
-            self.current = self.items.iter().position(Item::can_open);
+            self.cursor = self.items.iter().position(Item::can_open);
         }
     }
 
@@ -442,36 +490,42 @@ impl WalkthroughMode {
     }
 }
 
-impl Drop for WalkthroughMode {
+/// Like "1 file" and "3 files".
+fn plural(count: usize, what: &str) -> String {
+    if count == 1 {
+        format!("1 {what}")
+    } else {
+        format!("{count} {what}s")
+    }
+}
+
+impl Drop for WalkthroughView {
     /// A walkthrough no one will see is not paid for.
     fn drop(&mut self) {
-        if let State::Writing { cancel, .. } = &self.state {
+        if let State::Writing { cancel } = &self.state {
             cancel.store(true, Ordering::Relaxed);
         }
     }
 }
 
-impl Focusable for WalkthroughMode {
+impl Focusable for WalkthroughView {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
     }
 }
 
-impl Render for WalkthroughMode {
+impl Render for WalkthroughView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_items(window);
         self.animate_scroll(window);
-        let theme = cx.global::<Settings>().theme;
-        let body = match &self.state {
-            State::Ready(_) => self.ready(cx).into_any_element(),
-            _ => self.intro(cx).into_any_element(),
-        };
+        let width = f32::from(window.viewport_size().width);
+        let body = self.ready(width, cx);
         div()
             .size_full()
             .flex()
             .flex_col()
-            .bg(theme.editor_bg)
-            .text_color(theme.editor_fg)
+            .bg(palette::color(palette::PAGE))
+            .text_color(palette::color(palette::PRIMARY))
             .font_family(FAMILY)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))

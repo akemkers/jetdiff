@@ -1,25 +1,41 @@
-//! The walkthrough mode in the repo view: `w` shows it in place of the side panel and the diff, and
-//! back. It is kept while the same change is shown, and while it is being written.
+//! The walkthrough in the repo view: `w` shows it in place of the side panel and the diff, and
+//! back. Without one, `w` asks whether Claude should write it, and the notification slot shows the
+//! writing while the diff is read. It is kept while the same diff is shown, and while it is written.
 
 use std::rc::Rc;
+use std::time::Instant;
 
-use gpui::{Context, Entity, Focusable, Window, prelude::*};
+use gpui::{Context, Entity, Focusable, KeyDownEvent, SharedString, Window, prelude::*};
+use jetdiff_app::{Notification, Progress};
 use jetdiff_files::ChangedFile;
 
 use super::RepoView;
-use crate::walkthrough_mode::{WalkthroughEvent, WalkthroughMode};
+use crate::settings::Settings;
+use crate::walkthrough_view::{Status, WalkthroughEvent, WalkthroughView};
 
-/// The walkthrough mode and the change it was opened for.
-pub(super) struct Walkthrough {
-    mode: Entity<WalkthroughMode>,
+/// The walkthrough view and the diff it was opened for.
+pub(super) struct OpenWalkthrough {
+    view: Entity<WalkthroughView>,
     what: String,
     changed_files: Rc<[ChangedFile]>,
     pub(super) shown: bool,
+    /// `w` was pressed while the diff was read, so it is shown or asked about when it is.
+    opening: bool,
     _events: gpui::Subscription,
+}
+
+/// What the popup over the diff asks. Enter answers yes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Question {
+    Write,
+    Stop,
 }
 
 impl RepoView {
     pub(super) fn toggle_walkthrough(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.question.take().is_some() {
+            return cx.notify();
+        }
         if self
             .walkthrough
             .as_ref()
@@ -32,50 +48,156 @@ impl RepoView {
         let reuse = self.walkthrough.as_ref().is_some_and(|walkthrough| {
             let same =
                 walkthrough.what == what && Rc::ptr_eq(&walkthrough.changed_files, &changed_files);
-            same || walkthrough.mode.read(cx).is_writing()
+            same || walkthrough.view.read(cx).is_writing()
         });
         if !reuse {
             let repo = self.repo_source.repo().clone();
             let files = changed_files.to_vec();
             let (description, scale) = (what.clone(), self.scale);
-            let mode = cx.new(|cx| WalkthroughMode::new(repo, files, description, scale, cx));
-            let events = cx.subscribe_in(&mode, window, |this, _, event, window, cx| match event {
-                WalkthroughEvent::Close => this.close_walkthrough(window, cx),
-                WalkthroughEvent::Open { path, hunk } => {
-                    this.close_walkthrough(window, cx);
-                    this.open(path, *hunk, cx);
-                }
-            });
-            self.walkthrough = Some(Walkthrough {
-                mode,
+            let view = cx.new(|cx| WalkthroughView::new(repo, files, description, scale, cx));
+            let events = cx.subscribe_in(&view, window, Self::walkthrough_event);
+            self.walkthrough = Some(OpenWalkthrough {
+                view,
                 what,
                 changed_files,
                 shown: false,
+                opening: false,
                 _events: events,
             });
         }
-        if let Some(walkthrough) = &mut self.walkthrough {
-            walkthrough.shown = true;
-            window.focus(&walkthrough.mode.focus_handle(cx));
-        }
-        cx.notify();
+        self.open_walkthrough(window, cx);
     }
 
-    pub(super) fn walkthrough_mode(&self) -> Option<Entity<WalkthroughMode>> {
+    pub(super) fn walkthrough_view(&self) -> Option<Entity<WalkthroughView>> {
         let walkthrough = self
             .walkthrough
             .as_ref()
             .filter(|walkthrough| walkthrough.shown)?;
-        Some(walkthrough.mode.clone())
+        Some(walkthrough.view.clone())
     }
 
     pub(super) fn walkthrough_zoomed(&self, cx: &mut Context<Self>) {
         if let Some(walkthrough) = &self.walkthrough {
             let scale = self.scale;
             walkthrough
-                .mode
-                .update(cx, |mode, cx| mode.set_scale(scale, cx));
+                .view
+                .update(cx, |view, cx| view.set_scale(scale, cx));
         }
+    }
+
+    /// The popup's question, with the model that would write it.
+    pub(super) fn question_text(&self, question: Question, cx: &gpui::App) -> SharedString {
+        let model = &cx.global::<Settings>().walkthrough.model;
+        match question {
+            Question::Write => format!(
+                "Write a step-by-step walkthrough of this diff with Claude {model}? It can take a few minutes."
+            )
+            .into(),
+            Question::Stop => "Stop writing the walkthrough?".into(),
+        }
+    }
+
+    /// While the popup is open, Enter answers yes and any other key no. Esc and `w` come as
+    /// actions, which close it too.
+    pub(super) fn answer(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(question) = self.question.take() else {
+            return;
+        };
+        cx.stop_propagation();
+        let keystroke = &ev.keystroke;
+        if keystroke.key == "enter" && !keystroke.modifiers.modified() {
+            match question {
+                Question::Write => self.write_walkthrough(cx),
+                Question::Stop => self.stop_walkthrough(cx),
+            }
+        }
+        cx.notify();
+    }
+
+    /// Shown when it is written, asked about when it can be, and told why when it can't.
+    fn open_walkthrough(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(walkthrough) = &mut self.walkthrough else {
+            return;
+        };
+        walkthrough.opening = false;
+        match walkthrough.view.read(cx).status() {
+            Status::Loading => walkthrough.opening = true,
+            Status::Ready => {
+                walkthrough.shown = true;
+                window.focus(&walkthrough.view.focus_handle(cx));
+            }
+            Status::CanWrite => self.question = Some(Question::Write),
+            Status::Writing => self.question = Some(Question::Stop),
+            Status::CantWrite(reason) => self.show_brief(Notification::info(reason), cx),
+        }
+        cx.notify();
+    }
+
+    fn walkthrough_event(
+        &mut self,
+        _: &Entity<WalkthroughView>,
+        event: &WalkthroughEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            WalkthroughEvent::Loaded => {
+                if self
+                    .walkthrough
+                    .as_ref()
+                    .is_some_and(|walkthrough| walkthrough.opening)
+                {
+                    self.open_walkthrough(window, cx);
+                }
+            }
+            // It was asked for, so it opens when it is ready
+            WalkthroughEvent::Written => {
+                self.show_progress(None, cx);
+                self.question = None;
+                self.open_walkthrough(window, cx);
+            }
+            WalkthroughEvent::Failed(error) => {
+                self.show_progress(None, cx);
+                let warning = format!("The walkthrough couldn't be written: {error}");
+                self.show_brief(Notification::warning(warning), cx);
+            }
+            WalkthroughEvent::Close => self.close_walkthrough(window, cx),
+            WalkthroughEvent::Open { path, hunk } => {
+                self.close_walkthrough(window, cx);
+                self.open(path, *hunk, cx);
+            }
+        }
+    }
+
+    fn write_walkthrough(&mut self, cx: &mut Context<Self>) {
+        let Some(walkthrough) = &self.walkthrough else {
+            return;
+        };
+        walkthrough.view.update(cx, |view, cx| view.write(cx));
+        let model = &cx.global::<Settings>().walkthrough.model;
+        let progress = Progress::new(
+            format!("Writing a walkthrough with Claude {model}…"),
+            Instant::now(),
+        );
+        self.show_progress(Some(progress), cx);
+    }
+
+    fn stop_walkthrough(&mut self, cx: &mut Context<Self>) {
+        if let Some(walkthrough) = &self.walkthrough {
+            walkthrough.view.update(cx, |view, cx| view.cancel(cx));
+        }
+        self.show_progress(None, cx);
+        self.show_brief(Notification::info("Stopped writing the walkthrough"), cx);
+    }
+
+    fn show_progress(&self, progress: Option<Progress>, cx: &mut Context<Self>) {
+        self.notification_slot
+            .update(cx, |slot, cx| slot.show_progress(progress, cx));
+    }
+
+    fn show_brief(&self, brief: Notification, cx: &mut Context<Self>) {
+        self.notification_slot
+            .update(cx, |slot, cx| slot.show_brief(brief, cx));
     }
 
     fn close_walkthrough(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -100,7 +222,7 @@ impl RepoView {
         }
     }
 
-    /// For the model: what the change is.
+    /// For the model: what the diff is.
     fn what(&self, cx: &gpui::App) -> String {
         match &self.commits {
             Some(commits) => commits.read(cx).describe_selected(),

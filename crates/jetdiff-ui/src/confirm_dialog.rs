@@ -1,11 +1,15 @@
-//! Asks whether the hunk should be rolled back. `FileDiffView` handles Enter and Esc.
+//! Asks before something is done, like a rollback. Whoever shows it handles Enter and Esc.
 
-use gpui::{Div, div, prelude::*, px, relative};
+use gpui::{Div, SharedString, div, prelude::*, px, relative};
 
 use crate::text::FAMILY;
 use crate::theme::UiTheme;
 
-pub fn rollback_dialog(theme: &UiTheme) -> Div {
+/// Long questions wrap. The width is fixed, since GPUI measures text without one as a single line,
+/// and the wrapped lines would run out of the box.
+const WIDTH: f32 = 420.;
+
+pub fn confirm_dialog(question: impl Into<SharedString>, theme: &UiTheme) -> Div {
     div()
         .absolute()
         .inset_0()
@@ -15,6 +19,7 @@ pub fn rollback_dialog(theme: &UiTheme) -> Div {
         .pt(relative(0.2))
         .child(
             div()
+                .w(px(WIDTH))
                 .flex()
                 .flex_col()
                 .gap(px(6.))
@@ -28,7 +33,7 @@ pub fn rollback_dialog(theme: &UiTheme) -> Div {
                 .font_family(FAMILY)
                 .text_size(px(13.))
                 .text_color(theme.editor_fg)
-                .child("Roll back this hunk?")
+                .child(question.into())
                 .child(
                     div()
                         .text_color(theme.line_number)
