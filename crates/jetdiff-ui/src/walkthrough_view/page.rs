@@ -6,7 +6,7 @@ use jetdiff_app::walkthrough::{Page, Reading};
 use jetdiff_files::FileStatus;
 
 use super::notes::NoteRow;
-use super::palette::{ACCENT, BODY, BORDER, MUTED, PAGE, SELECTED, STRONG, color};
+use super::palette::{ACCENT, BODY, BORDER, FILE_HEADER, MUTED, PAGE, SELECTED, STRONG, color};
 use super::prose::{ProseColors, SANS, prose};
 use super::{Item, State, WalkthroughView};
 use crate::settings::Settings;
@@ -19,6 +19,9 @@ const SIDE_PADDING_FRACTION: f32 = 0.05;
 const MIN_SIDE_PADDING: f32 = 20.;
 const MAX_SIDE_PADDING: f32 = 72.;
 const GAP: f32 = 12.;
+/// Space above a file, so it stands apart from the code of the file before.
+const FILE_GAP: f32 = 20.;
+const FILE_HEADER_PADDING: f32 = 8.;
 const LABEL_SIZE: f32 = 12.;
 const TITLE_SIZE: f32 = 24.;
 const TEXT_SIZE: f32 = 16.;
@@ -124,9 +127,15 @@ impl WalkthroughView {
                     None => (None, file.path.clone()),
                 };
                 div()
-                    .pt(s(GAP))
+                    .mt(s(FILE_GAP))
+                    .px(s(GAP))
+                    .py(s(FILE_HEADER_PADDING))
                     .flex()
                     .gap(s(GAP))
+                    .bg(color(FILE_HEADER))
+                    .border_1()
+                    .border_color(color(BORDER))
+                    .rounded(s(6.))
                     .text_size(s(SMALL_SIZE))
                     .child(
                         div()

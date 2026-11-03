@@ -9,6 +9,8 @@ pub(super) const SURFACE: u32 = 0x1c1f28;
 pub(super) const BORDER: u32 = 0x2a2e3b;
 pub(super) const SELECTED: u32 = 0x2b3042;
 pub(super) const CODE_BACKGROUND: u32 = 0x262a36;
+/// Lighter than the code, so each file starts with a bar of its own.
+pub(super) const FILE_HEADER: u32 = 0x262a36;
 
 /// Headings and bold text.
 pub(super) const STRONG: u32 = 0xffffff;
