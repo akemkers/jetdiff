@@ -27,11 +27,11 @@ const TITLE_SIZE: f32 = 24.;
 const TEXT_SIZE: f32 = 16.;
 const SMALL_SIZE: f32 = 13.;
 const LINE_HEIGHT: f32 = 1.65;
-/// The page's code, centered. Room for about 115 characters of code with its line numbers.
+/// The page's code, at the left. Room for about 115 characters of code with its line numbers.
 const CONTENT_WIDTH: f32 = 1160.;
 /// Split has two sides, with room for about 100 characters on each.
 const SPLIT_CONTENT_WIDTH: f32 = 1840.;
-/// Prose is narrower, since long lines are hard to follow, and centered over the code.
+/// Prose is narrower, since long lines are hard to follow, and starts where the code does.
 const PROSE_WIDTH: f32 = 720.;
 const TAG_HEIGHT: f32 = 22.;
 const DOT_SIZE: f32 = 5.;
@@ -47,7 +47,7 @@ impl WalkthroughView {
         };
         let theme = cx.global::<Settings>().theme;
         // A scrolled column shrinks its children to fit unless told not to, and text then overlaps.
-        // Each item grows to the column's width and is centered in the page.
+        // Each item grows to the column's width, at the left of the page.
         let content_width = if self.unified {
             CONTENT_WIDTH
         } else {
@@ -57,13 +57,12 @@ impl WalkthroughView {
         let children: Vec<AnyElement> = (0..self.items.len())
             .map(|item| {
                 let element = self.item(item, reading, &theme, cx);
-                let centered = div().flex_1().min_w_0().max_w(column).child(element);
+                let column = div().flex_1().min_w_0().max_w(column).child(element);
                 div()
                     .flex_none()
                     .w_full()
                     .flex()
-                    .justify_center()
-                    .child(centered)
+                    .child(column)
                     .into_any_element()
             })
             .collect();
@@ -266,8 +265,8 @@ impl WalkthroughView {
         }
     }
 
-    /// Where the page is, the title with Key step, and the points, all centered over the code. The
-    /// notes under them are a table as wide as the text.
+    /// Where the page is, the title with Key step, and the points, at the left edge of the code.
+    /// The notes under them are a table as wide as the text.
     fn heading(&self, reading: &Reading, cx: &mut Context<Self>) -> Div {
         let s = |v: f32| px(v * self.scale);
         let body = ProseColors {
@@ -398,14 +397,14 @@ impl WalkthroughView {
     }
 }
 
-/// Prose and notes in a column narrower than the code, centered over it.
+/// Prose and notes in a column narrower than the code, at its left edge.
 pub(super) fn prose_column(content: impl IntoElement, scale: f32) -> Div {
     let column = div()
         .flex_1()
         .min_w_0()
         .max_w(px(PROSE_WIDTH * scale))
         .child(content);
-    div().flex().justify_center().child(column)
+    div().flex().child(column)
 }
 
 /// A point with a small dot in front, as in a list.
