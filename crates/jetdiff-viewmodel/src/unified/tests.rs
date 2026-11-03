@@ -260,3 +260,29 @@ fn excerpts_with_context_around_the_hunks() {
     assert_eq!(diff.excerpts(&[2], 50), [42..diff.row_count()]);
     assert_eq!(diff.excerpts(&[], 3), Vec::<Range<usize>>::new());
 }
+
+#[test]
+fn an_excerpt_has_the_same_lines_on_both_sides_when_lines_are_changed() {
+    let diff = UnifiedDiff::new(three_hunks());
+    let [rows] = diff.excerpts(&[0], 3).try_into().unwrap();
+    assert_eq!(diff.side_lines(rows.clone(), Side::Left), 7..14);
+    assert_eq!(diff.side_lines(rows.clone(), Side::Right), 7..14);
+    assert_eq!(diff.hunks_in(rows), 0..1);
+}
+
+#[test]
+fn an_excerpt_has_more_lines_on_the_side_lines_are_added_to() {
+    let left_side = numbered("a", 10);
+    let right_side = left_side.replace("a4\n", "a4\nx\ny\nz\n");
+    let diff = unified(&left_side, &right_side);
+    let [rows] = diff.excerpts(&[0], 2).try_into().unwrap();
+    assert_eq!(diff.side_lines(rows.clone(), Side::Left), 3..7);
+    assert_eq!(diff.side_lines(rows, Side::Right), 3..10);
+}
+
+#[test]
+fn hunks_in_rows_between_hunks_is_empty() {
+    let diff = UnifiedDiff::new(three_hunks());
+    assert_eq!(diff.hunks_in(0..63), 0..2);
+    assert_eq!(diff.hunks_in(15..38), 1..1);
+}

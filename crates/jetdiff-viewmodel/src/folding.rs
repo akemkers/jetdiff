@@ -61,7 +61,7 @@ impl Folding {
         Self::with_folds(line_counts, folds)
     }
 
-    /// No folds. For tests.
+    /// No folds. For tests and excerpts.
     pub fn none(diff: &FileDiff) -> Self {
         Self::with_folds(line_counts(diff), Vec::new())
     }

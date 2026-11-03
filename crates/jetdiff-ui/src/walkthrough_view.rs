@@ -108,6 +108,8 @@ pub struct WalkthroughView {
     digest: Option<Rc<Digest>>,
     /// Each digest file, ready to draw.
     diffs: Vec<Option<Rc<UnifiedDiff>>>,
+    /// Split or Unified, as in the diff. Set when the walkthrough is shown.
+    unified: bool,
     state: State,
     items: Vec<Item>,
     /// The item `n` and `p` are on.
@@ -144,6 +146,7 @@ impl WalkthroughView {
             what,
             digest: None,
             diffs: Vec::new(),
+            unified: cx.global::<Settings>().unified,
             state: State::Loading,
             items: Vec::new(),
             cursor: None,
@@ -181,6 +184,16 @@ impl WalkthroughView {
     pub fn set_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
         self.scale = scale;
         cx.notify();
+    }
+
+    /// The page stays on the same hunk. Its items are made again, since an excerpt is drawn for one
+    /// of them.
+    pub fn set_unified(&mut self, unified: bool, cx: &mut Context<Self>) {
+        if unified != self.unified {
+            self.unified = unified;
+            self.items = Vec::new();
+            cx.notify();
+        }
     }
 
     fn loaded(&mut self, digest: Digest, cx: &mut Context<Self>) {
@@ -332,7 +345,7 @@ impl WalkthroughView {
             Item::Excerpt {
                 file,
                 hunks: hunks.iter().copied().filter(in_rows).collect(),
-                excerpt: Rc::new(Excerpt::new(diff.clone(), rows, style)),
+                excerpt: Rc::new(Excerpt::new(diff.clone(), rows, self.unified, style)),
             }
         });
         excerpts.collect()
@@ -458,7 +471,7 @@ impl WalkthroughView {
     }
 
     /// The code font follows the zoom in the diff. The page's items are made again for a new size,
-    /// since the excerpts are shaped for the old one.
+    /// since the excerpts are shaped for the old one, and the page stays on the same hunk.
     fn ensure_items(&mut self, window: &Window) {
         let size = FONT_SIZE * self.scale;
         if self
@@ -473,7 +486,9 @@ impl WalkthroughView {
             && let Some(style) = &self.style
         {
             self.items = self.page_items(style);
-            self.cursor = self.items.iter().position(Item::can_open);
+            if self.cursor.is_none() {
+                self.cursor = self.items.iter().position(Item::can_open);
+            }
         }
     }
 

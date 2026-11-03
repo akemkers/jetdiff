@@ -53,7 +53,6 @@ impl WalkthroughView {
                     .text_color(color(SUBTITLE))
                     .child(subtitle)
             }));
-        // Prose is centered over the notes, which are a table
         let mut column = div()
             .flex()
             .flex_col()
@@ -86,7 +85,7 @@ impl WalkthroughView {
             if decisions > 0 {
                 count += &format!(" · {}", plural(decisions, "decision"));
             }
-            column = column.child(section("Notes", Some(count), self.scale));
+            column = column.child(narrow(section("Notes", Some(count), self.scale)));
             let rows = notes
                 .into_iter()
                 .map(|(page, note)| NoteRow {
@@ -95,7 +94,7 @@ impl WalkthroughView {
                 })
                 .collect();
             let table = self.notes_table(rows, cx);
-            column = column.child(div().mt(s(POINT_GAP)).child(table));
+            column = column.child(narrow(div().mt(s(POINT_GAP)).child(table)));
         }
         column.child(narrow(
             div()

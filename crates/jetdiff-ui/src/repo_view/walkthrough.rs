@@ -10,6 +10,7 @@ use jetdiff_app::{Notification, Progress};
 use jetdiff_files::ChangedFile;
 
 use super::RepoView;
+use crate::file_diff::ToggleDiffMode;
 use crate::settings::Settings;
 use crate::walkthrough_view::{Status, WalkthroughEvent, WalkthroughView};
 
@@ -85,6 +86,27 @@ impl RepoView {
         }
     }
 
+    /// `v` in the walkthrough switches it and the diff, also when the diff shows a file that is
+    /// always Unified. A hidden walkthrough follows the diff when it is shown again.
+    pub(super) fn toggle_diff_mode(
+        &mut self,
+        action: &ToggleDiffMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.walkthrough_view() {
+            Some(view) => {
+                let unified = !self.diff.read(cx).is_unified();
+                self.diff
+                    .update(cx, |diff, cx| diff.set_unified(unified, cx));
+                view.update(cx, |view, cx| view.set_unified(unified, cx));
+            }
+            None => self
+                .diff
+                .update(cx, |diff, cx| diff.toggle_diff_mode(action, window, cx)),
+        }
+    }
+
     /// The popup's question, with the model that would write it.
     pub(super) fn question_text(&self, question: Question, cx: &gpui::App) -> SharedString {
         let model = &cx.global::<Settings>().walkthrough.model;
@@ -123,6 +145,10 @@ impl RepoView {
         match walkthrough.view.read(cx).status() {
             Status::Loading => walkthrough.opening = true,
             Status::Ready => {
+                let unified = self.diff.read(cx).is_unified();
+                walkthrough
+                    .view
+                    .update(cx, |view, cx| view.set_unified(unified, cx));
                 walkthrough.shown = true;
                 window.focus(&walkthrough.view.focus_handle(cx));
             }

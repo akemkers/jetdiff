@@ -1,6 +1,8 @@
 //! The diff divider between the sides. The geometry comes ready from `divider_bands` and
 //! `fold_links`, local to the divider with the same y axis as the sides.
 
+use std::ops::Range;
+
 use gpui::{Bounds, ContentMask, Hsla, PathBuilder, Pixels, Window, fill, point, px, size};
 use jetdiff_viewmodel::divider::DIVIDER_WIDTH;
 use jetdiff_viewmodel::fold_paths::stroke_width;
@@ -39,6 +41,8 @@ pub struct Divider<'a> {
     pub top: f32,
     pub viewport: Viewport,
     pub scroll_y: [f32; 2],
+    /// The hunks that get a band. An excerpt shows only its own.
+    pub hunks: Range<usize>,
 }
 
 impl Divider<'_> {
@@ -58,7 +62,10 @@ impl Divider<'_> {
                 self.scroll_y,
                 self.viewport,
                 DIVIDER_WIDTH,
-            ) {
+            )
+            .into_iter()
+            .filter(|band| self.hunks.contains(&band.hunk))
+            {
                 let color = self.theme.diff(band.kind).background;
 
                 let mut b = PathBuilder::fill();

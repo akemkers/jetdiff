@@ -15,9 +15,7 @@ use jetdiff_viewmodel::metrics::FONT_SIZE;
 
 use crate::commit_list::{CommitList, SelectRow};
 use crate::confirm_dialog::confirm_dialog;
-use crate::file_diff::{
-    FileDiffView, ResetZoom, Rollback, ToggleDiffMode, ZoomIn, ZoomOut, Zoomed,
-};
+use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
 use crate::file_header::file_header;
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp};
@@ -462,10 +460,7 @@ impl Render for RepoView {
                 }
                 this.diff.update(cx, |d, cx| d.hide_help(a, w, cx))
             }))
-            .on_action(cx.listener(|this, action: &ToggleDiffMode, window, cx| {
-                this.diff
-                    .update(cx, |diff, cx| diff.toggle_diff_mode(action, window, cx))
-            }))
+            .on_action(cx.listener(Self::toggle_diff_mode))
             .map(|d| match walkthrough {
                 Some(walkthrough) => d.child(div().size_full().child(walkthrough)),
                 None => d

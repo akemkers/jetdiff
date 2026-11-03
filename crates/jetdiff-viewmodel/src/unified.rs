@@ -20,6 +20,8 @@ use crate::scroll::ScrollState;
 use crate::scrolloff;
 use crate::state::{DiffState, Horizontal, Outcome};
 
+mod excerpt;
+
 /// `h` and `l` scroll this many characters, as in Split.
 const SCROLL_COLUMNS: f32 = 4.;
 
@@ -169,27 +171,6 @@ impl UnifiedDiff {
 
     pub fn hunk_rows(&self) -> &[Range<usize>] {
         &self.hunk_rows
-    }
-
-    /// The rows of `hunks` with `context` unchanged rows around each, in order. Excerpts that
-    /// overlap or touch become one.
-    pub fn excerpts(&self, hunks: &[usize], context: usize) -> Vec<Range<usize>> {
-        let mut rows: Vec<Range<usize>> = hunks
-            .iter()
-            .map(|&hunk| {
-                let rows = &self.hunk_rows[hunk];
-                rows.start.saturating_sub(context)..(rows.end + context).min(self.rows.len())
-            })
-            .collect();
-        rows.sort_by_key(|rows| rows.start);
-        let mut excerpts: Vec<Range<usize>> = Vec::with_capacity(rows.len());
-        for rows in rows {
-            match excerpts.last_mut() {
-                Some(last) if rows.start <= last.end => last.end = last.end.max(rows.end),
-                _ => excerpts.push(rows),
-            }
-        }
-        excerpts
     }
 
     pub fn text(&self, row: usize) -> &str {

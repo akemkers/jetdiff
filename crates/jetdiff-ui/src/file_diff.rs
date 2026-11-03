@@ -165,8 +165,11 @@ impl FileDiffView {
         cx.notify();
     }
 
-    /// `v`: switches between Split and Unified for all files. The cursor stays on the same line and
-    /// height.
+    pub(crate) fn is_unified(&self) -> bool {
+        self.unified
+    }
+
+    /// `v`: switches between Split and Unified for all files.
     pub(crate) fn toggle_diff_mode(
         &mut self,
         _: &ToggleDiffMode,
@@ -177,7 +180,19 @@ impl FileDiffView {
         if !self.mode.diff().can_split() {
             return;
         }
-        self.unified = !self.unified;
+        self.set_unified(!self.unified, cx);
+        self.show_brief(if self.unified { "Unified" } else { "Split" }, cx);
+    }
+
+    /// Split or Unified for all files. The cursor stays on the same line and height.
+    pub(crate) fn set_unified(&mut self, unified: bool, cx: &mut Context<Self>) {
+        if unified == self.unified {
+            return;
+        }
+        self.unified = unified;
+        if !self.mode.diff().can_split() {
+            return;
+        }
         self.stop_animation();
         let diff = self.mode.diff().clone();
         let folding = Rc::new(folding(&diff, self.fold_unchanged));
@@ -189,7 +204,6 @@ impl FileDiffView {
         self.update_hunk_minimap_marks();
         self.clamp_scroll_x();
         self.scroll.jump(self.mode.scroll());
-        self.show_brief(if self.unified { "Unified" } else { "Split" }, cx);
         cx.notify();
     }
 

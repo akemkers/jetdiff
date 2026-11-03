@@ -3,19 +3,20 @@
 
 mod code_paint;
 mod divider;
+mod excerpt;
 mod split;
 mod split_side;
 mod unified;
 
 use std::cell::{Cell, RefCell};
-use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::{DiffMode, HunkMinimapMark, ScrollState, UnifiedDiff, Viewport};
+use jetdiff_viewmodel::{DiffMode, HunkMinimapMark, ScrollState, Viewport};
 
 use self::code_paint::HunkMinimapRects;
+pub use self::excerpt::Excerpt;
 use self::split::SplitPainter;
 use self::split_side::{CursorRow, SideCache};
 use self::unified::{RowCache, UnifiedPainter};
@@ -70,59 +71,6 @@ impl Shared {
     pub fn clear_hunk_minimaps(&self) {
         *self.split_hunk_minimaps.borrow_mut() = Default::default();
         *self.unified_hunk_minimap.borrow_mut() = Default::default();
-    }
-}
-
-/// Rows of a file in Unified, drawn over all of their bounds without a cursor or a scrollbar, for a
-/// walkthrough. Each has its own cache, since a cache keeps only the rows it drew last.
-pub struct Excerpt {
-    diff: Rc<UnifiedDiff>,
-    rows: Range<usize>,
-    cache: RefCell<RowCache>,
-    hunk_minimap: RefCell<HunkMinimapRects>,
-}
-
-impl Excerpt {
-    pub fn new(diff: Rc<UnifiedDiff>, rows: Range<usize>, style: &TextStyle) -> Self {
-        let mut cache = RowCache::new(CACHE_CAPACITY);
-        cache.set_key(style.cache_key());
-        Self {
-            diff,
-            rows,
-            cache: RefCell::new(cache),
-            hunk_minimap: RefCell::default(),
-        }
-    }
-
-    pub fn row_count(&self) -> usize {
-        self.rows.len()
-    }
-
-    pub fn paint(
-        &self,
-        style: TextStyle,
-        theme: UiTheme,
-        bounds: Bounds<Pixels>,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        let scroll_y = self.rows.start as f32 * style.line_height();
-        let painter = UnifiedPainter {
-            diff: self.diff.clone(),
-            theme,
-            style,
-            scroll_y: snap(scroll_y, window.scale_factor()),
-            scroll_x: 0.,
-            cursor_row: None,
-            hunk_minimap: false,
-        };
-        painter.paint(
-            bounds,
-            &mut self.cache.borrow_mut(),
-            &mut self.hunk_minimap.borrow_mut(),
-            window,
-            cx,
-        );
     }
 }
 

@@ -33,8 +33,10 @@ pub struct SplitSide<'a> {
     pub height: f32,
     pub scroll_y: f32,
     pub scroll_x: f32,
-    pub cursor_row: CursorRow,
-    pub hunk_minimap: &'a HunkMinimapRects,
+    /// `None` in an excerpt, which has no cursor.
+    pub cursor_row: Option<CursorRow>,
+    /// An excerpt is too short for one.
+    pub hunk_minimap: Option<&'a HunkMinimapRects>,
 }
 
 /// The cursor's line as this side draws it.
@@ -70,15 +72,17 @@ impl SplitSide<'_> {
             self.paint_folds(&visible, window);
             let widest = self.paint_text(&visible, cache, window, cx);
             self.paint_line_numbers(&visible, cache, window, cx);
-            let content_height = self.layout().content_height();
-            self.hunk_minimap.paint(
-                self.geom,
-                self.top,
-                self.scroll_y,
-                content_height,
-                self.theme,
-                window,
-            );
+            if let Some(hunk_minimap) = self.hunk_minimap {
+                let content_height = self.layout().content_height();
+                hunk_minimap.paint(
+                    self.geom,
+                    self.top,
+                    self.scroll_y,
+                    content_height,
+                    self.theme,
+                    window,
+                );
+            }
             widest
         });
         cache.trim(*visible.logical.start()..*visible.logical.end() + 1);
@@ -144,7 +148,10 @@ impl SplitSide<'_> {
     }
 
     fn paint_cursor_row(&self, visible: &Visible, window: &mut Window) {
-        let line = self.cursor_row.line;
+        let Some(cursor_row) = self.cursor_row else {
+            return;
+        };
+        let line = cursor_row.line;
         if !visible.logical.contains(&line) {
             return;
         }
@@ -154,7 +161,7 @@ impl SplitSide<'_> {
             self.geom,
             top,
             bottom,
-            self.cursor_row.active,
+            cursor_row.active,
             self.theme,
             window,
         );
@@ -237,7 +244,10 @@ impl SplitSide<'_> {
             for &line in &visible.lines {
                 let y = self.screen_y(layout.line_top(line)) + self.style.number_dy;
                 let cursor_number;
-                let number = if line == self.cursor_row.line {
+                let number = if self
+                    .cursor_row
+                    .is_some_and(|cursor_row| cursor_row.line == line)
+                {
                     let color = self.theme.cursor_row_line_number;
                     cursor_number = shape_number(line, color, self.style, window);
                     &cursor_number

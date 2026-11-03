@@ -63,8 +63,8 @@ impl SplitPainter {
                 height,
                 scroll_y: self.scroll_y[index],
                 scroll_x: self.scroll_x,
-                cursor_row: self.cursor_rows[index],
-                hunk_minimap: &hunk_minimaps[index],
+                cursor_row: Some(self.cursor_rows[index]),
+                hunk_minimap: Some(&hunk_minimaps[index]),
             };
             widest = widest.max(split_side.paint(&mut caches[index], window, cx));
         }
@@ -79,13 +79,18 @@ impl SplitPainter {
                 line_height,
             },
             scroll_y: self.scroll_y,
+            hunks: 0..self.diff.hunks().len(),
         }
         .paint(window);
         widest
     }
 }
 
-fn side_geometry(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> [SideGeometry; 2] {
+pub(super) fn side_geometry(
+    diff: &FileDiff,
+    style: &TextStyle,
+    bounds: Bounds<Pixels>,
+) -> [SideGeometry; 2] {
     let (x, width) = (f32::from(bounds.origin.x), f32::from(bounds.size.width));
     jetdiff_viewmodel::side_geometry(diff, style.number_char_width, x, width)
 }
