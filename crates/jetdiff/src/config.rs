@@ -1,6 +1,7 @@
 //! Settings from `$XDG_CONFIG_HOME/jetdiff/config.toml`, or `~/.config` without it.
 //! If the file is missing, it is made from the template in `config.toml`. The template also has the defaults for
-//! keys the file is missing, so older files work after new settings are added.
+//! keys the file is missing, so older files work after new settings are added. Unknown keys are
+//! ignored, so they also work after a setting is removed.
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -12,11 +13,7 @@ use toml::{Table, Value};
 
 const TEMPLATE: &str = include_str!("config.toml");
 
-/// Settings that are gone, ignored so older files still load.
-const REMOVED_KEYS: [&str; 1] = ["theme"];
-
 #[derive(Debug, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(deserialize_with = "font_size")]
     pub font_size: f32,
@@ -29,7 +26,6 @@ pub struct Config {
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Walkthrough {
     pub command: Vec<String>,
     pub model: String,
@@ -37,13 +33,11 @@ pub struct Walkthrough {
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct SidePanel {
     pub open: bool,
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Terminal {
     pub icons: bool,
 }
@@ -70,9 +64,6 @@ fn parse(text: &str) -> Result<Config, String> {
         &mut config,
         text.parse().map_err(|e: toml::de::Error| e.to_string())?,
     );
-    for key in REMOVED_KEYS {
-        config.remove(key);
-    }
     config.try_into().map_err(|e| e.to_string())
 }
 
@@ -154,12 +145,6 @@ mod tests {
     }
 
     #[test]
-    fn an_old_theme_is_ignored() {
-        let config = parse(&format!("theme = \"jetbrains-light\"\n{OK}")).unwrap();
-        assert_eq!(config, parse(OK).unwrap());
-    }
-
-    #[test]
     fn font_size_outside_limits_is_an_error() {
         let err = parse(&OK.replace("16", "41")).unwrap_err();
         assert!(err.contains("must be between 8 and 40"), "{err}");
@@ -167,9 +152,13 @@ mod tests {
     }
 
     #[test]
-    fn unknown_keys_are_an_error() {
-        assert!(parse(&format!("color_theme = \"x\"\n{OK}")).is_err());
-        assert!(parse(&format!("{OK}is_open = true\n")).is_err());
+    fn unknown_keys_are_ignored() {
+        let old_theme = format!("theme = \"jetbrains-light\"\n{OK}");
+        assert_eq!(parse(&old_theme).unwrap(), parse(OK).unwrap());
+        assert_eq!(
+            parse(&format!("{OK}is_open = true\n")).unwrap(),
+            parse(OK).unwrap()
+        );
     }
 
     #[test]
