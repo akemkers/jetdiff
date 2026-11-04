@@ -55,7 +55,7 @@ impl WalkthroughView {
                             .flex()
                             .child(note_tag(note.kind, self.scale)),
                     )
-                    .child(wrapping(prose(&note.text, false, &body)).flex_1().min_w_0())
+                    .child(wrapping(prose(&note.text, &body)).flex_1().min_w_0())
                     .when_some(page, |d, page| {
                         d.cursor_pointer()
                             .hover(|d| d.bg(color(SELECTED)))

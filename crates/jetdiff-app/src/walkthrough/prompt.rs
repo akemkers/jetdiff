@@ -13,7 +13,6 @@ use super::digest::Digest;
 pub const MAX_STEPS: usize = 16;
 pub const MAX_PARTS: usize = 6;
 pub const MAX_NOTES: usize = 6;
-pub const MAX_BEFORE_YOU_REVIEW: usize = 4;
 /// The contents column is narrow.
 pub const MAX_PART_TITLE: usize = 28;
 pub const MAX_STEP_TITLE: usize = 40;
@@ -106,7 +105,7 @@ mod tests {
     fn the_language_follows_the_rules() {
         let system = system("Norwegian");
         assert!(system.starts_with("You guide an engineer"));
-        assert!(system.ends_with("Write all prose in Norwegian: titles, the summary, part blurbs, points, notes and not covered notes. Keep the aliases, the weight and kind values, identifiers, paths and API names exactly as they are."));
+        assert!(system.ends_with("Write all prose in Norwegian: titles, the summary, points, notes and not covered notes. Keep the aliases, the weight and kind values, identifiers, paths and API names exactly as they are."));
     }
 
     #[test]
@@ -114,13 +113,7 @@ mod tests {
         let required = &schema()["required"];
         assert_eq!(
             required,
-            &serde_json::json!([
-                "title",
-                "summary",
-                "before_you_review",
-                "parts",
-                "not_covered"
-            ])
+            &serde_json::json!(["title", "summary", "parts", "not_covered"])
         );
     }
 }

@@ -221,7 +221,6 @@ mod tests {
     fn part(title: &str, steps: Vec<Step>) -> Part {
         Part {
             title: title.into(),
-            blurb: String::new(),
             steps,
         }
     }
@@ -234,7 +233,6 @@ mod tests {
                 part("Core", vec![step("One", &[(0, 0)]), step("Two", &[(1, 0)])]),
                 part("UI", vec![step("Three", &[(2, 0)])]),
             ],
-            before_you_review: vec!["Know this".into()],
             not_covered: (0..not_covered)
                 .map(|file| NotCovered {
                     file,

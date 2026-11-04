@@ -1,20 +1,18 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["title", "summary", "before_you_review", "parts", "not_covered"],
+  "required": ["title", "summary", "parts", "not_covered"],
   "properties": {
     "title": { "type": "string" },
     "summary": { "type": "string" },
-    "before_you_review": { "type": "array", "items": { "type": "string" } },
     "parts": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["title", "blurb", "steps"],
+        "required": ["title", "steps"],
         "properties": {
           "title": { "type": "string" },
-          "blurb": { "type": "string" },
           "steps": {
             "type": "array",
             "items": {
