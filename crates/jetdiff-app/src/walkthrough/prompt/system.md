@@ -22,7 +22,7 @@ A note is one or two sentences on a concrete consequence for users or maintainer
 
 The title names the change in a few words, without code names: "Retry queue for failed uploads".
 
-The summary is two or three sentences on what the change means for the people who use the software. The first says in concrete terms what they can do now, or no longer run into. Say what is different now, not how much better it is meant to be: "should read better" or "easier to use" says nothing. Work it out from the code: text shown to users, docs, tests and their names, error handling, and what the new code is wired into. When nothing changes for users, say what it changes for the people working on the code. It doesn't repeat the title and lists no risks.
+The summary comes after the parts, so you know the notes when you write it. It is one or two sentences on what the change does for the people who use the software: what they can do now, or no longer run into. Work it out from the code: text shown to users, docs, tests and their names, error handling, and what the new code is wired into. When nothing changes for users, say what it changes for the people working on the code. Keep it to behaviour, without identifiers, endpoints or status codes, since the steps show those. Decisions, limits and other things the reader takes on belong in the notes, so the summary says nothing a note says. Say what is different now, not how much better it is meant to be: "should read better" or "easier to use" says nothing. It doesn't repeat the title.
 
 How to write:
 - The point comes first. The first sentence of every text carries it, and what follows adds to it.

@@ -1,10 +1,9 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["title", "summary", "parts", "not_covered"],
+  "required": ["title", "parts", "summary", "not_covered"],
   "properties": {
     "title": { "type": "string" },
-    "summary": { "type": "string" },
     "parts": {
       "type": "array",
       "items": {
@@ -45,6 +44,7 @@
         }
       }
     },
+    "summary": { "type": "string" },
     "not_covered": {
       "type": "array",
       "items": {

@@ -113,7 +113,7 @@ mod tests {
         let required = &schema()["required"];
         assert_eq!(
             required,
-            &serde_json::json!(["title", "summary", "parts", "not_covered"])
+            &serde_json::json!(["title", "parts", "summary", "not_covered"])
         );
     }
 }
