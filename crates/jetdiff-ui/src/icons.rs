@@ -11,12 +11,11 @@ macro_rules! icons {
     ($($name:literal),*) => {
         [$(
             (concat!($name, ".svg"), include_bytes!(concat!("../icons/", $name, ".svg")).as_slice()),
-            (concat!($name, "_dark.svg"), include_bytes!(concat!("../icons/", $name, "_dark.svg")).as_slice()),
         )*]
     };
 }
 
-const ICONS: [(&str, &[u8]); 32] = icons!(
+const ICONS: [(&str, &[u8]); 16] = icons!(
     "branch",
     "chevronDown",
     "chevronRight",
@@ -50,7 +49,7 @@ impl AssetSource for Assets {
     }
 }
 
-pub fn file_icon(path: &str, dark: bool) -> String {
+pub fn file_icon(path: &str) -> String {
     use Language::*;
     let name = match Language::from_path(path) {
         Some(Java) => "java",
@@ -66,24 +65,23 @@ pub fn file_icon(path: &str, dark: bool) -> String {
         Some(Go) => "go",
         None => "text",
     };
-    icon(name, dark)
+    icon(name)
 }
 
-pub fn chevron_icon(open: bool, dark: bool) -> String {
-    icon(if open { "chevronDown" } else { "chevronRight" }, dark)
+pub fn chevron_icon(open: bool) -> String {
+    icon(if open { "chevronDown" } else { "chevronRight" })
 }
 
-pub fn branch_icon(dark: bool) -> String {
-    icon("branch", dark)
+pub fn branch_icon() -> String {
+    icon("branch")
 }
 
-pub fn folder_icon(dark: bool) -> String {
-    icon("folder", dark)
+pub fn folder_icon() -> String {
+    icon("folder")
 }
 
-fn icon(name: &str, dark: bool) -> String {
-    let suffix = if dark { "_dark" } else { "" };
-    format!("{name}{suffix}.svg")
+fn icon(name: &str) -> String {
+    format!("{name}.svg")
 }
 
 #[cfg(test)]
@@ -92,13 +90,13 @@ mod tests {
 
     #[test]
     fn icon_per_file_type() {
-        assert_eq!(file_icon("src/A.kt", true), "kotlin_dark.svg");
-        assert_eq!(file_icon("App.tsx", false), "typeScript.svg");
-        assert_eq!(file_icon("main.rs", false), "rust.svg");
-        assert_eq!(file_icon("main.go", false), "go.svg");
-        assert_eq!(file_icon("Makefile", true), "text_dark.svg");
-        assert_eq!(folder_icon(true), "folder_dark.svg");
-        assert_eq!(branch_icon(false), "branch.svg");
+        assert_eq!(file_icon("src/A.kt"), "kotlin.svg");
+        assert_eq!(file_icon("App.tsx"), "typeScript.svg");
+        assert_eq!(file_icon("main.rs"), "rust.svg");
+        assert_eq!(file_icon("main.go"), "go.svg");
+        assert_eq!(file_icon("Makefile"), "text.svg");
+        assert_eq!(folder_icon(), "folder.svg");
+        assert_eq!(branch_icon(), "branch.svg");
     }
 
     #[test]
@@ -107,15 +105,8 @@ mod tests {
             "a.go", "a.java", "a.js", "a.json", "a.kt", "a.md", "a.rs", "a.toml", "a.ts", "a.xml",
             "a.yml", "a",
         ] {
-            for dark in [false, true] {
-                assert!(
-                    Assets.load(&file_icon(path, dark)).unwrap().is_some(),
-                    "{path}"
-                );
-            }
+            assert!(Assets.load(&file_icon(path)).unwrap().is_some(), "{path}");
         }
-        for dark in [false, true] {
-            assert!(Assets.load(&branch_icon(dark)).unwrap().is_some());
-        }
+        assert!(Assets.load(&branch_icon()).unwrap().is_some());
     }
 }

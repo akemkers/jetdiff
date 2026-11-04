@@ -5,8 +5,8 @@ use std::ops::Range;
 
 use gpui::{Font, FontWeight, Hsla, StyledText, TextRun, font};
 
-use super::palette::{CODE_BACKGROUND, color};
 use crate::text::FAMILY;
+use crate::theme::UiPalette;
 
 /// The system's own sans, so prose doesn't read like code.
 pub(super) const SANS: &str = ".SystemUIFont";
@@ -85,10 +85,30 @@ fn runs(marks: &[Mark]) -> Vec<(Mark, Range<usize>)> {
     runs
 }
 
-/// The colors of plain and bold text. Code has its own.
+/// Code is in the bold color, on a background of its own.
 pub(super) struct ProseColors {
     pub text: Hsla,
     pub bold: Hsla,
+    pub code_background: Hsla,
+}
+
+impl ProseColors {
+    pub(super) fn body(palette: &UiPalette) -> Self {
+        Self {
+            text: palette.body,
+            bold: palette.strong,
+            code_background: palette.code_background,
+        }
+    }
+
+    /// For text beside the main text, with bold in the body color.
+    pub(super) fn muted(palette: &UiPalette) -> Self {
+        Self {
+            text: palette.muted,
+            bold: palette.body,
+            code_background: palette.code_background,
+        }
+    }
 }
 
 pub(super) fn prose(text: &str, colors: &ProseColors) -> StyledText {
@@ -100,7 +120,7 @@ pub(super) fn prose(text: &str, colors: &ProseColors) -> StyledText {
             let (font, color, background_color) = match mark {
                 Mark::Plain => (sans.clone(), colors.text, None),
                 Mark::Bold => (bold(&sans), colors.bold, None),
-                Mark::Code => (font(FAMILY), colors.bold, Some(color(CODE_BACKGROUND))),
+                Mark::Code => (font(FAMILY), colors.bold, Some(colors.code_background)),
             };
             TextRun {
                 len: range.len(),

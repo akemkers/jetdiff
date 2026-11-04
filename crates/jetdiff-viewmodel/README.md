@@ -66,7 +66,8 @@ graph TD
 - `layout`, `geometry`: vertical and horizontal placement per side, and Unified with two number columns
 - `divider`, `fold_paths`, `hunk_minimap`: the diff divider, the fold wave and fold link, and the hunk minimap
 - `keys`, `command`: the keymap and the commands it gives
-- `theme`, `metrics`: colors and line height like IntelliJ
+- `theme`: the one built-in theme, the diff in Catppuccin Mocha and the palette around it
+- `metrics`: line height like IntelliJ
 
 Many modules are ports of specific classes in IntelliJ, and the name is at the top of the file. Research is in [`docs/research/`](../../docs/research).
 

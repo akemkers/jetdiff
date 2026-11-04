@@ -6,12 +6,11 @@ use jetdiff_app::walkthrough::{Page, Reading};
 use jetdiff_files::FileStatus;
 
 use super::notes::NoteRow;
-use super::palette::{ACCENT, BODY, BORDER, FILE_HEADER, MUTED, PAGE, SELECTED, STRONG, color};
 use super::prose::{ProseColors, SANS, prose};
 use super::{Item, State, WalkthroughView};
 use crate::settings::Settings;
 use crate::text::FAMILY;
-use crate::theme::UiTheme;
+use crate::theme::{UiPalette, UiTheme};
 
 const TOP_PADDING: f32 = 40.;
 const SIDE_PADDING: f32 = 48.;
@@ -84,6 +83,7 @@ impl WalkthroughView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let s = |v: f32| px(v * self.scale);
+        let palette = theme.palette;
         let is_cursor = self.cursor == Some(item);
         match &self.items[item] {
             // A flex item gets the page's width up to its max, so the text wraps with the window
@@ -117,12 +117,12 @@ impl WalkthroughView {
                     .py(s(FILE_HEADER_PADDING))
                     .flex()
                     .gap(s(GAP))
-                    .bg(color(FILE_HEADER))
+                    .bg(palette.file_header)
                     .border_1()
-                    .border_color(color(BORDER))
+                    .border_color(palette.border)
                     .rounded(s(6.))
                     .cursor_pointer()
-                    .hover(|d| d.bg(color(SELECTED)).border_color(color(ACCENT)))
+                    .hover(|d| d.bg(palette.selected).border_color(palette.accent))
                     .text_size(s(SMALL_SIZE))
                     .child(
                         div()
@@ -134,20 +134,21 @@ impl WalkthroughView {
                                 div()
                                     .min_w_0()
                                     .truncate()
-                                    .text_color(color(MUTED))
+                                    .text_color(palette.muted)
                                     .child(folder)
                             }))
                             .child(
                                 div()
                                     .flex_none()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(color(STRONG))
+                                    .text_color(palette.strong)
                                     .child(name),
                             ),
                     )
                     .children(
-                        status
-                            .map(|status| div().flex_none().text_color(color(MUTED)).child(status)),
+                        status.map(|status| {
+                            div().flex_none().text_color(palette.muted).child(status)
+                        }),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| this.open_file(item, cx)))
                     .into_any_element()
@@ -159,9 +160,9 @@ impl WalkthroughView {
                 let height = excerpt.line_count() as f32 * style.line_height();
                 let (excerpt, theme) = (excerpt.clone(), *theme);
                 let border = if is_cursor {
-                    color(ACCENT)
+                    palette.accent
                 } else {
-                    color(BORDER)
+                    palette.border
                 };
                 div()
                     .id(("excerpt", item))
@@ -201,10 +202,7 @@ impl WalkthroughView {
                 if *too_long {
                     hunks += ", too long to show here";
                 }
-                let muted = ProseColors {
-                    text: color(MUTED),
-                    bold: color(BODY),
-                };
+                let muted = ProseColors::muted(&palette);
                 div()
                     .id(("not-covered", item))
                     .px(s(GAP * 1.5))
@@ -215,9 +213,9 @@ impl WalkthroughView {
                     .border_1()
                     .border_l(px(CURRENT_BORDER))
                     .border_color(if is_cursor {
-                        color(ACCENT)
+                        palette.accent
                     } else {
-                        color(BORDER)
+                        palette.border
                     })
                     .rounded(s(8.))
                     .cursor_pointer()
@@ -233,10 +231,10 @@ impl WalkthroughView {
                                     .truncate()
                                     .font_family(FAMILY)
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(color(STRONG))
+                                    .text_color(palette.strong)
                                     .child(path),
                             )
-                            .child(div().text_color(color(MUTED)).child(hunks)),
+                            .child(div().text_color(palette.muted).child(hunks)),
                     )
                     .when(!not_covered.note.is_empty(), |d| {
                         d.child(wrapping(prose(&not_covered.note, &muted)))
@@ -254,16 +252,14 @@ impl WalkthroughView {
     /// The notes under them are a table as wide as the text.
     fn heading(&self, reading: &Reading, cx: &mut Context<Self>) -> Div {
         let s = |v: f32| px(v * self.scale);
-        let body = ProseColors {
-            text: color(BODY),
-            bold: color(STRONG),
-        };
+        let palette = cx.global::<Settings>().theme.palette;
+        let body = ProseColors::body(&palette);
         let title = |text: String| {
             div()
                 .text_size(s(TITLE_SIZE))
                 .line_height(relative(1.3))
                 .font_weight(FontWeight::BOLD)
-                .text_color(color(STRONG))
+                .text_color(palette.strong)
                 .child(text)
         };
         let column = div()
@@ -273,10 +269,10 @@ impl WalkthroughView {
             .font_family(SANS)
             .text_size(s(TEXT_SIZE))
             .line_height(relative(LINE_HEIGHT))
-            .text_color(color(BODY));
+            .text_color(palette.body);
         let Some((step, number, steps)) = reading.step() else {
             let not_covered = column
-                .child(label("NOT COVERED".into(), self.scale))
+                .child(label("NOT COVERED".into(), &palette, self.scale))
                 .child(title("Not covered".into()))
                 .child(wrapping(prose(
                     "The hunks no step covers, and the files that weren't sent or read. `Enter` \
@@ -291,10 +287,11 @@ impl WalkthroughView {
         let points = step
             .points
             .iter()
-            .map(|point| bullet(wrapping(prose(point, &body)), self.scale));
+            .map(|point| bullet(wrapping(prose(point, &body)), &palette, self.scale));
         let top = column
             .child(label(
                 format!("{part} · STEP {number} OF {steps}"),
+                &palette,
                 self.scale,
             ))
             .child(
@@ -303,7 +300,7 @@ impl WalkthroughView {
                     .items_center()
                     .gap(s(GAP))
                     .child(title(step.title.clone()))
-                    .when(step.is_key(), |d| d.child(key_step(self.scale))),
+                    .when(step.is_key(), |d| d.child(key_step(&palette, self.scale))),
             )
             .children(points);
         let notes = step
@@ -324,6 +321,7 @@ impl WalkthroughView {
     /// The keys, with buttons for the previous and next page, and how much is read.
     fn keymap_bar(&self, reading: &Reading, cx: &mut Context<Self>) -> Div {
         let s = |v: f32| px(v * self.scale);
+        let palette = cx.global::<Settings>().theme.palette;
         let button = |id: &'static str,
                       text: &'static str,
                       forward: bool,
@@ -336,10 +334,10 @@ impl WalkthroughView {
                 .flex()
                 .items_center()
                 .border_1()
-                .border_color(color(BORDER))
+                .border_color(palette.border)
                 .rounded(s(6.))
                 .cursor_pointer()
-                .hover(|d| d.bg(color(SELECTED)))
+                .hover(|d| d.bg(palette.selected))
                 .child(text)
                 .on_click(cx.listener(move |this, _, _, cx| this.step_by(forward, cx)))
         };
@@ -364,17 +362,17 @@ impl WalkthroughView {
             .flex()
             .items_center()
             .gap(s(GAP))
-            .bg(color(PAGE))
+            .bg(palette.page)
             .border_t_1()
-            .border_color(color(BORDER))
+            .border_color(palette.border)
             .font_family(SANS)
             .text_size(s(SMALL_SIZE))
             .child(button("previous", "← Previous", false, cx))
             .child(button("next", next, true, cx))
-            .child(div().text_color(color(MUTED)).child(read))
+            .child(div().text_color(palette.muted).child(read))
             .child(div().flex_1())
             .child(
-                div().font_family(FAMILY).text_color(color(MUTED)).child(
+                div().font_family(FAMILY).text_color(palette.muted).child(
                     "Tab → step   n p hunk   v split/unified   Enter open in the diff   w back",
                 ),
             )
@@ -392,14 +390,14 @@ pub(super) fn prose_column(content: impl IntoElement, scale: f32) -> Div {
 }
 
 /// A point with a small dot in front, as in a list.
-pub(super) fn bullet(content: impl IntoElement, scale: f32) -> Div {
+pub(super) fn bullet(content: impl IntoElement, palette: &UiPalette, scale: f32) -> Div {
     let s = |v: f32| px(v * scale);
     let dot = div()
         .flex_none()
         .mt(s(TEXT_SIZE * LINE_HEIGHT / 2. - DOT_SIZE / 2.))
         .size(s(DOT_SIZE))
         .rounded_full()
-        .bg(color(MUTED));
+        .bg(palette.muted);
     div()
         .flex()
         .items_start()
@@ -415,15 +413,15 @@ pub(super) fn wrapping(text: impl IntoElement) -> Div {
 }
 
 /// A small heading above the content, like `OVERVIEW · 16 STEPS`.
-pub(super) fn label(text: String, scale: f32) -> Div {
+pub(super) fn label(text: String, palette: &UiPalette, scale: f32) -> Div {
     div()
         .text_size(px(LABEL_SIZE * scale))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(color(MUTED))
+        .text_color(palette.muted)
         .child(text)
 }
 
-pub(super) fn key_step(scale: f32) -> Div {
+pub(super) fn key_step(palette: &UiPalette, scale: f32) -> Div {
     div()
         .flex_none()
         .h(px(TAG_HEIGHT * scale))
@@ -431,8 +429,8 @@ pub(super) fn key_step(scale: f32) -> Div {
         .flex()
         .items_center()
         .rounded_full()
-        .bg(color(SELECTED))
-        .text_color(color(ACCENT))
+        .bg(palette.selected)
+        .text_color(palette.accent)
         .text_size(px(LABEL_SIZE * scale))
         .line_height(relative(1.))
         .font_weight(FontWeight::SEMIBOLD)

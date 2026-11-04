@@ -5,7 +5,6 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use jetdiff_viewmodel::Theme;
 use jetdiff_viewmodel::metrics::{MAX_FONT_SIZE, MIN_FONT_SIZE};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
@@ -13,19 +12,12 @@ use toml::{Table, Value};
 
 const TEMPLATE: &str = include_str!("config.toml");
 
-type NewTheme = fn() -> Theme;
-
-const THEMES: [(&str, NewTheme); 3] = [
-    ("catppuccin-mocha", Theme::mocha),
-    ("jetbrains-dark", Theme::dark),
-    ("jetbrains-light", Theme::light),
-];
+/// Settings that are gone, ignored so older files still load.
+const REMOVED_KEYS: [&str; 1] = ["theme"];
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    #[serde(deserialize_with = "theme")]
-    pub theme: Theme,
     #[serde(deserialize_with = "font_size")]
     pub font_size: f32,
     pub fold_unchanged: bool,
@@ -78,6 +70,9 @@ fn parse(text: &str) -> Result<Config, String> {
         &mut config,
         text.parse().map_err(|e: toml::de::Error| e.to_string())?,
     );
+    for key in REMOVED_KEYS {
+        config.remove(key);
+    }
     config.try_into().map_err(|e| e.to_string())
 }
 
@@ -90,18 +85,6 @@ fn merge(base: &mut Table, over: Table) {
             }
         }
     }
-}
-
-fn theme<'de, D: Deserializer<'de>>(d: D) -> Result<Theme, D::Error> {
-    let name = String::deserialize(d)?;
-    THEMES
-        .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, t)| t())
-        .ok_or_else(|| {
-            let names = THEMES.map(|(n, _)| n).join(", ");
-            D::Error::custom(format!("must be one of {names}"))
-        })
 }
 
 fn font_size<'de, D: Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
@@ -142,12 +125,11 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    const OK: &str = "theme = \"jetbrains-dark\"\nfont_size = 16\nfold_unchanged = false\ndiff_mode = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\n";
+    const OK: &str = "font_size = 16\nfold_unchanged = false\ndiff_mode = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\n";
 
     #[test]
     fn template_is_valid() {
         let config = parse(TEMPLATE).unwrap();
-        assert_eq!(config.theme, Theme::mocha());
         assert_eq!(config.font_size, 14.);
         assert!(config.fold_unchanged);
         assert!(!config.unified);
@@ -156,16 +138,8 @@ mod tests {
     }
 
     #[test]
-    fn template_names_all_themes() {
-        for (name, _) in THEMES {
-            assert!(TEMPLATE.contains(name), "{name} missing in config.toml");
-        }
-    }
-
-    #[test]
     fn reads_all_settings() {
         let config = parse(OK).unwrap();
-        assert_eq!(config.theme, Theme::dark());
         assert_eq!(config.font_size, 16.);
         assert!(!config.fold_unchanged);
         assert!(config.unified);
@@ -180,9 +154,9 @@ mod tests {
     }
 
     #[test]
-    fn unknown_theme_is_an_error() {
-        let err = parse(&OK.replace("jetbrains-dark", "nope")).unwrap_err();
-        assert!(err.contains("must be one of catppuccin-mocha"), "{err}");
+    fn an_old_theme_is_ignored() {
+        let config = parse(&format!("theme = \"jetbrains-light\"\n{OK}")).unwrap();
+        assert_eq!(config, parse(OK).unwrap());
     }
 
     #[test]
@@ -200,8 +174,7 @@ mod tests {
 
     #[test]
     fn missing_keys_come_from_the_template() {
-        let config = parse("theme = \"jetbrains-dark\"\n[side_panel]\nopen = true\n").unwrap();
-        assert_eq!(config.theme, Theme::dark());
+        let config = parse("[side_panel]\nopen = true\n").unwrap();
         assert_eq!(config.font_size, 14.);
         assert!(config.fold_unchanged);
         assert!(config.side_panel.open);

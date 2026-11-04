@@ -11,6 +11,7 @@ use jetdiff_ui::{
     NextFile, PrevCommit, PrevFile, RepoView, ResetZoom, Settings, ToggleDiffMode, ToggleHelp,
     ToggleSidePanel, ToggleWalkthrough, UiTheme, ZoomIn, ZoomOut, load_font,
 };
+use jetdiff_viewmodel::Theme;
 
 use crate::Content;
 use crate::config::Config;
@@ -24,7 +25,7 @@ pub fn run(content: Content, title: String, config: Config) {
             bind_keys(cx);
             load_font(cx);
             cx.set_global(Settings {
-                theme: UiTheme::new(&config.theme),
+                theme: UiTheme::new(&Theme::built_in()),
                 font_size: config.font_size,
                 fold_unchanged: config.fold_unchanged,
                 unified: config.unified,

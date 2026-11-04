@@ -6,7 +6,6 @@ mod contents;
 mod notes;
 mod overview;
 mod page;
-mod palette;
 mod prose;
 
 use std::rc::Rc;
@@ -551,12 +550,13 @@ impl Render for WalkthroughView {
         self.ensure_items(window);
         self.animate_scroll(window);
         let body = self.ready(cx);
+        let palette = cx.global::<Settings>().theme.palette;
         div()
             .size_full()
             .flex()
             .flex_col()
-            .bg(palette::color(palette::PAGE))
-            .text_color(palette::color(palette::PRIMARY))
+            .bg(palette.page)
+            .text_color(palette.primary)
             .font_family(FAMILY)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))

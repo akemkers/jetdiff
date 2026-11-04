@@ -5,12 +5,11 @@
 use gpui::{Context, Div, FontWeight, SharedString, Stateful, div, prelude::*, px, relative};
 use jetdiff_app::walkthrough::{ContentsRow, Reading, Weight};
 
-use super::palette::{
-    BORDER, KEY_DOT, MUTED, PRIMARY, READ, SELECTED, STEP_NUMBER, STRONG, SURFACE, color,
-};
 use super::prose::SANS;
 use super::{WalkthroughView, plural};
+use crate::settings::Settings;
 use crate::text::FAMILY;
+use crate::theme::UiPalette;
 
 const WIDTH: f32 = 300.;
 const PADDING: f32 = 14.;
@@ -27,13 +26,14 @@ const PROGRESS_HEIGHT: f32 = 4.;
 impl WalkthroughView {
     pub(super) fn contents(&self, reading: &Reading, cx: &mut Context<Self>) -> Div {
         let s = |v: f32| px(v * self.scale);
+        let palette = cx.global::<Settings>().theme.palette;
         let mut rows = Vec::new();
         for row in reading.contents() {
             let element = match row {
                 ContentsRow::Overview { selected } => self
                     .row(0, selected, cx)
-                    .child(self.badge("◆".into(), false))
-                    .child(title("Overview".into(), selected, false))
+                    .child(self.badge("◆".into(), false, &palette))
+                    .child(title("Overview".into(), selected, false, &palette))
                     .into_any_element(),
                 ContentsRow::Part(part) => div()
                     .pt(s(PADDING * 1.25))
@@ -41,7 +41,7 @@ impl WalkthroughView {
                     .px(s(PADDING / 2.))
                     .text_size(s(LABEL_SIZE))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(color(MUTED))
+                    .text_color(palette.muted)
                     .child(part.title.to_uppercase())
                     .into_any_element(),
                 ContentsRow::Step {
@@ -59,8 +59,8 @@ impl WalkthroughView {
                     };
                     let skim = step.weight == Weight::Skim;
                     self.row(page, selected, cx)
-                        .child(self.badge(badge, checked))
-                        .child(title(step.title.clone(), selected, skim))
+                        .child(self.badge(badge, checked, &palette))
+                        .child(title(step.title.clone(), selected, skim, &palette))
                         .when(step.is_key(), |d| {
                             d.child(
                                 div()
@@ -68,7 +68,7 @@ impl WalkthroughView {
                                     .mt(s((LINE_HEIGHT - KEY_DOT_SIZE) / 2.))
                                     .size(s(KEY_DOT_SIZE))
                                     .rounded_full()
-                                    .bg(color(KEY_DOT)),
+                                    .bg(palette.key_dot),
                             )
                         })
                         .into_any_element()
@@ -81,12 +81,12 @@ impl WalkthroughView {
                     .mt(s(PADDING))
                     .pt(s(PADDING / 2.))
                     .border_t_1()
-                    .border_color(color(BORDER))
+                    .border_color(palette.border)
                     .child(
                         self.row(page, selected, cx)
-                            .child(self.badge("…".into(), false))
-                            .child(title("Not covered".into(), selected, false))
-                            .child(pill(plural(files, "file"), self.scale)),
+                            .child(self.badge("…".into(), false, &palette))
+                            .child(title("Not covered".into(), selected, false, &palette))
+                            .child(pill(plural(files, "file"), &palette, self.scale)),
                     )
                     .into_any_element(),
             };
@@ -98,13 +98,13 @@ impl WalkthroughView {
             .h_full()
             .flex()
             .flex_col()
-            .bg(color(SURFACE))
+            .bg(palette.surface)
             .border_r_1()
-            .border_color(color(BORDER))
+            .border_color(palette.border)
             .font_family(SANS)
             .text_size(s(TEXT_SIZE))
             .line_height(s(LINE_HEIGHT))
-            .text_color(color(PRIMARY))
+            .text_color(palette.primary)
             .child(
                 div()
                     .id("walkthrough-contents")
@@ -117,12 +117,13 @@ impl WalkthroughView {
                     .gap(s(2.))
                     .children(rows),
             )
-            .child(self.key(reading))
+            .child(self.key(reading, &palette))
     }
 
     /// A row that goes to `page` when clicked. The selected one stands out.
     fn row(&self, page: usize, selected: bool, cx: &mut Context<Self>) -> Stateful<Div> {
         let s = |v: f32| px(v * self.scale);
+        let palette = cx.global::<Settings>().theme.palette;
         div()
             .id(("walkthrough-page", page))
             .min_h(s(MIN_ROW_HEIGHT))
@@ -133,13 +134,13 @@ impl WalkthroughView {
             .gap(s(PADDING * 0.75))
             .rounded(s(6.))
             .cursor_pointer()
-            .when(selected, |d| d.bg(color(SELECTED)))
-            .when(!selected, |d| d.hover(|d| d.bg(color(BORDER))))
+            .when(selected, |d| d.bg(palette.selected))
+            .when(!selected, |d| d.hover(|d| d.bg(palette.border)))
             .on_click(cx.listener(move |this, _, _, cx| this.go_to(page, cx)))
     }
 
     /// The step's number, or a check once it is read.
-    fn badge(&self, text: String, read: bool) -> Div {
+    fn badge(&self, text: String, read: bool, palette: &UiPalette) -> Div {
         let s = |v: f32| px(v * self.scale);
         div()
             .flex_none()
@@ -148,19 +149,19 @@ impl WalkthroughView {
             .flex()
             .items_center()
             .justify_center()
-            .bg(color(BORDER))
+            .bg(palette.border)
             .font_family(FAMILY)
             .text_size(s(LABEL_SIZE))
             .text_color(if read {
-                color(READ)
+                palette.read
             } else {
-                color(STEP_NUMBER)
+                palette.step_number
             })
             .child(text)
     }
 
     /// What the marks mean, and how much is read.
-    fn key(&self, reading: &Reading) -> Div {
+    fn key(&self, reading: &Reading, palette: &UiPalette) -> Div {
         let s = |v: f32| px(v * self.scale);
         let (read, steps) = (reading.read_count(), reading.step_count());
         let read_share = read as f32 / steps.max(1) as f32;
@@ -179,21 +180,21 @@ impl WalkthroughView {
             .flex_col()
             .gap(s(8.))
             .border_t_1()
-            .border_color(color(BORDER))
+            .border_color(palette.border)
             .text_size(s(SMALL_SIZE))
-            .text_color(color(MUTED))
+            .text_color(palette.muted)
             .child(
                 div()
                     .flex()
                     .flex_wrap()
                     .gap_x(s(PADDING))
                     .gap_y(s(4.))
-                    .child(mark(div().text_color(color(READ)).child("✓"), "Read"))
+                    .child(mark(div().text_color(palette.read).child("✓"), "Read"))
                     .child(mark(
                         div()
                             .size(s(KEY_DOT_SIZE))
                             .rounded_full()
-                            .bg(color(KEY_DOT)),
+                            .bg(palette.key_dot),
                         "Key step",
                     ))
                     .child(mark(div(), "Dimmed: safe to skim")),
@@ -203,38 +204,38 @@ impl WalkthroughView {
                 div()
                     .h(s(PROGRESS_HEIGHT))
                     .rounded_full()
-                    .bg(color(BORDER))
+                    .bg(palette.border)
                     .child(
                         div()
                             .h_full()
                             .w(relative(read_share))
                             .rounded_full()
-                            .bg(color(READ)),
+                            .bg(palette.read),
                     ),
             )
     }
 }
 
 /// Wraps instead of being cut, so the whole title shows.
-fn title(text: String, selected: bool, skim: bool) -> Div {
+fn title(text: String, selected: bool, skim: bool, palette: &UiPalette) -> Div {
     div()
         .flex_1()
         .min_w_0()
-        .when(skim && !selected, |d| d.text_color(color(MUTED)))
+        .when(skim && !selected, |d| d.text_color(palette.muted))
         .when(selected, |d| {
-            d.text_color(color(STRONG))
+            d.text_color(palette.strong)
                 .font_weight(FontWeight::SEMIBOLD)
         })
         .child(SharedString::from(text))
 }
 
-fn pill(text: String, scale: f32) -> Div {
+fn pill(text: String, palette: &UiPalette, scale: f32) -> Div {
     div()
         .flex_none()
         .px(px(8. * scale))
         .rounded_full()
-        .bg(color(BORDER))
+        .bg(palette.border)
         .text_size(px(SMALL_SIZE * scale))
-        .text_color(color(MUTED))
+        .text_color(palette.muted)
         .child(text)
 }

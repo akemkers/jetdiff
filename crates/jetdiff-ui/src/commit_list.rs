@@ -171,7 +171,7 @@ impl CommitList {
         let row = self.commits.row(i);
         if let CommitRow::Branch(_) = row {
             // Explicitly Embedded, otherwise GPUI reads `branch.svg` as a URI and fetches it over HTTP
-            let icon = ImageSource::Resource(Resource::Embedded(branch_icon(theme.dark).into()));
+            let icon = ImageSource::Resource(Resource::Embedded(branch_icon().into()));
             return lane
                 .flex()
                 .items_center()

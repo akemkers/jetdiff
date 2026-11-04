@@ -341,7 +341,7 @@ impl SidePanel {
                 } => {
                     spans.push(Span::styled(if *open { "▾ " } else { "▸ " }, dim));
                     if self.icons {
-                        spans.push(icon(folder_icon(theme.dark)));
+                        spans.push(icon(folder_icon()));
                     }
                     spans.push(Span::raw(name.clone()));
                     spans.push(Span::styled(format!(" {}", count_label(*count)), dim));
@@ -356,7 +356,7 @@ impl SidePanel {
                     let style = Style::default().fg(color(status));
                     spans.push(Span::raw("  "));
                     if self.icons {
-                        spans.push(icon(file_icon(&file.path, theme.dark)));
+                        spans.push(icon(file_icon(&file.path)));
                     }
                     spans.push(Span::styled(file_name(&file.path).to_owned(), style));
                     if let Some(from) = file.renamed_from_label() {
@@ -398,7 +398,7 @@ impl SidePanel {
             match commits.row(i) {
                 CommitRow::Branch(label) => {
                     if self.icons {
-                        spans.extend([Span::raw(" "), icon(branch_icon(theme.dark))]);
+                        spans.extend([Span::raw(" "), icon(branch_icon())]);
                     } else {
                         spans.push(Span::styled(BRANCH_MARK, graph));
                     }

@@ -1,7 +1,7 @@
 //! `jetdiff_viewmodel::Theme` translated to GPUI colors once, so paint skips the conversion.
 
 use gpui::{Font, FontStyle, FontWeight, Hsla};
-use jetdiff_viewmodel::theme::DiffColors;
+use jetdiff_viewmodel::theme::{DiffColors, Palette};
 use jetdiff_viewmodel::{HunkKind, Rgba, SyntaxStyle, Theme, Token};
 
 pub fn hsla(c: Rgba) -> Hsla {
@@ -13,6 +13,8 @@ pub fn hsla(c: Rgba) -> Hsla {
     }
     .into()
 }
+
+pub type UiPalette = Palette<Hsla>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiDiffColors {
@@ -66,8 +68,6 @@ impl UiSyntax {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiTheme {
-    /// Picks the `_dark` icons.
-    pub dark: bool,
     pub editor_bg: Hsla,
     pub editor_fg: Hsla,
     pub line_number: Hsla,
@@ -86,6 +86,7 @@ pub struct UiTheme {
     pub file_added: Hsla,
     pub file_deleted: Hsla,
     pub file_modified: Hsla,
+    pub palette: UiPalette,
     added: UiDiffColors,
     deleted: UiDiffColors,
     modified: UiDiffColors,
@@ -95,7 +96,6 @@ pub struct UiTheme {
 impl UiTheme {
     pub fn new(theme: &Theme) -> Self {
         Self {
-            dark: theme.dark,
             editor_bg: hsla(theme.editor_bg),
             editor_fg: hsla(theme.editor_fg),
             line_number: hsla(theme.line_number),
@@ -114,23 +114,12 @@ impl UiTheme {
             file_added: hsla(theme.file_added),
             file_deleted: hsla(theme.file_deleted),
             file_modified: hsla(theme.file_modified),
+            palette: theme.palette.map(hsla),
             added: (&theme.added).into(),
             deleted: (&theme.deleted).into(),
             modified: (&theme.modified).into(),
-            syntax: Token::ALL.map(|t| UiSyntax::new(theme.syntax(t))),
+            syntax: Token::ALL.map(|token| UiSyntax::new(theme.syntax(token))),
         }
-    }
-
-    pub fn dark() -> Self {
-        Self::new(&Theme::dark())
-    }
-
-    pub fn light() -> Self {
-        Self::new(&Theme::light())
-    }
-
-    pub fn mocha() -> Self {
-        Self::new(&Theme::mocha())
     }
 
     pub fn syntax(&self, token: Token) -> &UiSyntax {
