@@ -1,5 +1,5 @@
-//! Prose from the model, drawn with its marks: `code` in backticks as inline code, figures in bold,
-//! and for a point, its lead-in up to the first colon or full stop in bold.
+//! Prose from the model, drawn with its marks: `code` in backticks as inline code and figures in
+//! bold.
 
 use std::ops::Range;
 
@@ -19,14 +19,11 @@ pub(super) enum Mark {
 }
 
 /// `text` without its backticks, and the marks on it, in order and covering all of it.
-pub(super) fn marks(text: &str, lead_in: bool) -> (String, Vec<(Mark, Range<usize>)>) {
+pub(super) fn marks(text: &str) -> (String, Vec<(Mark, Range<usize>)>) {
     let (text, code) = without_backticks(text);
     let mut marks = vec![Mark::Plain; text.len()];
     let mut set = |range: Range<usize>, mark: Mark| marks[range].fill(mark);
     let in_code = |at: usize| code.iter().any(|range| range.contains(&at));
-    if lead_in && let Some(end) = lead_in_end(&text, &in_code) {
-        set(0..end, Mark::Bold);
-    }
     for word in figures(&text, &in_code) {
         set(word, Mark::Bold);
     }
@@ -54,23 +51,6 @@ fn without_backticks(text: &str) -> (String, Vec<Range<usize>>) {
         }
     }
     (plain, code)
-}
-
-/// After the first colon, semicolon or full stop outside code, when more text follows.
-fn lead_in_end(text: &str, in_code: &impl Fn(usize) -> bool) -> Option<usize> {
-    let mut chars = text.char_indices().peekable();
-    while let Some((at, char)) = chars.next() {
-        let ends = match char {
-            ':' | ';' => true,
-            '.' => chars.peek().is_some_and(|(_, next)| next.is_whitespace()),
-            _ => false,
-        };
-        if ends && !in_code(at) {
-            let end = at + char.len_utf8();
-            return (end < text.trim_end().len()).then_some(end);
-        }
-    }
-    None
 }
 
 /// Words with a digit, like `640k` or `200`, without the punctuation after them.
@@ -111,8 +91,8 @@ pub(super) struct ProseColors {
     pub bold: Hsla,
 }
 
-pub(super) fn prose(text: &str, lead_in: bool, colors: &ProseColors) -> StyledText {
-    let (text, marks) = marks(text, lead_in);
+pub(super) fn prose(text: &str, colors: &ProseColors) -> StyledText {
+    let (text, marks) = marks(text);
     let sans = font(SANS);
     let runs = marks
         .into_iter()
@@ -147,8 +127,8 @@ mod tests {
     use super::*;
 
     /// The text of each mark, like `**bold**` and `` `code` ``.
-    fn shown(text: &str, lead_in: bool) -> String {
-        let (text, marks) = marks(text, lead_in);
+    fn shown(text: &str) -> String {
+        let (text, marks) = marks(text);
         marks
             .into_iter()
             .map(|(mark, range)| match mark {
@@ -162,42 +142,21 @@ mod tests {
     #[test]
     fn code_in_backticks() {
         assert_eq!(
-            shown("Press `w` to open `RepoView`", false),
+            shown("Press `w` to open `RepoView`"),
             "Press `w` to open `RepoView`"
         );
-        let (text, _) = marks("Press `w` to open", false);
+        let (text, _) = marks("Press `w` to open");
         assert_eq!(text, "Press w to open");
         // Without its pair the backtick is text
-        assert_eq!(shown("a ` b", false), "a ` b");
+        assert_eq!(shown("a ` b"), "a ` b");
     }
 
     #[test]
     fn figures_in_bold() {
         assert_eq!(
-            shown("Over 640k characters, up to 200.", false),
+            shown("Over 640k characters, up to 200."),
             "Over **640k** characters, up to **200**."
         );
-        assert_eq!(shown("Keep `h3` as it is", false), "Keep `h3` as it is");
-    }
-
-    #[test]
-    fn the_lead_in_of_a_point() {
-        assert_eq!(
-            shown(
-                "The digest is central: every hunk has an alias like `h3`.",
-                true
-            ),
-            "**The digest is central:** every hunk has an alias like `h3`."
-        );
-        assert_eq!(
-            shown("No API client. It runs `claude`.", true),
-            "**No API client.** It runs `claude`."
-        );
-        // A point that is only a lead-in, or a full stop inside a name, is not bold
-        assert_eq!(shown("Just one sentence.", true), "Just one sentence.");
-        assert_eq!(
-            shown("Uses `Job::run.` and more", true),
-            "Uses `Job::run.` and more"
-        );
+        assert_eq!(shown("Keep `h3` as it is"), "Keep `h3` as it is");
     }
 }

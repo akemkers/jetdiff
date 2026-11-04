@@ -254,7 +254,7 @@ impl WalkthroughView {
                             .child(div().text_color(color(MUTED)).child(hunks)),
                     )
                     .when(!not_covered.note.is_empty(), |d| {
-                        d.child(wrapping(prose(&not_covered.note, false, &muted)))
+                        d.child(wrapping(prose(&not_covered.note, &muted)))
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.cursor = Some(item);
@@ -296,7 +296,6 @@ impl WalkthroughView {
                 .child(wrapping(prose(
                     "The hunks no step covers, and the files that weren't sent or read. `Enter` \
                      opens one in the diff.",
-                    false,
                     &body,
                 )));
             return prose_column(not_covered, self.scale);
@@ -307,7 +306,7 @@ impl WalkthroughView {
         let points = step
             .points
             .iter()
-            .map(|point| bullet(wrapping(prose(point, false, &body)), self.scale));
+            .map(|point| bullet(wrapping(prose(point, &body)), self.scale));
         let top = column
             .child(label(
                 format!("{part} · STEP {number} OF {steps}"),

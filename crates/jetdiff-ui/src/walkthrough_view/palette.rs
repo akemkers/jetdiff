@@ -16,7 +16,6 @@ pub(super) const FILE_HEADER: u32 = 0x262a36;
 pub(super) const STRONG: u32 = 0xffffff;
 pub(super) const PRIMARY: u32 = 0xe6e8ef;
 pub(super) const BODY: u32 = 0xd4d7e1;
-pub(super) const SUBTITLE: u32 = 0xc9cdd9;
 pub(super) const MUTED: u32 = 0x9aa0b4;
 pub(super) const STEP_NUMBER: u32 = 0x7d849a;
 

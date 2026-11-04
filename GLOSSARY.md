@@ -76,7 +76,7 @@ The hunks of a source grouped into steps in reading order and explained, written
 _Avoid_: walkthrough mode, tour, guide, review
 
 **Overview**:
-The first page of a walkthrough: what the diff does, what to know before reviewing it, the notes, and the parts.
+The first page of a walkthrough: what the diff does, the notes, and the parts.
 _Avoid_: front page, summary page
 
 **Step**:
@@ -84,7 +84,7 @@ The hunks that serve one purpose, possibly across files, with a title and an exp
 _Avoid_: section, chapter
 
 **Part**:
-A group of steps that belong together, with a short title and a blurb.
+A group of steps that belong together, with a short title.
 _Avoid_: group, chapter
 
 **Key step**:

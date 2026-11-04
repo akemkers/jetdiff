@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use serde::Deserialize;
 
 use super::digest::{Digest, FileContent, HunkRef};
-use super::prompt::{MAX_BEFORE_YOU_REVIEW, MAX_NOTES, MAX_PARTS, MAX_STEPS};
+use super::prompt::{MAX_NOTES, MAX_PARTS, MAX_STEPS};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Weight {
@@ -48,7 +48,6 @@ pub struct Step {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Part {
     pub title: String,
-    pub blurb: String,
     pub steps: Vec<Step>,
 }
 
@@ -65,8 +64,6 @@ pub struct NotCovered {
 pub struct Walkthrough {
     pub title: String,
     pub summary: String,
-    /// What a reviewer needs to know before reading the steps.
-    pub before_you_review: Vec<String>,
     pub parts: Vec<Part>,
     pub not_covered: Vec<NotCovered>,
 }
@@ -86,7 +83,6 @@ struct Output {
 struct RawWalkthrough {
     title: String,
     summary: String,
-    before_you_review: Vec<String>,
     parts: Vec<RawPart>,
     not_covered: Vec<RawNotCovered>,
 }
@@ -95,7 +91,6 @@ struct RawWalkthrough {
 #[serde(default)]
 struct RawPart {
     title: String,
-    blurb: String,
     steps: Vec<RawStep>,
 }
 
@@ -182,7 +177,6 @@ impl Walkthrough {
             if !part_steps.is_empty() {
                 parts.push(Part {
                     title: raw_part.title.trim().to_owned(),
-                    blurb: raw_part.blurb.trim().to_owned(),
                     steps: part_steps,
                 });
             }
@@ -190,13 +184,6 @@ impl Walkthrough {
         Self {
             title: raw.title.trim().to_owned(),
             summary: raw.summary.trim().to_owned(),
-            before_you_review: raw
-                .before_you_review
-                .iter()
-                .map(|point| point.trim().to_owned())
-                .filter(|point| !point.is_empty())
-                .take(MAX_BEFORE_YOU_REVIEW)
-                .collect(),
             not_covered: not_covered(digest, &used, &raw.not_covered),
             parts,
         }

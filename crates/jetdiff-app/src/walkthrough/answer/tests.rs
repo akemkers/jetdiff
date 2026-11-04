@@ -45,25 +45,19 @@ fn steps_point_at_the_hunks_in_the_digest() {
     let answer = output(json!({
         "title": "Retry",
         "summary": "Uploads are retried.",
-        "before_you_review": ["The queue lives in memory.", " "],
         "parts": [{
             "title": "Core",
-            "blurb": "",
             "steps": [
                 { "title": "Queue", "hunks": ["h3", "h1"], "weight": "key", "points": [" A queue. ", "", "In memory."],
                   "notes": [{ "kind": "decision", "text": "Kept in memory." }, { "kind": "opinion", "text": "Nice." }] },
                 step("Made up", &["h9"]),
                 step("Again", &["h1", "h2", "h2"]),
             ],
-        }, { "title": "Empty", "blurb": "", "steps": [] }],
+        }, { "title": "Empty", "steps": [] }],
         "not_covered": [],
     }));
     let walkthrough = Walkthrough::from_answer(&answer, &digest()).unwrap();
     assert_eq!(walkthrough.title, "Retry");
-    assert_eq!(
-        walkthrough.before_you_review,
-        ["The queue lives in memory."]
-    );
     assert_eq!(walkthrough.parts.len(), 1);
     let steps = &walkthrough.parts[0].steps;
     assert_eq!(steps.len(), 2);
@@ -88,7 +82,7 @@ fn steps_point_at_the_hunks_in_the_digest() {
 fn not_covered_lists_every_file_with_hunks_left() {
     let answer = output(json!({
         "title": "T", "summary": "S",
-        "parts": [{ "title": "P", "blurb": "", "steps": [step("One", &["h1"])] }],
+        "parts": [{ "title": "P", "steps": [step("One", &["h1"])] }],
         "not_covered": [{ "path": "a.rs", "note": "A comment" }, { "path": "nope.rs", "note": "?" }],
     }));
     let walkthrough = Walkthrough::from_answer(&answer, &digest()).unwrap();
@@ -111,7 +105,7 @@ fn not_covered_lists_every_file_with_hunks_left() {
 fn answers_that_give_no_walkthrough() {
     let no_steps = output(json!({
         "title": "T", "summary": "S",
-        "parts": [{ "title": "P", "blurb": "", "steps": [step("Made up", &["h7"])] }],
+        "parts": [{ "title": "P", "steps": [step("Made up", &["h7"])] }],
         "not_covered": [],
     }));
     let error = |answer: &str| Walkthrough::from_answer(answer, &digest()).unwrap_err();
@@ -126,7 +120,7 @@ fn answers_that_give_no_walkthrough() {
     let as_text = json!({
         "is_error": false,
         "result": json!({ "title": "T", "summary": "S", "parts": [
-            { "title": "P", "blurb": "", "steps": [step("One", &["h1"])] }
+            { "title": "P", "steps": [step("One", &["h1"])] }
         ], "not_covered": [] }).to_string(),
     })
     .to_string();

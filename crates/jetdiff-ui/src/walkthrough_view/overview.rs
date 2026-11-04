@@ -1,17 +1,16 @@
-//! The first page: what the diff does, what a reviewer needs to know first, and the notes, with a
-//! button at the bottom to the steps. A click on a note goes to its step.
+//! The first page: what the diff does and the notes, with a button at the bottom to the steps. A
+//! click on a note goes to its step.
 
 use gpui::{Context, Div, FontWeight, div, prelude::*, px, relative};
 use jetdiff_app::walkthrough::{NoteKind, Reading};
 
 use super::notes::NoteRow;
-use super::page::{bullet, label, prose_column, wrapping};
-use super::palette::{BODY, BUTTON, BUTTON_TEXT, MUTED, STRONG, SUBTITLE, color};
+use super::page::{label, prose_column, wrapping};
+use super::palette::{BODY, BUTTON, BUTTON_TEXT, MUTED, STRONG, color};
 use super::prose::{ProseColors, SANS, prose};
 use super::{WalkthroughView, plural};
 
 const TITLE_SIZE: f32 = 32.;
-const SUBTITLE_SIZE: f32 = 19.;
 const SECTION_SIZE: f32 = 18.;
 const TEXT_SIZE: f32 = 16.;
 const SMALL_SIZE: f32 = 13.;
@@ -29,7 +28,6 @@ impl WalkthroughView {
             text: color(BODY),
             bold: color(STRONG),
         };
-        let (title, subtitle) = split_title(&walkthrough.title);
         let steps = reading.step_count();
         let narrow = |content: Div| prose_column(content, self.scale);
         let heading = div()
@@ -43,16 +41,8 @@ impl WalkthroughView {
                     .line_height(relative(1.2))
                     .font_weight(FontWeight::BOLD)
                     .text_color(color(STRONG))
-                    .child(title),
-            )
-            .children(subtitle.map(|subtitle| {
-                div()
-                    .pt(s(GAP / 4.))
-                    .text_size(s(SUBTITLE_SIZE))
-                    .line_height(relative(1.4))
-                    .text_color(color(SUBTITLE))
-                    .child(subtitle)
-            }));
+                    .child(walkthrough.title.clone()),
+            );
         let mut column = div()
             .flex()
             .flex_col()
@@ -63,17 +53,8 @@ impl WalkthroughView {
             .child(narrow(heading));
         for paragraph in paragraphs(&walkthrough.summary) {
             column = column.child(narrow(
-                div()
-                    .pt(s(GAP))
-                    .child(wrapping(prose(&paragraph, false, &body))),
+                div().pt(s(GAP)).child(wrapping(prose(&paragraph, &body))),
             ));
-        }
-        if !walkthrough.before_you_review.is_empty() {
-            column = column.child(narrow(section("Before you review", None, self.scale)));
-            for point in &walkthrough.before_you_review {
-                let point = bullet(wrapping(prose(point, true, &body)), self.scale);
-                column = column.child(narrow(div().pt(s(POINT_GAP)).child(point)));
-            }
         }
         let notes = reading.notes();
         if !notes.is_empty() {
@@ -150,22 +131,6 @@ fn section(title: &'static str, count: Option<String>, scale: f32) -> Div {
         }))
 }
 
-/// "Walkthrough mode: a change read as steps" is a title and a subtitle.
-fn split_title(title: &str) -> (String, Option<String>) {
-    let Some((title, subtitle)) = title.split_once(": ") else {
-        return (title.to_owned(), None);
-    };
-    let mut chars = subtitle.chars();
-    let mut subtitle: String = chars
-        .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default();
-    if !subtitle.ends_with(['.', '!', '?']) {
-        subtitle.push('.');
-    }
-    (title.to_owned(), Some(subtitle))
-}
-
 /// The last sentence, which is often an aside, in a paragraph of its own.
 fn paragraphs(summary: &str) -> Vec<String> {
     let sentence_ends: Vec<usize> = summary.match_indices(". ").map(|(at, _)| at + 1).collect();
@@ -181,18 +146,6 @@ fn paragraphs(summary: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_title_and_its_subtitle() {
-        assert_eq!(
-            split_title("Walkthrough mode: a change read as model-written steps"),
-            (
-                "Walkthrough mode".into(),
-                Some("A change read as model-written steps.".into())
-            )
-        );
-        assert_eq!(split_title("Retry queue"), ("Retry queue".into(), None));
-    }
 
     #[test]
     fn the_last_sentence_in_its_own_paragraph() {
