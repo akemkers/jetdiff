@@ -550,8 +550,7 @@ impl Render for WalkthroughView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_items(window);
         self.animate_scroll(window);
-        let width = f32::from(window.viewport_size().width);
-        let body = self.ready(width, cx);
+        let body = self.ready(cx);
         div()
             .size_full()
             .flex()

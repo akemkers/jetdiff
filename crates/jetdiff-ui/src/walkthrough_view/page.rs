@@ -13,11 +13,8 @@ use crate::settings::Settings;
 use crate::text::FAMILY;
 use crate::theme::UiTheme;
 
-const TOP_PADDING: f32 = 48.;
-/// The side padding is this share of the window, between the two sizes below.
-const SIDE_PADDING_FRACTION: f32 = 0.05;
-const MIN_SIDE_PADDING: f32 = 20.;
-const MAX_SIDE_PADDING: f32 = 72.;
+const TOP_PADDING: f32 = 40.;
+const SIDE_PADDING: f32 = 48.;
 const GAP: f32 = 12.;
 /// Space above a file, so it stands apart from the code of the file before.
 const FILE_GAP: f32 = 20.;
@@ -27,12 +24,8 @@ const TITLE_SIZE: f32 = 24.;
 const TEXT_SIZE: f32 = 16.;
 const SMALL_SIZE: f32 = 13.;
 const LINE_HEIGHT: f32 = 1.65;
-/// The page's code, at the left. Room for about 115 characters of code with its line numbers.
-const CONTENT_WIDTH: f32 = 1160.;
-/// Split has two sides, with room for about 100 characters on each.
-const SPLIT_CONTENT_WIDTH: f32 = 1840.;
-/// Prose is narrower, since long lines are hard to follow, and starts where the code does.
-const PROSE_WIDTH: f32 = 720.;
+/// About 68 characters at the text size, since long lines are hard to follow.
+const PROSE_WIDTH: f32 = 600.;
 const TAG_HEIGHT: f32 = 22.;
 const DOT_SIZE: f32 = 5.;
 const POINT_GAP: f32 = 14.;
@@ -40,24 +33,17 @@ const CURRENT_BORDER: f32 = 3.;
 const KEYMAP_BAR_HEIGHT: f32 = 44.;
 
 impl WalkthroughView {
-    /// `window_width` gives the side padding.
-    pub(super) fn ready(&self, window_width: f32, cx: &mut Context<Self>) -> Div {
+    pub(super) fn ready(&self, cx: &mut Context<Self>) -> Div {
         let State::Ready(reading) = &self.state else {
             return div();
         };
         let theme = cx.global::<Settings>().theme;
         // A scrolled column shrinks its children to fit unless told not to, and text then overlaps.
-        // Each item grows to the column's width, at the left of the page.
-        let content_width = if self.unified {
-            CONTENT_WIDTH
-        } else {
-            SPLIT_CONTENT_WIDTH
-        };
-        let column = px(content_width * self.scale);
+        // Each item grows to the column's width.
         let children: Vec<AnyElement> = (0..self.items.len())
             .map(|item| {
                 let element = self.item(item, reading, &theme, cx);
-                let column = div().flex_1().min_w_0().max_w(column).child(element);
+                let column = div().flex_1().min_w_0().child(element);
                 div()
                     .flex_none()
                     .w_full()
@@ -67,7 +53,6 @@ impl WalkthroughView {
             })
             .collect();
         let s = |v: f32| px(v * self.scale);
-        let side = (window_width * SIDE_PADDING_FRACTION).clamp(MIN_SIDE_PADDING, MAX_SIDE_PADDING);
         let page = div()
             .id("walkthrough-page")
             .flex_1()
@@ -75,7 +60,7 @@ impl WalkthroughView {
             .h_full()
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
-            .px(px(side))
+            .px(s(SIDE_PADDING))
             .pt(s(TOP_PADDING))
             .pb(s(TOP_PADDING))
             .flex()
