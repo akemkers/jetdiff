@@ -66,7 +66,7 @@ graph TD
 - `file_tree`, `commit_list`: the lists in the side panel, over `Files` and `Commits` from `jetdiff-app`
 - `notification_slot_view`: the pinned notification, with a brief one over it for a while, above the keymap bar
 - `watcher`: polls `jetdiff_app::Watcher` on the GPUI executor
-- `theme`: Catppuccin Mocha and IntelliJ's Islands themes
+- `theme`: the built-in theme from `jetdiff-viewmodel` translated to GPUI colors
 
 ## Resources
 

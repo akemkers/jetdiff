@@ -67,7 +67,7 @@ jetdiff-ui       GPUI
   notification_slot_view
                  the notification slot, repainted when the brief notification is gone
   repo_view      the tree + one file, like the commit dialog in IntelliJ
-  theme          color table from JetBrains (light and dark)
+  theme          the built-in theme translated to GPUI colors
 
 jetdiff-tui      the terminal, ratatui
   diff_view      keys, mouse and overlay for the diff

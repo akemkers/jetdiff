@@ -58,7 +58,6 @@ Syntax colors for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML,
 Read from `$XDG_CONFIG_HOME/jetdiff/config.toml`, or `~/.config/jetdiff/config.toml`. The file is created the first time jetdiff starts, with the defaults:
 
 ```toml
-theme = "catppuccin-mocha"
 font_size = 14             # between 8 and 40, Cmd-0 goes back to this
 fold_unchanged = true      # false shows the whole file
 diff_mode = "split"        # or "unified", v switches while the app is running
@@ -69,8 +68,6 @@ open = false               # true shows the file tree and the commit list at sta
 [terminal]
 icons = true               # file icons in the terminal view, requires a Nerd Font
 ```
-
-`theme` is `catppuccin-mocha`, `jetbrains-dark` or `jetbrains-light`. The last two are IntelliJ's Islands themes.
 
 ### Keys
 

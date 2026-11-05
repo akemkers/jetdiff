@@ -6,11 +6,9 @@ use jetdiff_app::walkthrough::{Note, NoteKind};
 
 use super::WalkthroughView;
 use super::page::wrapping;
-use super::palette::{
-    ACCENT, BODY, BORDER, DECISION, DIVERGENCE, LIMITATION, SELECTED, STRONG, SURFACE, UNTESTED,
-    UPKEEP, color,
-};
 use super::prose::{ProseColors, SANS, prose};
+use crate::settings::Settings;
+use crate::theme::UiPalette;
 
 const NOTE_SIZE: f32 = 15.;
 const LINK_SIZE: f32 = 13.;
@@ -29,10 +27,8 @@ pub(super) struct NoteRow<'a> {
 impl WalkthroughView {
     pub(super) fn notes_table(&self, rows: Vec<NoteRow>, cx: &mut Context<Self>) -> Div {
         let s = |v: f32| px(v * self.scale);
-        let body = ProseColors {
-            text: color(BODY),
-            bold: color(STRONG),
-        };
+        let palette = cx.global::<Settings>().theme.palette;
+        let body = ProseColors::body(&palette);
         let (vertical, horizontal) = ROW_PADDING;
         let rows = rows
             .into_iter()
@@ -45,7 +41,7 @@ impl WalkthroughView {
                     .flex()
                     .items_start()
                     .gap(s(GAP))
-                    .when(i > 0, |d| d.border_t_1().border_color(color(BORDER)))
+                    .when(i > 0, |d| d.border_t_1().border_color(palette.border))
                     .text_size(s(NOTE_SIZE))
                     .line_height(relative(1.6))
                     .child(
@@ -53,17 +49,17 @@ impl WalkthroughView {
                             .flex_none()
                             .w(s(TAG_COLUMN))
                             .flex()
-                            .child(note_tag(note.kind, self.scale)),
+                            .child(note_tag(note.kind, &palette, self.scale)),
                     )
                     .child(wrapping(prose(&note.text, &body)).flex_1().min_w_0())
                     .when_some(page, |d, page| {
                         d.cursor_pointer()
-                            .hover(|d| d.bg(color(SELECTED)))
+                            .hover(|d| d.bg(palette.selected))
                             .child(
                                 div()
                                     .flex_none()
                                     .text_size(s(LINK_SIZE))
-                                    .text_color(color(ACCENT))
+                                    .text_color(palette.accent)
                                     .child(format!("Step {page} →")),
                             )
                             .on_click(cx.listener(move |this, _, _, cx| this.go_to(page, cx)))
@@ -72,9 +68,9 @@ impl WalkthroughView {
         div()
             .flex()
             .flex_col()
-            .bg(color(SURFACE))
+            .bg(palette.surface)
             .border_1()
-            .border_color(color(BORDER))
+            .border_color(palette.border)
             .rounded(s(8.))
             .overflow_hidden()
             .font_family(SANS)
@@ -83,13 +79,13 @@ impl WalkthroughView {
 }
 
 /// A pill with the note's kind. The kinds differ in lightness, not only in hue.
-pub(super) fn note_tag(kind: NoteKind, scale: f32) -> Div {
-    let ((background, text), name) = match kind {
-        NoteKind::Decision => (DECISION, "Decision"),
-        NoteKind::Upkeep => (UPKEEP, "Upkeep"),
-        NoteKind::Limitation => (LIMITATION, "Limitation"),
-        NoteKind::Divergence => (DIVERGENCE, "Divergence"),
-        NoteKind::Untested => (UNTESTED, "Untested"),
+pub(super) fn note_tag(kind: NoteKind, palette: &UiPalette, scale: f32) -> Div {
+    let (pill, name) = match kind {
+        NoteKind::Decision => (palette.decision_tag, "Decision"),
+        NoteKind::Upkeep => (palette.upkeep_tag, "Upkeep"),
+        NoteKind::Limitation => (palette.limitation_tag, "Limitation"),
+        NoteKind::Divergence => (palette.divergence_tag, "Divergence"),
+        NoteKind::Untested => (palette.untested_tag, "Untested"),
     };
     div()
         .flex_none()
@@ -98,8 +94,8 @@ pub(super) fn note_tag(kind: NoteKind, scale: f32) -> Div {
         .flex()
         .items_center()
         .rounded_full()
-        .bg(color(background))
-        .text_color(color(text))
+        .bg(pill.background)
+        .text_color(pill.text)
         .font(font(SANS))
         .text_size(px(TAG_SIZE * scale))
         .line_height(relative(1.))

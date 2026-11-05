@@ -152,7 +152,7 @@ mod tests {
             inline: &[],
             inline_highlight_kind: None,
         };
-        paint_line(&line, scroll_x, area, &Theme::mocha(), &mut buf);
+        paint_line(&line, scroll_x, area, &Theme::built_in(), &mut buf);
         row(&buf, 0)
     }
 
@@ -167,7 +167,7 @@ mod tests {
     fn space_keeps_the_color_in_front() {
         let area = Rect::new(0, 0, 4, 1);
         let mut buf = Buffer::empty(area);
-        let theme = Theme::mocha();
+        let theme = Theme::built_in();
         let line = LineText {
             text: "fn x",
             syntax: &[SyntaxSpan {

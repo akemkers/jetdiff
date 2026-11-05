@@ -1,8 +1,5 @@
 # Settings for jetdiff.
 
-# catppuccin-mocha, jetbrains-dark or jetbrains-light.
-theme = "catppuccin-mocha"
-
 # Between 8 and 40. Cmd-0 goes back to this.
 font_size = 14
 

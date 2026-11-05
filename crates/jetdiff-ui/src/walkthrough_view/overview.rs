@@ -6,9 +6,10 @@ use jetdiff_app::walkthrough::{NoteKind, Reading};
 
 use super::notes::NoteRow;
 use super::page::{label, prose_column, wrapping};
-use super::palette::{BODY, BUTTON, BUTTON_TEXT, MUTED, STRONG, color};
 use super::prose::{ProseColors, SANS, prose};
 use super::{WalkthroughView, plural};
+use crate::settings::Settings;
+use crate::theme::UiPalette;
 
 const TITLE_SIZE: f32 = 32.;
 const SECTION_SIZE: f32 = 18.;
@@ -24,23 +25,25 @@ impl WalkthroughView {
     pub(super) fn overview(&self, reading: &Reading, cx: &mut Context<Self>) -> Div {
         let s = |v: f32| px(v * self.scale);
         let walkthrough = reading.walkthrough();
-        let body = ProseColors {
-            text: color(BODY),
-            bold: color(STRONG),
-        };
+        let palette = cx.global::<Settings>().theme.palette;
+        let body = ProseColors::body(&palette);
         let steps = reading.step_count();
         let narrow = |content: Div| prose_column(content, self.scale);
         let heading = div()
             .flex()
             .flex_col()
-            .child(label(format!("OVERVIEW · {steps} STEPS"), self.scale))
+            .child(label(
+                format!("OVERVIEW · {steps} STEPS"),
+                &palette,
+                self.scale,
+            ))
             .child(
                 div()
                     .pt(s(GAP / 2.))
                     .text_size(s(TITLE_SIZE))
                     .line_height(relative(1.2))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(color(STRONG))
+                    .text_color(palette.strong)
                     .child(walkthrough.title.clone()),
             );
         let mut column = div()
@@ -49,7 +52,7 @@ impl WalkthroughView {
             .font_family(SANS)
             .text_size(s(TEXT_SIZE))
             .line_height(relative(LINE_HEIGHT))
-            .text_color(color(BODY))
+            .text_color(palette.body)
             .child(narrow(heading));
         for paragraph in paragraphs(&walkthrough.summary) {
             column = column.child(narrow(
@@ -66,7 +69,7 @@ impl WalkthroughView {
             if decisions > 0 {
                 count += &format!(" · {}", plural(decisions, "decision"));
             }
-            column = column.child(narrow(section("Notes", Some(count), self.scale)));
+            column = column.child(narrow(section("Notes", Some(count), &palette, self.scale)));
             let rows = notes
                 .into_iter()
                 .map(|(page, note)| NoteRow {
@@ -88,6 +91,7 @@ impl WalkthroughView {
     /// To the first step not read yet.
     fn continue_button(&self, reading: &Reading, cx: &mut Context<Self>) -> impl IntoElement {
         let s = |v: f32| px(v * self.scale);
+        let palette = cx.global::<Settings>().theme.palette;
         let (page, text) = match reading.first_unread_step() {
             Some(1) if reading.read_count() == 0 => (1, "Start at step 1 →".to_owned()),
             Some(page) => (page, format!("Continue at step {page} →")),
@@ -100,8 +104,8 @@ impl WalkthroughView {
             .flex()
             .items_center()
             .rounded(s(6.))
-            .bg(color(BUTTON))
-            .text_color(color(BUTTON_TEXT))
+            .bg(palette.button)
+            .text_color(palette.button_text)
             .font_weight(FontWeight::SEMIBOLD)
             .cursor_pointer()
             .child(text)
@@ -110,7 +114,7 @@ impl WalkthroughView {
 }
 
 /// A heading with an optional count on the right.
-fn section(title: &'static str, count: Option<String>, scale: f32) -> Div {
+fn section(title: &'static str, count: Option<String>, palette: &UiPalette, scale: f32) -> Div {
     div()
         .pt(px(SECTION_GAP * scale))
         .flex()
@@ -120,13 +124,13 @@ fn section(title: &'static str, count: Option<String>, scale: f32) -> Div {
                 .flex_1()
                 .text_size(px(SECTION_SIZE * scale))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(color(STRONG))
+                .text_color(palette.strong)
                 .child(title),
         )
         .children(count.map(|count| {
             div()
                 .text_size(px(SMALL_SIZE * scale))
-                .text_color(color(MUTED))
+                .text_color(palette.muted)
                 .child(count)
         }))
 }

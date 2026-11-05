@@ -145,7 +145,6 @@ impl FileTree {
     ) -> impl IntoElement + use<> {
         let row = &self.files.rows()[i];
         let theme = cx.global::<Settings>().theme;
-        let dark = theme.dark;
         let s = |v: f32| px(v * self.scale);
         // Explicitly Embedded, otherwise GPUI reads `java.svg` as a URI and fetches it over HTTP
         let icon = |path: String| {
@@ -180,8 +179,8 @@ impl FileTree {
             RowKind::Dir {
                 name, count, open, ..
             } => base
-                .child(icon(chevron_icon(*open, dark)))
-                .child(icon(folder_icon(dark)))
+                .child(icon(chevron_icon(*open)))
+                .child(icon(folder_icon()))
                 .child(name.clone())
                 .child(
                     div()
@@ -194,7 +193,7 @@ impl FileTree {
                 let name = file_name(&file.path);
                 // The space where the folders have the arrow, so the icons line up under each other
                 base.child(div().w(s(ICON_SIZE)).flex_none())
-                    .child(icon(file_icon(&file.path, dark)))
+                    .child(icon(file_icon(&file.path)))
                     .child(
                         div()
                             .text_color(Self::status_color(&theme, file.status))
