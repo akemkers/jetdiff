@@ -15,7 +15,7 @@ macro_rules! icons {
     };
 }
 
-const ICONS: [(&str, &[u8]); 16] = icons!(
+const ICONS: [(&str, &[u8]); 17] = icons!(
     "branch",
     "chevronDown",
     "chevronRight",
@@ -26,6 +26,7 @@ const ICONS: [(&str, &[u8]); 16] = icons!(
     "json",
     "kotlin",
     "markdown",
+    "python",
     "rust",
     "text",
     "toml",
@@ -57,6 +58,7 @@ pub fn file_icon(path: &str) -> String {
         Some(Json) => "json",
         Some(Kotlin) => "kotlin",
         Some(Markdown) => "markdown",
+        Some(Python) => "python",
         Some(Toml) => "toml",
         Some(Tsx | TypeScript) => "typeScript",
         Some(Xml) => "xml",
@@ -102,8 +104,8 @@ mod tests {
     #[test]
     fn all_icons_exist() {
         for path in [
-            "a.go", "a.java", "a.js", "a.json", "a.kt", "a.md", "a.rs", "a.toml", "a.ts", "a.xml",
-            "a.yml", "a",
+            "a.go", "a.java", "a.js", "a.json", "a.kt", "a.md", "a.py", "a.rs", "a.toml", "a.ts",
+            "a.xml", "a.yml", "a",
         ] {
             assert!(Assets.load(&file_icon(path)).unwrap().is_some(), "{path}");
         }

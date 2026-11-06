@@ -14,6 +14,7 @@ pub enum Language {
     Json,
     Kotlin,
     Markdown,
+    Python,
     Rust,
     Toml,
     Tsx,
@@ -23,13 +24,14 @@ pub enum Language {
 }
 
 /// The same order as the enum, so `lang as usize` is the index.
-const LANGUAGES: [Language; 12] = [
+const LANGUAGES: [Language; 13] = [
     Language::Go,
     Language::Java,
     Language::JavaScript,
     Language::Json,
     Language::Kotlin,
     Language::Markdown,
+    Language::Python,
     Language::Rust,
     Language::Toml,
     Language::Tsx,
@@ -48,6 +50,7 @@ impl Language {
             "json" => Self::Json,
             "kt" | "kts" => Self::Kotlin,
             "md" | "markdown" => Self::Markdown,
+            "py" | "pyi" | "pyw" => Self::Python,
             "rs" => Self::Rust,
             "toml" => Self::Toml,
             "tsx" => Self::Tsx,
@@ -216,6 +219,11 @@ fn build(lang: Language) -> HighlightConfiguration {
             tree_sitter_md::LANGUAGE,
             include_str!("../queries/markdown.scm").to_owned(),
             include_str!("../queries/markdown_injections.scm"),
+        ),
+        Python => (
+            tree_sitter_python::LANGUAGE,
+            include_str!("../queries/python.scm").to_owned(),
+            "",
         ),
         Rust => (
             tree_sitter_rust::LANGUAGE,
@@ -502,6 +510,91 @@ mod tests {
         let text = "fun f() { return visible }";
         has(Language::Kotlin, text, &[("return", Keyword)]);
         lacks(Language::Kotlin, text, &["visible"]);
+    }
+
+    #[test]
+    fn python() {
+        use Token::*;
+        let text = "\"\"\"Doc\"\"\"\n@dataclass\n@app.route(\"/\")\nclass A(B):\n    \"\"\"Doc A\"\"\"\n    \
+            def f(self, x: int) -> str:\n        if x is not None:\n            \"s\"\n        \
+            return f\"{x}\\n\" + g(self.h()) # c\n";
+        has(
+            Language::Python,
+            text,
+            &[
+                ("\"\"\"Doc\"\"\"", DocComment),
+                ("\"\"\"Doc A\"\"\"", DocComment),
+                ("@dataclass", Metadata),
+                ("@app.route", Metadata),
+                ("class", Keyword),
+                ("A", Type),
+                ("def", Keyword),
+                ("f", Function),
+                ("self", SelfValue),
+                ("->", Operator),
+                ("is", Keyword),
+                ("not", Keyword),
+                ("None", Keyword),
+                ("\"s\"", String),
+                ("\\n", Escape),
+                ("g", FunctionCall),
+                ("h", FunctionCall),
+                ("# c", Comment),
+            ],
+        );
+        lacks(Language::Python, text, &["x", "int", "B", "{x}"]);
+        assert_eq!(Language::from_path("a/b.py"), Some(Language::Python));
+        assert_eq!(Language::from_path("gui.pyw"), Some(Language::Python));
+    }
+
+    #[test]
+    fn python_decorator_is_only_the_name() {
+        let got = tokens(
+            Language::Python,
+            "@a.b.c\n@lru_cache(maxsize=SIZE)\n@x.y.z(1)\ndef f(): pass\n",
+        );
+        for name in ["@a.b.c", "@lru_cache", "@x.y.z"] {
+            assert!(got.contains(&(name, Token::Metadata)), "{name} in {got:?}");
+        }
+        lacks(
+            Language::Python,
+            "@lru_cache(maxsize=SIZE)\ndef f(): pass\n",
+            &["maxsize", "SIZE"],
+        );
+    }
+
+    #[test]
+    fn python_docstring_after_shebang() {
+        use Token::*;
+        has(
+            Language::Python,
+            "#!/usr/bin/env python3\n\"\"\"Doc.\"\"\"\ndef k():\n    \"a\" \"b\"\n",
+            &[
+                ("\"\"\"Doc.\"\"\"", DocComment),
+                ("\"a\" \"b\"", DocComment),
+            ],
+        );
+    }
+
+    #[test]
+    fn python_fstring() {
+        use Token::*;
+        let text = "s = f\"{{lit}} {x!r:>10} {y:{w}}\"\nreturn ...\n";
+        has(
+            Language::Python,
+            text,
+            &[("{{", Escape), ("}}", Escape), ("...", Keyword)],
+        );
+        let got = tokens(Language::Python, text);
+        assert!(
+            got.iter().any(|&(t, k)| t.contains("!r") && k == String),
+            "{got:?}"
+        );
+        assert!(
+            got.iter().any(|&(t, k)| t.contains(">10") && k == String),
+            "{got:?}"
+        );
+        lacks(Language::Python, text, &["x", "w"]);
     }
 
     #[test]

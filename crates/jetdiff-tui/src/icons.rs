@@ -35,6 +35,7 @@ pub fn file_icon(path: &str) -> Icon {
         Some(Json) => ('\u{e80b}', 0xB589EC),
         Some(Kotlin) => ('\u{e634}', 0xA571E6),
         Some(Markdown) => ('\u{e609}', 0x548AF7),
+        Some(Python) => ('\u{e606}', 0x548AF7),
         Some(Toml) => ('\u{e6b2}', 0x548AF7),
         Some(Tsx | TypeScript) => ('\u{e628}', 0x548AF7),
         Some(Xml) => ('\u{e619}', 0xC77D55),
@@ -54,7 +55,7 @@ mod tests {
 
     #[test]
     fn the_icons_are_one_column() {
-        for path in ["a.rs", "a.kt", "a.ts", "a.txt", "a.go"] {
+        for path in ["a.rs", "a.kt", "a.ts", "a.txt", "a.go", "a.py"] {
             assert_eq!(file_icon(path).glyph.width(), Some(1), "{path}");
         }
         assert_eq!(folder_icon().glyph.width(), Some(1));
