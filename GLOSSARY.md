@@ -157,8 +157,12 @@ _Avoid_: changes tree, file list
 Branch at the top, with Local changes and the branch's own commits under it as its slices, to pick between.
 
 **Diff header**:
-The row above the diff with the file's path, the counts of added and deleted lines, the diff mode and Fold.
+The row above the diff with the file's path and the counts of added and deleted lines at the left, and the file controls at the right.
 _Avoid_: toolbar, header row, title bar
+
+**File controls**:
+The buttons at the right of the diff header that change how the file is shown: the diff mode (Split | Unified) and Fold. A button that can't do anything for the file is dimmed, not hidden.
+_Avoid_: segmented control, toolbar
 
 **File header**:
 The bar over a file's excerpts in a walkthrough, with its path and file status.
