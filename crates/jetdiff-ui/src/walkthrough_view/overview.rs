@@ -6,9 +6,10 @@ use jetdiff_app::walkthrough::{NoteKind, Reading};
 
 use super::notes::NoteRow;
 use super::page::{label, prose_column, wrapping};
-use super::prose::{ProseColors, SANS, prose};
+use super::prose::{ProseColors, prose};
 use super::{WalkthroughView, plural};
 use crate::settings::Settings;
+use crate::text::SANS;
 use crate::theme::UiPalette;
 
 const TITLE_SIZE: f32 = 32.;

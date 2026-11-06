@@ -2,13 +2,27 @@
 
 pub type Keys = (&'static str, &'static str);
 
-pub const KEYMAP_BAR: [Keys; 6] = [
-    ("Tab Shift-Tab", "file"),
-    ("j k", "up/down"),
-    ("n p", "hunk"),
-    ("w", "walkthrough"),
-    ("?", "all keys"),
-    ("q", "quit"),
+/// Each key is drawn as a key label of its own, followed by what the keys do.
+pub type KeymapBarKeys = (&'static [&'static str], &'static str);
+
+pub const DIFF_KEYMAP_BAR: [KeymapBarKeys; 6] = [
+    (&["Tab", "⇧Tab"], "file"),
+    (&["j", "k"], "line"),
+    (&["n", "p"], "hunk"),
+    (&["w"], "walkthrough"),
+    (&["?"], "all keys"),
+    (&["q"], "quit"),
+];
+
+/// No `?`, since the help is not shown in the walkthrough.
+pub const WALKTHROUGH_KEYMAP_BAR: [KeymapBarKeys; 7] = [
+    (&["Tab", "⇧Tab"], "step"),
+    (&["j", "k"], "scroll"),
+    (&["n", "p"], "hunk"),
+    (&["Enter"], "open in diff"),
+    (&["v"], "split/unified"),
+    (&["w"], "diff"),
+    (&["q"], "quit"),
 ];
 
 /// The Ctrl variants from vim are not included.

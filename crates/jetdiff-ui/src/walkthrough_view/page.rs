@@ -1,15 +1,15 @@
 //! A page of the walkthrough: where it is, the step's title, explanation and notes, then its code
-//! file by file. After the last step, the files no step covers. Under it, the keymap bar.
+//! file by file. After the last step, the files no step covers.
 
-use gpui::{AnyElement, Context, Div, FontWeight, Stateful, canvas, div, prelude::*, px, relative};
+use gpui::{AnyElement, Context, Div, FontWeight, canvas, div, prelude::*, px, relative};
 use jetdiff_app::walkthrough::{Page, Reading};
 use jetdiff_files::FileStatus;
 
 use super::notes::NoteRow;
-use super::prose::{ProseColors, SANS, prose};
+use super::prose::{ProseColors, prose};
 use super::{Item, State, WalkthroughView};
 use crate::settings::Settings;
-use crate::text::FAMILY;
+use crate::text::{FAMILY, SANS};
 use crate::theme::{UiPalette, UiTheme};
 
 const TOP_PADDING: f32 = 40.;
@@ -29,7 +29,6 @@ const TAG_HEIGHT: f32 = 22.;
 const DOT_SIZE: f32 = 5.;
 const POINT_GAP: f32 = 14.;
 const CURRENT_BORDER: f32 = 3.;
-const KEYMAP_BAR_HEIGHT: f32 = 44.;
 
 impl WalkthroughView {
     pub(super) fn ready(&self, cx: &mut Context<Self>) -> Div {
@@ -67,12 +66,7 @@ impl WalkthroughView {
             .gap(s(GAP))
             .children(children);
         let contents = self.contents(reading, cx);
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .child(div().flex_1().min_h_0().flex().child(contents).child(page))
-            .child(self.keymap_bar(reading, cx))
+        div().size_full().flex().child(contents).child(page)
     }
 
     fn item(
@@ -316,66 +310,6 @@ impl WalkthroughView {
             .when(!notes.is_empty(), |d| {
                 d.child(prose_column(self.notes_table(notes, cx), self.scale))
             })
-    }
-
-    /// The keys, with buttons for the previous and next page, and how much is read.
-    fn keymap_bar(&self, reading: &Reading, cx: &mut Context<Self>) -> Div {
-        let s = |v: f32| px(v * self.scale);
-        let palette = cx.global::<Settings>().theme.palette;
-        let button = |id: &'static str,
-                      text: &'static str,
-                      forward: bool,
-                      cx: &mut Context<Self>|
-         -> Stateful<Div> {
-            div()
-                .id(id)
-                .h(s(30.))
-                .px(s(GAP))
-                .flex()
-                .items_center()
-                .border_1()
-                .border_color(palette.border)
-                .rounded(s(6.))
-                .cursor_pointer()
-                .hover(|d| d.bg(palette.selected))
-                .child(text)
-                .on_click(cx.listener(move |this, _, _, cx| this.step_by(forward, cx)))
-        };
-        let before_not_covered = reading
-            .step()
-            .is_some_and(|(_, number, steps)| number == steps)
-            && !reading.not_covered().is_empty();
-        let next = if before_not_covered {
-            "Not covered →"
-        } else {
-            "Next →"
-        };
-        let read = if reading.is_last() {
-            "End of the walkthrough".to_owned()
-        } else {
-            format!("{} of {} read", reading.read_count(), reading.step_count())
-        };
-        div()
-            .flex_none()
-            .h(s(KEYMAP_BAR_HEIGHT))
-            .px(s(GAP * 1.5))
-            .flex()
-            .items_center()
-            .gap(s(GAP))
-            .bg(palette.page)
-            .border_t_1()
-            .border_color(palette.border)
-            .font_family(SANS)
-            .text_size(s(SMALL_SIZE))
-            .child(button("previous", "← Previous", false, cx))
-            .child(button("next", next, true, cx))
-            .child(div().text_color(palette.muted).child(read))
-            .child(div().flex_1())
-            .child(
-                div().font_family(FAMILY).text_color(palette.muted).child(
-                    "Tab → step   n p hunk   v split/unified   Enter open in the diff   w back",
-                ),
-            )
     }
 }
 
