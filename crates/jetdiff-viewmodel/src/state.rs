@@ -95,7 +95,7 @@ impl DiffState {
 
     /// A valid line outside closed folds.
     fn clamp_line(&self, side: Side, line: usize) -> usize {
-        let line = line.min(self.diff.line_count(side) - 1);
+        let line = line.min(self.diff.line_count(side));
         self.folding.cursor_after(side, line)
     }
 
