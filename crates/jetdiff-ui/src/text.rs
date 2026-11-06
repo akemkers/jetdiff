@@ -7,6 +7,8 @@ use gpui::{App, Font, FontFeatures, Pixels, SharedString, Window, font, px};
 use jetdiff_viewmodel::metrics::{LINE_NUMBER_FONT_DELTA, LineMetrics, line_metrics};
 
 pub(crate) const FAMILY: &str = "JetBrains Mono";
+/// The system's own sans, so UI text and prose don't read like code.
+pub(crate) const SANS: &str = ".SystemUIFont";
 
 /// The same version as in IntelliJ's JBR, so the text metrics are the same as in the IDE.
 const FONTS: [&[u8]; 4] = [

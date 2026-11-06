@@ -6,8 +6,9 @@ use jetdiff_app::walkthrough::{Note, NoteKind};
 
 use super::WalkthroughView;
 use super::page::wrapping;
-use super::prose::{ProseColors, SANS, prose};
+use super::prose::{ProseColors, prose};
 use crate::settings::Settings;
+use crate::text::SANS;
 use crate::theme::UiPalette;
 
 const NOTE_SIZE: f32 = 15.;

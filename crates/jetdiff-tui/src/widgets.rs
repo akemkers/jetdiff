@@ -1,6 +1,6 @@
 //! The path, the keymap bar, the notification, the help and the rollback dialog.
 
-use jetdiff_app::help::{ALL, KEYMAP_BAR};
+use jetdiff_app::help::{ALL, DIFF_KEYMAP_BAR};
 use jetdiff_app::{Notification, NotificationLevel};
 use jetdiff_viewmodel::Theme;
 use ratatui::buffer::Buffer;
@@ -39,8 +39,8 @@ pub fn keymap_bar(area: Rect, theme: &Theme, buf: &mut Buffer) {
     let keys = Style::default().fg(color(theme.editor_fg));
     let what = Style::default().fg(color(theme.line_number));
     let mut spans = vec![Span::raw(" ")];
-    for (key, description) in KEYMAP_BAR {
-        spans.push(Span::styled(key, keys));
+    for (labels, description) in DIFF_KEYMAP_BAR {
+        spans.push(Span::styled(labels.join(" "), keys));
         spans.push(Span::styled(format!(" {description}   "), what));
     }
     Clear.render(area, buf);

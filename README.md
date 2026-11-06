@@ -11,15 +11,15 @@ It shows a branch, Local changes, a commit or a file pair in Split, with the two
 ## Installing
 
 ```
-cargo install --path crates/jetdiff
+cargo install --locked --path crates/jetdiff
 ```
 
-This puts `jetdiff` on your PATH. rustup installs the Rust version pinned in `rust-toolchain.toml` by itself.
+This puts `jetdiff` on your PATH. `--locked` builds with the versions in `Cargo.lock`, since newer ones may not compile. rustup installs the Rust version pinned in `rust-toolchain.toml` by itself.
 
 The `gui` and `tui` features are both on by default. On a server without a screen, the terminal view is enough and GPUI isn't needed:
 
 ```
-cargo install --path crates/jetdiff --no-default-features --features tui
+cargo install --locked --path crates/jetdiff --no-default-features --features tui
 ```
 
 ## Setup

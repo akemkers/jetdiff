@@ -8,9 +8,10 @@ use gpui::{
     MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Render, ScrollWheelEvent, Window,
     actions, canvas, div, prelude::*, px,
 };
+use jetdiff_app::help::DIFF_KEYMAP_BAR;
 use jetdiff_app::{Notification, RollbackRequest, cursor_location, rollback_request};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::metrics::zoomed;
+use jetdiff_viewmodel::metrics::{FONT_SIZE, zoomed};
 use jetdiff_viewmodel::{
     Command, DiffMode, FileDiff, FoldId, Folding, Horizontal, HunkMinimapMark, KeyParser, Parsed,
     Viewport, hunk_minimap_marks,
@@ -18,7 +19,7 @@ use jetdiff_viewmodel::{
 
 use crate::code_viewer::{self, Hit, Painter, Shared};
 use crate::confirm_dialog::confirm_dialog;
-use crate::help::{HideHelp, KEYMAP_BAR_HEIGHT, KeyHelp, ToggleHelp};
+use crate::help::{HideHelp, KEYMAP_BAR_HEIGHT, KeyHelp, ToggleHelp, keymap_bar};
 use crate::keystroke::to_key;
 use crate::notification_slot_view::NotificationSlotView;
 use crate::scroll_animator::ScrollAnimator;
@@ -67,8 +68,10 @@ pub struct FileDiffView {
     overlay: Option<Overlay>,
     /// Left and Right path for `y`. Empty when there is no file.
     paths: [String; 2],
-    /// Owned by whoever makes the diff, but drawn above the keymap bar here.
+    /// Owned by whoever makes the diff, and drawn above the keymap bar.
     notification_slot: Entity<NotificationSlotView>,
+    /// A File pair has no repo view around it to draw the keymap bar.
+    draws_keymap_bar: bool,
     shared: Rc<Shared>,
     focus: FocusHandle,
 }
@@ -77,7 +80,9 @@ impl FileDiffView {
     /// One file, with its own notification slot.
     pub fn standalone(diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) -> Self {
         let notification_slot = cx.new(|_| NotificationSlotView::default());
-        Self::new(diff, paths, notification_slot, cx)
+        let mut view = Self::new(diff, paths, notification_slot, cx);
+        view.draws_keymap_bar = true;
+        view
     }
 
     pub(crate) fn new(
@@ -105,6 +110,7 @@ impl FileDiffView {
             overlay: None,
             paths,
             notification_slot,
+            draws_keymap_bar: false,
             shared: Rc::new(Shared::new()),
             focus: cx.focus_handle(),
         }
@@ -565,7 +571,7 @@ impl Focusable for FileDiffView {
 impl Render for FileDiffView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_style(window);
-        // The keymap bar can wrap over several lines, so the height comes from the previous layout
+        // The height comes from the previous layout, and before the first one it is a guess
         let height = self.shared.bounds.get().map_or(
             f32::from(window.viewport_size().height) - KEYMAP_BAR_HEIGHT,
             |b| f32::from(b.size.height),
@@ -593,11 +599,15 @@ impl Render for FileDiffView {
         let shared = self.shared.clone();
 
         let keys = KeyHelp { theme };
-        let footer = div()
-            .relative()
-            .flex_none()
-            .child(keys.keymap_bar())
-            .child(self.notification_slot.clone());
+        let footer = self.draws_keymap_bar.then(|| {
+            let scale = self.font_size / FONT_SIZE;
+            keymap_bar(
+                &DIFF_KEYMAP_BAR,
+                self.notification_slot.clone(),
+                &theme.palette,
+                scale,
+            )
+        });
         let overlay = self.overlay.as_ref().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
             Overlay::Confirm(_) => confirm_dialog("Roll back this hunk?", &theme),
@@ -633,7 +643,7 @@ impl Render for FileDiffView {
                 .flex_1()
                 .w_full(),
             )
-            .child(footer)
+            .children(footer)
             .children(overlay)
     }
 }
