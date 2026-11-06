@@ -587,11 +587,13 @@ mod tests {
         );
         let got = tokens(Language::Python, text);
         assert!(
-            got.iter().any(|&(t, k)| t.contains("!r") && k == String),
+            got.iter()
+                .any(|&(text, token)| text.contains("!r") && token == String),
             "{got:?}"
         );
         assert!(
-            got.iter().any(|&(t, k)| t.contains(">10") && k == String),
+            got.iter()
+                .any(|&(text, token)| text.contains(">10") && token == String),
             "{got:?}"
         );
         lacks(Language::Python, text, &["x", "w"]);
@@ -722,11 +724,11 @@ mod tests {
         );
         assert!(
             got.iter()
-                .any(|&(t, k)| t.contains("Title") && k == Heading),
+                .any(|&(text, token)| text.contains("Title") && token == Heading),
             "{got:?}"
         );
         assert!(got.contains(&("**bold**", Strong)), "{got:?}");
-        assert!(!got.iter().any(|&(t, _)| t.contains("fn")), "{got:?}");
+        assert!(!got.iter().any(|&(text, _)| text.contains("fn")), "{got:?}");
     }
 
     #[test]
@@ -734,7 +736,7 @@ mod tests {
         let got = tokens(Language::JavaScript, "`a${b}c`");
         assert!(
             !got.iter()
-                .any(|&(t, k)| t.contains('b') && k == Token::String),
+                .any(|&(text, token)| text.contains('b') && token == Token::String),
             "{got:?}"
         );
     }
