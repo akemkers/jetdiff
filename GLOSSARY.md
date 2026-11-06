@@ -104,8 +104,8 @@ The changed files with hunks no step points to, and the files that weren't sent 
 _Avoid_: skipped, uncovered, left out
 
 **Contents**:
-The list of the overview, the parts with their steps, and Not covered, left of the page.
-_Avoid_: sidebar, side panel, table of contents
+The list of the overview, the parts with their steps, and Not covered, shown in the side panel during a walkthrough.
+_Avoid_: sidebar, table of contents
 
 **Read**:
 A step that has been shown.
@@ -146,7 +146,7 @@ The file path and line number of the cursor's line in the newest version of the 
 _Avoid_: location, reference, position
 
 **Side panel**:
-The panel left of the diff, holding the file tree, and for Branch and Local changes also the commit list.
+The panel on the left, the same in the diff and the walkthrough. Next to the diff it holds the file tree, and for Branch and Local changes also the commit list. In a walkthrough it holds the contents.
 _Avoid_: left panel, sidebar, panel
 
 **File tree**:
@@ -156,8 +156,16 @@ _Avoid_: changes tree, file list
 **Commit list**:
 Branch at the top, with Local changes and the branch's own commits under it as its slices, to pick between.
 
+**Diff header**:
+The row above the diff with the file's path, the counts of added and deleted lines, the diff mode and Fold.
+_Avoid_: toolbar, header row, title bar
+
+**File header**:
+The bar over a file's excerpts in a walkthrough, with its path and file status.
+_Avoid_: file bar
+
 **Keymap bar**:
-The most important keys, shown at the bottom.
+The most important keys, shown at the bottom across the whole window, in the diff and the walkthrough.
 _Avoid_: key bar, status bar
 
 **Notification**:
