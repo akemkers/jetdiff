@@ -170,6 +170,12 @@ impl FileDiff {
         self.single_side().is_none()
     }
 
+    /// The lines of a side that are in hunks: deleted on Left, added on Right. A Modified hunk
+    /// counts on both.
+    pub fn changed_line_count(&self, side: Side) -> usize {
+        self.hunks.iter().map(|hunk| hunk.lines(side).len()).sum()
+    }
+
     /// At least one line. Text that ends with `'\n'` has an empty last line, as in IntelliJ.
     pub fn line_count(&self, side: Side) -> usize {
         self.side(side).line_count()
@@ -397,6 +403,14 @@ mod tests {
         assert_eq!(d.hunk_at(Side::Left, 1), Some(0));
         assert_eq!(d.hunk_at(Side::Right, 1), Some(0));
         assert_eq!(d.hunk_at(Side::Right, 0), None);
+    }
+
+    #[test]
+    fn changed_lines_per_side() {
+        // A Modified hunk of one line against two, and an added line
+        let d = diff("a\nb\nc\n", "a\nx\ny\nc\nd\n");
+        assert_eq!(d.changed_line_count(Side::Left), 1);
+        assert_eq!(d.changed_line_count(Side::Right), 3);
     }
 
     #[test]

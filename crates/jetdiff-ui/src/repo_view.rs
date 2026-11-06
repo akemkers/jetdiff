@@ -17,7 +17,6 @@ use jetdiff_viewmodel::metrics::FONT_SIZE;
 use crate::commit_list::{CommitList, SelectRow};
 use crate::confirm_dialog::confirm_dialog;
 use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
-use crate::file_header::file_header;
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp, keymap_bar};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
@@ -438,11 +437,6 @@ impl Render for RepoView {
                         .h_full()
                         .flex()
                         .flex_col()
-                        .children(
-                            self.repo_source
-                                .shown()
-                                .map(|file| file_header(&file.path, self.scale, &theme)),
-                        )
                         .child(div().flex_1().min_h_0().child(self.diff.clone())),
                 ),
         };

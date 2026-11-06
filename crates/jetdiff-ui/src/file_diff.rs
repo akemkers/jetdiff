@@ -1,5 +1,9 @@
 //! The diff of one file, Split or Unified. `DiffMode` owns the cursor, folding and the scroll target.
 //! This is where the parts that need GPUI live: keys, mouse, animation toward the target and zoom.
+//! The diff header sits above it.
+
+mod diff_header;
+mod file_controls;
 
 use std::rc::Rc;
 
@@ -598,9 +602,10 @@ impl Render for FileDiffView {
             matches!(&self.mode, DiffMode::Split(state) if state.folding.hovered().is_some());
         let shared = self.shared.clone();
 
+        let scale = self.font_size / FONT_SIZE;
+        let diff_header = self.diff_header(scale, cx);
         let keys = KeyHelp { theme };
         let footer = self.draws_keymap_bar.then(|| {
-            let scale = self.font_size / FONT_SIZE;
             keymap_bar(
                 &DIFF_KEYMAP_BAR,
                 self.notification_slot.clone(),
@@ -631,6 +636,7 @@ impl Render for FileDiffView {
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .when(hovered, |d| d.cursor_pointer())
+            .children(diff_header)
             .child(
                 canvas(
                     |_, _, _| {},
