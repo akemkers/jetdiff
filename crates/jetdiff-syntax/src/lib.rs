@@ -23,7 +23,7 @@ pub enum Language {
     Yaml,
 }
 
-/// The same order as the enum, so `lang as usize` is the index.
+/// The same order as the enum, so `language as usize` is the index.
 const LANGUAGES: [Language; 13] = [
     Language::Go,
     Language::Java,
@@ -42,8 +42,8 @@ const LANGUAGES: [Language; 13] = [
 
 impl Language {
     pub fn from_path(path: &str) -> Option<Self> {
-        let ext = path.rsplit_once('.')?.1;
-        Some(match ext.to_ascii_lowercase().as_str() {
+        let extension = path.rsplit_once('.')?.1;
+        Some(match extension.to_ascii_lowercase().as_str() {
             "go" => Self::Go,
             "java" => Self::Java,
             "js" | "jsx" | "mjs" | "cjs" => Self::JavaScript,
@@ -171,10 +171,10 @@ const NAMES: [(&str, Option<Token>); 28] = [
     ("plain", None),
 ];
 
-fn config(lang: Language) -> &'static HighlightConfiguration {
+fn config(language: Language) -> &'static HighlightConfiguration {
     static CONFIGS: [OnceLock<HighlightConfiguration>; LANGUAGES.len()] =
         [const { OnceLock::new() }; LANGUAGES.len()];
-    CONFIGS[lang as usize].get_or_init(|| build(lang))
+    CONFIGS[language as usize].get_or_init(|| build(language))
 }
 
 /// The inline grammar of Markdown, which the block grammar injects.
@@ -189,11 +189,11 @@ fn markdown_inline() -> &'static HighlightConfiguration {
     })
 }
 
-fn build(lang: Language) -> HighlightConfiguration {
+fn build(language: Language) -> HighlightConfiguration {
     use Language::*;
-    const JS: &str = include_str!("../queries/javascript.scm");
-    const TS: &str = include_str!("../queries/typescript.scm");
-    let (language, highlights, injections) = match lang {
+    const JAVASCRIPT: &str = include_str!("../queries/javascript.scm");
+    const TYPESCRIPT: &str = include_str!("../queries/typescript.scm");
+    let (grammar, highlights, injections) = match language {
         Go => (
             tree_sitter_go::LANGUAGE,
             include_str!("../queries/go.scm").to_owned(),
@@ -204,7 +204,7 @@ fn build(lang: Language) -> HighlightConfiguration {
             include_str!("../queries/java.scm").to_owned(),
             "",
         ),
-        JavaScript => (tree_sitter_javascript::LANGUAGE, JS.to_owned(), ""),
+        JavaScript => (tree_sitter_javascript::LANGUAGE, JAVASCRIPT.to_owned(), ""),
         Json => (
             tree_sitter_json::LANGUAGE,
             include_str!("../queries/json.scm").to_owned(),
@@ -235,11 +235,15 @@ fn build(lang: Language) -> HighlightConfiguration {
             include_str!("../queries/toml.scm").to_owned(),
             "",
         ),
-        Tsx => (tree_sitter_typescript::LANGUAGE_TSX, [JS, TS].concat(), ""),
+        Tsx => (
+            tree_sitter_typescript::LANGUAGE_TSX,
+            [JAVASCRIPT, TYPESCRIPT].concat(),
+            "",
+        ),
         // The JSX patterns in javascript.scm don't exist in the TypeScript grammar
         TypeScript => (
             tree_sitter_typescript::LANGUAGE_TYPESCRIPT,
-            [strip_jsx(JS), TS].concat(),
+            [strip_jsx(JAVASCRIPT), TYPESCRIPT].concat(),
             "",
         ),
         Xml => (
@@ -253,7 +257,7 @@ fn build(lang: Language) -> HighlightConfiguration {
             "",
         ),
     };
-    new_config(language.into(), &highlights, injections)
+    new_config(grammar.into(), &highlights, injections)
 }
 
 fn strip_jsx(query: &str) -> &str {
@@ -267,7 +271,7 @@ fn new_config(
 ) -> HighlightConfiguration {
     let mut config = HighlightConfiguration::new(language, "", highlights, injections, "")
         .unwrap_or_else(|e| panic!("invalid query: {e}"));
-    config.configure(&NAMES.map(|(n, _)| n));
+    config.configure(&NAMES.map(|(name, _)| name));
     config
 }
 
@@ -276,11 +280,11 @@ fn injection(name: &str) -> Option<&'static HighlightConfiguration> {
 }
 
 /// Sorted and without overlap. Nested captures give the innermost token.
-pub fn highlight(lang: Language, text: &str) -> Vec<Span> {
-    let config = config(lang);
+pub fn highlight(language: Language, text: &str) -> Vec<Span> {
+    let config = config(language);
     let mut highlighter = Highlighter::new();
     let Ok(events) = highlighter.highlight(config, text.as_bytes(), None, None, |name| {
-        injection(name).map(|c| c as &HighlightConfiguration)
+        injection(name).map(|injected| injected as &HighlightConfiguration)
     }) else {
         return Vec::new();
     };
@@ -288,7 +292,7 @@ pub fn highlight(lang: Language, text: &str) -> Vec<Span> {
     let mut spans: Vec<Span> = Vec::new();
     for event in events {
         match event {
-            Ok(HighlightEvent::HighlightStart(h)) => stack.push(NAMES[h.0].1),
+            Ok(HighlightEvent::HighlightStart(capture)) => stack.push(NAMES[capture.0].1),
             Ok(HighlightEvent::HighlightEnd) => {
                 stack.pop();
             }
@@ -317,49 +321,49 @@ pub fn highlight(lang: Language, text: &str) -> Vec<Span> {
 mod tests {
     use super::*;
 
-    fn tokens(lang: Language, text: &str) -> Vec<(&str, Token)> {
-        highlight(lang, text)
+    fn tokens(language: Language, text: &str) -> Vec<(&str, Token)> {
+        highlight(language, text)
             .into_iter()
-            .map(|s| (&text[s.range], s.token))
+            .map(|span| (&text[span.range], span.token))
             .collect()
     }
 
-    fn has(lang: Language, text: &str, want: &[(&str, Token)]) {
-        let got = tokens(lang, text);
-        for w in want {
-            assert!(got.contains(w), "{w:?} missing in {got:?}");
+    fn has(language: Language, text: &str, want: &[(&str, Token)]) {
+        let got = tokens(language, text);
+        for wanted in want {
+            assert!(got.contains(wanted), "{wanted:?} missing in {got:?}");
         }
     }
 
     /// No token for these; they are shown as plain text.
-    fn lacks(lang: Language, text: &str, plain: &[&str]) {
-        let got = tokens(lang, text);
-        for p in plain {
+    fn lacks(language: Language, text: &str, plain: &[&str]) {
+        let got = tokens(language, text);
+        for plain_text in plain {
             assert!(
-                !got.iter().any(|(t, _)| t == p),
-                "{p:?} has a token in {got:?}"
+                !got.iter().any(|(text, _)| text == plain_text),
+                "{plain_text:?} has a token in {got:?}"
             );
         }
     }
 
     #[test]
     fn order_like_the_enum() {
-        for (i, t) in Token::ALL.iter().enumerate() {
-            assert_eq!(*t as usize, i, "{t:?}");
+        for (i, token) in Token::ALL.iter().enumerate() {
+            assert_eq!(*token as usize, i, "{token:?}");
             assert!(
-                NAMES.iter().any(|(_, n)| *n == Some(*t)),
-                "{t:?} missing in NAMES"
+                NAMES.iter().any(|(_, named)| *named == Some(*token)),
+                "{token:?} missing in NAMES"
             );
         }
-        for (i, l) in LANGUAGES.iter().enumerate() {
-            assert_eq!(*l as usize, i, "{l:?}");
+        for (i, language) in LANGUAGES.iter().enumerate() {
+            assert_eq!(*language as usize, i, "{language:?}");
         }
     }
 
     #[test]
     fn all_queries_build() {
-        for lang in LANGUAGES {
-            config(lang);
+        for language in LANGUAGES {
+            config(language);
         }
         markdown_inline();
     }
