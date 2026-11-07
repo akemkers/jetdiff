@@ -63,7 +63,7 @@ pub fn keymap_bar(
         .child(notification_slot)
 }
 
-fn key_label(key: &'static str, palette: &UiPalette, scale: f32) -> Div {
+pub(crate) fn key_label(key: &'static str, palette: &UiPalette, scale: f32) -> Div {
     let s = |v: f32| px(v * scale);
     div()
         .px(s(KEY_LABEL_PADDING))

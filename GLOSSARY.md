@@ -146,8 +146,12 @@ The file path and line number of the cursor's line in the newest version of the 
 _Avoid_: location, reference, position
 
 **Side panel**:
-The panel on the left, the same in the diff and the walkthrough. Next to the diff it holds the file tree, and for Branch and Local changes also the commit list. In a walkthrough it holds the contents.
+The panel on the left, the same in the diff and the walkthrough, with the walkthrough switch at the top. Next to the diff it holds the file tree, and for Branch and Local changes also the commit list. In a walkthrough it holds the contents.
 _Avoid_: left panel, sidebar, panel
+
+**Walkthrough switch**:
+The Diff | Walkthrough buttons at the top of the side panel. A click on the side not shown does what `w` does.
+_Avoid_: mode switch, segmented control
 
 **File tree**:
 The files in the current source, grouped in folders, each with its file status.

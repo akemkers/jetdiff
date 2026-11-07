@@ -65,8 +65,7 @@ impl WalkthroughView {
             .flex_col()
             .gap(s(GAP))
             .children(children);
-        let contents = self.contents(reading, cx);
-        div().size_full().flex().child(contents).child(page)
+        div().size_full().flex().child(page)
     }
 
     fn item(
