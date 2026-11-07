@@ -1,7 +1,7 @@
 //! The path, the keymap bar, the notification, the help and the rollback dialog.
 
+use jetdiff_app::Notification;
 use jetdiff_app::help::{ALL, DIFF_KEYMAP_BAR};
-use jetdiff_app::{Notification, NotificationLevel};
 use jetdiff_viewmodel::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -49,13 +49,10 @@ pub fn keymap_bar(area: Rect, theme: &Theme, buf: &mut Buffer) {
 }
 
 pub fn notification(notification: &Notification, area: Rect, theme: &Theme, buf: &mut Buffer) {
-    let background = match notification.level {
-        NotificationLevel::Info => theme.notification_info_background,
-        NotificationLevel::Warning => theme.notification_warning_background,
-    };
+    let colors = notification.level.colors(&theme.palette);
     let style = Style::default()
-        .fg(color(theme.notification_foreground))
-        .bg(color(background));
+        .fg(color(colors.text))
+        .bg(color(colors.background));
     text_row(&notification.text, style, area, buf);
 }
 
@@ -91,7 +88,8 @@ pub fn help(area: Rect, theme: &Theme, buf: &mut Buffer) {
     let mut lines = Vec::new();
     for (section, rows) in ALL {
         lines.push(Line::styled(section, title));
-        for (key, description) in rows {
+        for (labels, description) in rows {
+            let key = labels.join(" ");
             lines.push(Line::from(vec![
                 Span::styled(format!("{key:<KEY_COLUMN$}"), keys),
                 Span::styled(*description, what),

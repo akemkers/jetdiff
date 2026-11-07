@@ -3,40 +3,47 @@
 use gpui::{Div, SharedString, div, prelude::*, px, relative};
 
 use crate::text::FAMILY;
-use crate::theme::UiTheme;
+use crate::theme::UiPalette;
 
 /// Long questions wrap. The width is fixed, since GPUI measures text without one as a single line,
 /// and the wrapped lines would run out of the box.
 const WIDTH: f32 = 420.;
+/// How far down the window the dialog starts.
+const TOP_FRACTION: f32 = 0.2;
+const GAP: f32 = 6.;
+const HORIZONTAL_PADDING: f32 = 16.;
+const VERTICAL_PADDING: f32 = 12.;
+const RADIUS: f32 = 6.;
+const TEXT_SIZE: f32 = 13.;
 
-pub fn confirm_dialog(question: impl Into<SharedString>, theme: &UiTheme) -> Div {
+pub fn confirm_dialog(question: impl Into<SharedString>, palette: &UiPalette) -> Div {
     div()
         .absolute()
         .inset_0()
         .flex()
         .items_start()
         .justify_center()
-        .pt(relative(0.2))
+        .pt(relative(TOP_FRACTION))
         .child(
             div()
                 .w(px(WIDTH))
                 .flex()
                 .flex_col()
-                .gap(px(6.))
-                .px(px(16.))
-                .py(px(12.))
-                .bg(theme.editor_bg)
+                .gap(px(GAP))
+                .px(px(HORIZONTAL_PADDING))
+                .py(px(VERTICAL_PADDING))
+                .bg(palette.surface)
                 .border_1()
-                .border_color(theme.line_number)
-                .rounded(px(6.))
+                .border_color(palette.border)
+                .rounded(px(RADIUS))
                 .shadow_lg()
                 .font_family(FAMILY)
-                .text_size(px(13.))
-                .text_color(theme.editor_fg)
+                .text_size(px(TEXT_SIZE))
+                .text_color(palette.primary)
                 .child(question.into())
                 .child(
                     div()
-                        .text_color(theme.line_number)
+                        .text_color(palette.muted)
                         .child("[Enter] yes / [Esc] no"),
                 ),
         )
