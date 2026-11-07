@@ -35,6 +35,8 @@ pub struct Palette<Color = Rgba> {
     pub limitation_tag: Pill<Color>,
     pub untested_tag: Pill<Color>,
     pub upkeep_tag: Pill<Color>,
+    /// A Warning notification.
+    pub warning: Pill<Color>,
     pub key_label_background: Color,
     pub key_label_border: Color,
     pub tree_guide_line: Color,
@@ -75,6 +77,7 @@ impl<Color: Copy> Palette<Color> {
             limitation_tag: self.limitation_tag.map(convert),
             untested_tag: self.untested_tag.map(convert),
             upkeep_tag: self.upkeep_tag.map(convert),
+            warning: self.warning.map(convert),
             key_label_background: convert(self.key_label_background),
             key_label_border: convert(self.key_label_border),
             tree_guide_line: convert(self.tree_guide_line),

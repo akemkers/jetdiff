@@ -45,9 +45,6 @@ impl Theme {
             // Between base and selected, since surface0 is almost the same as selected
             tree_selection_inactive: rgb(0x2A2B3C),
             commit_graph: rgb(TEAL),
-            notification_info_background: rgb(GREEN),
-            notification_warning_background: rgb(YELLOW),
-            notification_foreground: base,
             file_added: rgb(GREEN),
             file_deleted: rgb(SURFACE2),
             file_modified: rgb(BLUE),
@@ -116,6 +113,8 @@ fn palette() -> Palette {
         untested_tag: pill(0x3e1f2a, 0xf5a3b6),
         // Upkeep has no color of its own in the design, so it gets the quiet one
         upkeep_tag: pill(0x262a36, 0xd4d7e1),
+        // Starts from the limitation tag
+        warning: pill(0x3f2818, 0xf5ad80),
         key_label_background: rgb(0x262a36),
         key_label_border: rgb(0x30354a),
         tree_guide_line: rgb(0x2f3445),

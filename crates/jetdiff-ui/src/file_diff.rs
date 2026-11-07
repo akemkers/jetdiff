@@ -615,7 +615,7 @@ impl Render for FileDiffView {
         });
         let overlay = self.overlay.as_ref().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
-            Overlay::Confirm(_) => confirm_dialog("Roll back this hunk?", &theme),
+            Overlay::Confirm(_) => confirm_dialog("Roll back this hunk?", &theme.palette),
         });
 
         div()
