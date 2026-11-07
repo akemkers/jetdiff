@@ -8,6 +8,7 @@ use tree_sitter_highlight::{HighlightConfiguration, HighlightEvent, Highlighter}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
+    Dockerfile,
     Go,
     Java,
     JavaScript,
@@ -16,6 +17,7 @@ pub enum Language {
     Markdown,
     Python,
     Rust,
+    Sql,
     Toml,
     Tsx,
     TypeScript,
@@ -24,7 +26,8 @@ pub enum Language {
 }
 
 /// The same order as the enum, so `language as usize` is the index.
-const LANGUAGES: [Language; 13] = [
+const LANGUAGES: [Language; 15] = [
+    Language::Dockerfile,
     Language::Go,
     Language::Java,
     Language::JavaScript,
@@ -33,6 +36,7 @@ const LANGUAGES: [Language; 13] = [
     Language::Markdown,
     Language::Python,
     Language::Rust,
+    Language::Sql,
     Language::Toml,
     Language::Tsx,
     Language::TypeScript,
@@ -42,7 +46,11 @@ const LANGUAGES: [Language; 13] = [
 
 impl Language {
     pub fn from_path(path: &str) -> Option<Self> {
-        let extension = path.rsplit_once('.')?.1;
+        let name = path.rsplit('/').next().unwrap_or(path);
+        if is_dockerfile(name) {
+            return Some(Self::Dockerfile);
+        }
+        let extension = name.rsplit_once('.')?.1;
         Some(match extension.to_ascii_lowercase().as_str() {
             "go" => Self::Go,
             "java" => Self::Java,
@@ -52,6 +60,7 @@ impl Language {
             "md" | "markdown" => Self::Markdown,
             "py" | "pyi" | "pyw" => Self::Python,
             "rs" => Self::Rust,
+            "sql" => Self::Sql,
             "toml" => Self::Toml,
             "tsx" => Self::Tsx,
             "ts" | "mts" | "cts" => Self::TypeScript,
@@ -60,6 +69,16 @@ impl Language {
             _ => return None,
         })
     }
+}
+
+/// `Dockerfile`, `Containerfile`, `Dockerfile.dev` and `app.dockerfile`.
+fn is_dockerfile(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    let stem = name.split('.').next().unwrap_or_default();
+    let extension = name.rsplit('.').next().unwrap_or_default();
+    ["dockerfile", "containerfile"]
+        .iter()
+        .any(|known| stem == *known || extension == *known)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,6 +213,11 @@ fn build(language: Language) -> HighlightConfiguration {
     const JAVASCRIPT: &str = include_str!("../queries/javascript.scm");
     const TYPESCRIPT: &str = include_str!("../queries/typescript.scm");
     let (grammar, highlights, injections) = match language {
+        Dockerfile => (
+            tree_sitter_containerfile::LANGUAGE,
+            include_str!("../queries/dockerfile.scm").to_owned(),
+            "",
+        ),
         Go => (
             tree_sitter_go::LANGUAGE,
             include_str!("../queries/go.scm").to_owned(),
@@ -228,6 +252,11 @@ fn build(language: Language) -> HighlightConfiguration {
         Rust => (
             tree_sitter_rust::LANGUAGE,
             include_str!("../queries/rust.scm").to_owned(),
+            "",
+        ),
+        Sql => (
+            tree_sitter_sequel::LANGUAGE,
+            include_str!("../queries/sql.scm").to_owned(),
             "",
         ),
         Toml => (
@@ -717,6 +746,71 @@ mod tests {
             "{\"name\": \"v\"}",
             &[("\"name\"", Token::Property), ("\"v\"", Token::String)],
         );
+    }
+
+    #[test]
+    fn sql() {
+        use Token::*;
+        let text = "-- c\n/* b */\nCREATE TABLE a (id INT PRIMARY KEY, n VARCHAR(10));\n\
+            SELECT count(*), 'x' FROM a WHERE id >= 42 AND n IS NOT NULL;\n";
+        has(
+            Language::Sql,
+            text,
+            &[
+                ("-- c", Comment),
+                ("/* b */", Comment),
+                ("CREATE", Keyword),
+                ("INT", Keyword),
+                ("VARCHAR", Keyword),
+                ("count", FunctionCall),
+                ("'x'", String),
+                ("42", Number),
+                (">=", Operator),
+                ("NULL", Keyword),
+                (";", Punctuation),
+            ],
+        );
+        lacks(Language::Sql, text, &["a", "id", "n"]);
+        assert_eq!(Language::from_path("db/V1__init.SQL"), Some(Language::Sql));
+    }
+
+    #[test]
+    fn dockerfile() {
+        use Token::*;
+        let text = "# c\nFROM rust:1.80 AS build\nARG MODE=release\n\
+            RUN cargo build\nWORKDIR /out/${MODE}\nEXPOSE 8080\nCMD [\"app\", \"--a\\tb\"]\n";
+        has(
+            Language::Dockerfile,
+            text,
+            &[
+                ("# c\n", Comment),
+                ("FROM", Keyword),
+                ("AS", Keyword),
+                ("RUN", Keyword),
+                ("${MODE}", Property),
+                ("8080", Number),
+                ("\"app\"", String),
+                ("\\t", Escape),
+            ],
+        );
+        lacks(Language::Dockerfile, text, &["build", "cargo"]);
+    }
+
+    #[test]
+    fn dockerfile_names() {
+        for path in [
+            "Dockerfile",
+            "a/Containerfile",
+            "Dockerfile.dev",
+            "app.dockerfile",
+        ] {
+            assert_eq!(
+                Language::from_path(path),
+                Some(Language::Dockerfile),
+                "{path}"
+            );
+        }
+        assert_eq!(Language::from_path("dockerfiles/a.txt"), None);
     }
 
     #[test]

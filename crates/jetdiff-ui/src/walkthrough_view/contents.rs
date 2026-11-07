@@ -5,10 +5,9 @@
 use gpui::{Context, Div, FontWeight, SharedString, Stateful, div, prelude::*, px, relative};
 use jetdiff_app::walkthrough::{ContentsRow, Reading, Weight};
 
-use super::prose::SANS;
 use super::{WalkthroughView, plural};
 use crate::settings::Settings;
-use crate::text::FAMILY;
+use crate::text::{FAMILY, SANS};
 use crate::theme::UiPalette;
 
 const WIDTH: f32 = 300.;

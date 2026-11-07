@@ -5,11 +5,8 @@ use std::ops::Range;
 
 use gpui::{Font, FontWeight, Hsla, StyledText, TextRun, font};
 
-use crate::text::FAMILY;
+use crate::text::{FAMILY, SANS};
 use crate::theme::UiPalette;
-
-/// The system's own sans, so prose doesn't read like code.
-pub(super) const SANS: &str = ".SystemUIFont";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Mark {

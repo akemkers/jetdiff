@@ -1,6 +1,6 @@
 //! File tree and diff next to each other, with the commit list under the tree. Loads the selected file, and reads
 //! the repo source again when a row in the commit list is selected, a hunk is rolled back, files change on disk
-//! or HEAD moves. `w` shows the walkthrough in their place.
+//! or HEAD moves. `w` shows the walkthrough in their place. The keymap bar spans the window under both.
 
 mod walkthrough;
 
@@ -8,6 +8,7 @@ use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
     Window, actions, div, prelude::*, px,
 };
+use jetdiff_app::help::{DIFF_KEYMAP_BAR, WALKTHROUGH_KEYMAP_BAR};
 use jetdiff_app::{
     Applied, Commits, DiskChange, Notification, ReadJob, RepoSource, Show, Shown, empty_diff,
 };
@@ -16,9 +17,8 @@ use jetdiff_viewmodel::metrics::FONT_SIZE;
 use crate::commit_list::{CommitList, SelectRow};
 use crate::confirm_dialog::confirm_dialog;
 use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
-use crate::file_header::file_header;
 use crate::file_tree::{FileTree, Selection};
-use crate::help::{HideHelp, ToggleHelp};
+use crate::help::{HideHelp, ToggleHelp, keymap_bar};
 use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::notification_slot_view::NotificationSlotView;
 use crate::settings::Settings;
@@ -411,11 +411,40 @@ impl Render for RepoView {
         let theme = cx.global::<Settings>().theme;
         let question = self
             .question
-            .map(|question| confirm_dialog(self.question_text(question, cx), &theme));
+            .map(|question| confirm_dialog(self.question_text(question, cx), &theme.palette));
+        let keys = match walkthrough {
+            Some(_) => WALKTHROUGH_KEYMAP_BAR.as_slice(),
+            None => DIFF_KEYMAP_BAR.as_slice(),
+        };
+        let keymap_bar = keymap_bar(
+            keys,
+            self.notification_slot.clone(),
+            &theme.palette,
+            self.scale,
+        );
+        let content = match walkthrough {
+            Some(walkthrough) => div().size_full().child(walkthrough),
+            None => div()
+                .size_full()
+                .flex()
+                .when(self.side_panel_open, |d| {
+                    d.child(self.side_panel(window, cx))
+                })
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .flex()
+                        .flex_col()
+                        .child(div().flex_1().min_h_0().child(self.diff.clone())),
+                ),
+        };
         div()
             .relative()
             .size_full()
             .flex()
+            .flex_col()
             .capture_key_down(cx.listener(Self::answer))
             .on_action(cx.listener(|this, _: &ToggleWalkthrough, window, cx| {
                 this.toggle_walkthrough(window, cx)
@@ -461,25 +490,8 @@ impl Render for RepoView {
                 this.diff.update(cx, |d, cx| d.hide_help(a, w, cx))
             }))
             .on_action(cx.listener(Self::toggle_diff_mode))
-            .map(|d| match walkthrough {
-                Some(walkthrough) => d.child(div().size_full().child(walkthrough)),
-                None => d
-                    .when(self.side_panel_open, |d| {
-                        d.child(self.side_panel(window, cx))
-                    })
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .h_full()
-                            .flex()
-                            .flex_col()
-                            .children(self.repo_source.shown().map(|file| {
-                                file_header(&file.path, self.scale, &cx.global::<Settings>().theme)
-                            }))
-                            .child(div().flex_1().min_h_0().child(self.diff.clone())),
-                    ),
-            })
+            .child(div().flex_1().min_h_0().child(content))
+            .child(keymap_bar)
             .children(question)
     }
 }

@@ -5,7 +5,6 @@ mod code_viewer;
 mod commit_list;
 mod confirm_dialog;
 mod file_diff;
-mod file_header;
 mod file_tree;
 mod help;
 mod icons;

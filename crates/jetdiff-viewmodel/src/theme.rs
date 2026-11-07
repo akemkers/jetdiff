@@ -43,10 +43,6 @@ pub struct Theme {
     pub tree_selection_inactive: Rgba,
     /// The line and dots in the commit list.
     pub commit_graph: Rgba,
-    /// Notification above the keymap bar. Warnings are yellow.
-    pub notification_info_background: Rgba,
-    pub notification_warning_background: Rgba,
-    pub notification_foreground: Rgba,
     /// `FileStatus` ADDED, DELETED and MODIFIED. Rename uses MODIFIED.
     pub file_added: Rgba,
     pub file_deleted: Rgba,

@@ -62,7 +62,7 @@ impl NotificationSlotView {
 impl Render for NotificationSlotView {
     /// Lies over the parent without taking space, so the content below doesn't jump.
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.global::<Settings>().theme;
+        let palette = cx.global::<Settings>().theme.palette;
         let now = Instant::now();
         let shown = self.slot.current(now).map(|content| match content {
             SlotContent::Notification(notification) => {
@@ -82,14 +82,14 @@ impl Render for NotificationSlotView {
             .left_0()
             .right_0()
             .children(shown.map(|(level, text)| {
+                let colors = level.colors(&palette);
                 div()
                     .px(px(HORIZONTAL_PADDING))
                     .py(px(VERTICAL_PADDING))
-                    .bg(match level {
-                        NotificationLevel::Info => theme.notification_info_background,
-                        NotificationLevel::Warning => theme.notification_warning_background,
-                    })
-                    .text_color(theme.notification_foreground)
+                    .bg(colors.background)
+                    .border_t_1()
+                    .border_color(palette.border)
+                    .text_color(colors.text)
                     .font_family(FAMILY)
                     .text_size(px(TEXT_SIZE))
                     .child(text)
