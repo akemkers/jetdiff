@@ -36,6 +36,7 @@ pub fn file_icon(path: &str) -> Icon {
         Some(Json) => ('\u{e80b}', 0xB589EC),
         Some(Kotlin) => ('\u{e634}', 0xA571E6),
         Some(Markdown) => ('\u{e609}', 0x548AF7),
+        Some(Python) => ('\u{e606}', 0x548AF7),
         Some(Sql) => ('\u{e706}', 0xB589EC),
         Some(Toml) => ('\u{e6b2}', 0x548AF7),
         Some(Tsx | TypeScript) => ('\u{e628}', 0x548AF7),
@@ -62,6 +63,7 @@ mod tests {
             "a.ts",
             "a.txt",
             "a.go",
+            "a.py",
             "a.sql",
             "Dockerfile",
         ] {

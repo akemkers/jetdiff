@@ -15,7 +15,7 @@ macro_rules! icons {
     };
 }
 
-const ICONS: [(&str, &[u8]); 18] = icons!(
+const ICONS: [(&str, &[u8]); 19] = icons!(
     "branch",
     "chevronDown",
     "chevronRight",
@@ -27,6 +27,7 @@ const ICONS: [(&str, &[u8]); 18] = icons!(
     "json",
     "kotlin",
     "markdown",
+    "python",
     "rust",
     "sql",
     "text",
@@ -60,6 +61,7 @@ pub fn file_icon(path: &str) -> String {
         Some(Json) => "json",
         Some(Kotlin) => "kotlin",
         Some(Markdown) => "markdown",
+        Some(Python) => "python",
         Some(Sql) => "sql",
         Some(Toml) => "toml",
         Some(Tsx | TypeScript) => "typeScript",
@@ -112,6 +114,7 @@ mod tests {
             "a.json",
             "a.kt",
             "a.md",
+            "a.py",
             "a.rs",
             "a.sql",
             "a.toml",

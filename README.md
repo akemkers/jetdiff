@@ -51,7 +51,7 @@ Branch and Local changes are read again automatically when files change on disk,
 
 Unchanged lines are folded, with 4 lines of context. Click a fold to open it. Unified has no folding.
 
-Syntax colors for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, JSON, YAML, TOML, XML, Markdown, SQL and Dockerfile. The language is picked from the file extension, or the file name for `Dockerfile` and `Containerfile`.
+Syntax colors for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, Python, JSON, YAML, TOML, XML, Markdown, SQL and Dockerfile. The language is picked from the file extension, or the file name for `Dockerfile` and `Containerfile`.
 
 ### Settings
 

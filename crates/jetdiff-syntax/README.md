@@ -21,7 +21,7 @@ if let Some(lang) = Language::from_path("src/main.rs") {
 }
 ```
 
-Languages: Kotlin, Java, TypeScript, TSX, JavaScript, Rust, Go, JSON, YAML, TOML, XML, Markdown, SQL and Dockerfile.
+Languages: Kotlin, Java, TypeScript, TSX, JavaScript, Rust, Go, Python, JSON, YAML, TOML, XML, Markdown, SQL and Dockerfile.
 
 The queries are in `queries/`, one per language. They are written for jetdiff, not taken from the grammars, so they hit IntelliJ's categories.
 
