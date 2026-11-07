@@ -1,9 +1,9 @@
 //! What the tree and the commit list have in common: sizes, keys and how the selection and the
 //! cursor look.
 
-use gpui::{Div, FontWeight, Hsla, KeyDownEvent, Stateful, prelude::*};
+use gpui::{Div, FontWeight, KeyDownEvent, Stateful, prelude::*};
 
-use crate::theme::{UiPalette, UiTheme};
+use crate::theme::UiPalette;
 
 pub const ROW_HEIGHT: f32 = 22.;
 pub const TEXT_SIZE: f32 = 14.;
@@ -26,17 +26,6 @@ pub fn list_key(ev: &KeyDownEvent) -> Option<ListKey> {
         "k" | "up" => Some(ListKey::Up),
         "enter" | "l" => Some(ListKey::Select),
         _ => None,
-    }
-}
-
-/// The cursor is shown only with focus. The selection is fainter.
-pub fn row_bg(theme: &UiTheme, cursor: bool, selected: bool, focused: bool) -> Option<Hsla> {
-    if focused && cursor {
-        Some(theme.tree_selection)
-    } else if selected {
-        Some(theme.tree_selection_inactive)
-    } else {
-        None
     }
 }
 
