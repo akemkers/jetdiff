@@ -15,12 +15,11 @@ macro_rules! icons {
     };
 }
 
-const ICONS: [(&str, &[u8]); 19] = icons!(
+const ICONS: [(&str, &[u8]); 18] = icons!(
     "branch",
     "chevronDown",
     "chevronRight",
     "docker",
-    "folder",
     "go",
     "java",
     "javaScript",
@@ -82,10 +81,6 @@ pub fn branch_icon() -> String {
     icon("branch")
 }
 
-pub fn folder_icon() -> String {
-    icon("folder")
-}
-
 fn icon(name: &str) -> String {
     format!("{name}.svg")
 }
@@ -101,7 +96,6 @@ mod tests {
         assert_eq!(file_icon("main.rs"), "rust.svg");
         assert_eq!(file_icon("main.go"), "go.svg");
         assert_eq!(file_icon("Makefile"), "text.svg");
-        assert_eq!(folder_icon(), "folder.svg");
         assert_eq!(branch_icon(), "branch.svg");
     }
 

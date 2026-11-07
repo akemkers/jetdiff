@@ -11,13 +11,13 @@ use crate::theme::{UiPalette, UiTheme};
 actions!(jetdiff, [ToggleHelp, HideHelp]);
 
 /// The bar keeps one height in both modes, so it doesn't wrap.
-pub const KEYMAP_BAR_HEIGHT: f32 = 44.;
+pub const KEYMAP_BAR_HEIGHT: f32 = 48.;
 const KEYMAP_BAR_PADDING: f32 = 16.;
 const KEYS_GAP: f32 = 16.;
 const LABEL_GAP: f32 = 4.;
-const TEXT_SIZE: f32 = 12.;
-const KEY_LABEL_TEXT_SIZE: f32 = 11.;
-const KEY_LABEL_PADDING: f32 = 5.;
+const TEXT_SIZE: f32 = 14.;
+const KEY_LABEL_TEXT_SIZE: f32 = 13.;
+const KEY_LABEL_PADDING: f32 = 6.;
 const KEY_LABEL_RADIUS: f32 = 4.;
 
 /// Sizes in the popup. Gives two columns with sections.
