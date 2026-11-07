@@ -7,10 +7,10 @@ use crate::help::key_label;
 use crate::text::SANS;
 use crate::theme::UiPalette;
 
-const HEIGHT: f32 = 24.;
-const PADDING: f32 = 10.;
+const HEIGHT: f32 = 30.;
+const PADDING: f32 = 12.;
 const RADIUS: f32 = 5.;
-const TEXT_SIZE: f32 = 12.;
+const TEXT_SIZE: f32 = 14.;
 const DIMMED_OPACITY: f32 = 0.4;
 const KEY_LABEL_GAP: f32 = 6.;
 

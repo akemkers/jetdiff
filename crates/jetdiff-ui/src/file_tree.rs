@@ -5,22 +5,25 @@ use std::rc::Rc;
 
 use gpui::{
     App, Context, Entity, FocusHandle, Focusable, Hsla, ImageSource, KeyDownEvent, Render,
-    Resource, ScrollStrategy, Subscription, UniformListScrollHandle, Window, div, img, prelude::*,
-    px, uniform_list,
+    Resource, ScrollStrategy, Subscription, TextRun, UniformListScrollHandle, Window, div, font,
+    img, prelude::*, px, uniform_list,
 };
-use jetdiff_app::{Files, count_label, file_name};
+use jetdiff_app::{Files, file_name};
 use jetdiff_files::{ChangedFile, FileStatus, RowKind, Tree};
-use jetdiff_viewmodel::columns::display_width;
 
-use crate::icons::{chevron_icon, file_icon, folder_icon};
-use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, ROW_HEIGHT, TEXT_SIZE, list_key, row_bg};
+use crate::icons::{chevron_icon, file_icon};
+use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, list_key, selection_and_cursor};
 use crate::settings::Settings;
-use crate::text::FAMILY;
-use crate::text::TextStyle;
-use crate::theme::UiTheme;
+use crate::text::SANS;
+use crate::theme::UiPalette;
 
-const INDENT: f32 = 16.;
+const INDENT: f32 = 17.;
 const ICON_SIZE: f32 = 16.;
+const TEXT_SIZE: f32 = 14.;
+const ROW_HEIGHT: f32 = 26.;
+const GUIDE_LINE_WIDTH: f32 = 1.;
+/// The outline of the cursor, on both sides of the row.
+const CURSOR_OUTLINE: f32 = 2.;
 
 /// The selected file, an index in the changed files. `None` when the list is empty. The tree and RepoView
 /// observe it.
@@ -102,19 +105,32 @@ impl FileTree {
         }
     }
 
-    /// The width the content needs, unscaled.
+    /// The width the content needs, unscaled, measured in the font the rows use.
     pub fn content_width(&mut self, window: &Window) -> f32 {
         *self.content_width.get_or_insert_with(|| {
-            let char_width = TextStyle::new(TEXT_SIZE, window).char_width;
-            content_width(self.files.changed_files(), char_width)
+            let measure = |text: &str| {
+                let run = TextRun {
+                    len: text.len(),
+                    font: font(SANS),
+                    color: Hsla::default(),
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                };
+                let line = window
+                    .text_system()
+                    .layout_line(text, px(TEXT_SIZE), &[run], None);
+                f32::from(line.width)
+            };
+            content_width(self.files.changed_files(), measure)
         })
     }
 
-    fn status_color(theme: &UiTheme, status: FileStatus) -> Hsla {
+    fn status_color(palette: &UiPalette, status: FileStatus) -> Hsla {
         match status {
-            FileStatus::Added => theme.file_added,
-            FileStatus::Deleted => theme.file_deleted,
-            FileStatus::Modified | FileStatus::Renamed => theme.file_modified,
+            FileStatus::Added => palette.added_pill.text,
+            FileStatus::Deleted => palette.deleted_pill.text,
+            FileStatus::Modified | FileStatus::Renamed => palette.primary,
         }
     }
 
@@ -144,7 +160,7 @@ impl FileTree {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let row = &self.files.rows()[i];
-        let theme = cx.global::<Settings>().theme;
+        let palette = cx.global::<Settings>().theme.palette;
         let s = |v: f32| px(v * self.scale);
         // Explicitly Embedded, otherwise GPUI reads `java.svg` as a URI and fetches it over HTTP
         let icon = |path: String| {
@@ -152,55 +168,66 @@ impl FileTree {
                 .size(s(ICON_SIZE))
                 .flex_none()
         };
+        let is_selected = selected.is_some_and(|file| row.kind == RowKind::File(file));
+        let guide_lines = (0..row.depth).map(|level| {
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left(s(PAD_LEFT
+                    + level as f32 * INDENT
+                    + (ICON_SIZE - GUIDE_LINE_WIDTH) / 2.))
+                .w(s(GUIDE_LINE_WIDTH))
+                .bg(palette.tree_guide_line)
+        });
         let base = div()
             .id(i)
+            .relative()
             .h(s(ROW_HEIGHT))
             .w_full()
             .flex()
             .items_center()
             .gap(s(GAP))
             .pl(s(PAD_LEFT + row.depth as f32 * INDENT))
+            .pr(s(PAD_RIGHT))
             .whitespace_nowrap()
             .overflow_hidden()
-            .when_some(
-                row_bg(
-                    &theme,
-                    i == self.files.cursor(),
-                    selected.is_some_and(|f| row.kind == RowKind::File(f)),
-                    focused,
-                ),
-                |d, bg| d.bg(bg),
-            )
+            .children(guide_lines)
             .on_click(cx.listener(move |this, _, _, cx| {
                 let file = this.files.select(i);
                 this.selected(file, cx)
             }));
+        let base = selection_and_cursor(
+            base,
+            is_selected,
+            i == self.files.cursor(),
+            focused,
+            &palette,
+        );
         match &row.kind {
             RowKind::Dir {
                 name, count, open, ..
             } => base
+                .text_color(palette.secondary)
                 .child(icon(chevron_icon(*open)))
-                .child(icon(folder_icon()))
                 .child(name.clone())
-                .child(
-                    div()
-                        .pl(s(2.))
-                        .text_color(theme.line_number)
-                        .child(count_label(*count)),
-                ),
-            &RowKind::File(f) => {
-                let file = &self.files.changed_files()[f];
-                let name = file_name(&file.path);
-                // The space where the folders have the arrow, so the icons line up under each other
-                base.child(div().w(s(ICON_SIZE)).flex_none())
-                    .child(icon(file_icon(&file.path)))
+                .child(div().flex_1())
+                .child(div().text_color(palette.muted).child(count.to_string())),
+            &RowKind::File(file) => {
+                let file = &self.files.changed_files()[file];
+                let name_color = if is_selected {
+                    palette.strong
+                } else {
+                    Self::status_color(&palette, file.status)
+                };
+                base.child(icon(file_icon(&file.path)))
                     .child(
                         div()
-                            .text_color(Self::status_color(&theme, file.status))
-                            .child(name.to_owned()),
+                            .text_color(name_color)
+                            .child(file_name(&file.path).to_owned()),
                     )
-                    .when_some(file.renamed_from_label(), |d, from| {
-                        d.child(div().pl(s(2.)).text_color(theme.line_number).child(from))
+                    .when_some(file.renamed_from_label(), |row, from| {
+                        row.child(div().text_color(palette.muted).child(from))
                     })
             }
         }
@@ -220,9 +247,9 @@ impl Render for FileTree {
             .size_full()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))
-            .font_family(FAMILY)
+            .font_family(SANS)
             .text_size(px(TEXT_SIZE * self.scale))
-            .text_color(cx.global::<Settings>().theme.editor_fg)
+            .text_color(cx.global::<Settings>().theme.palette.primary)
             .child(
                 uniform_list(
                     "files",
@@ -240,30 +267,29 @@ impl Render for FileTree {
     }
 }
 
-/// The width that fits all rows with all folders open, unscaled. The font is monospace.
-fn content_width(changed_files: &[ChangedFile], char_width: f32) -> f32 {
-    let text = |s: &str| display_width(s) as f32 * char_width;
-    let icons = 2. * (ICON_SIZE + GAP);
+/// The width that fits all rows with all folders open, unscaled.
+fn content_width(changed_files: &[ChangedFile], measure: impl Fn(&str) -> f32) -> f32 {
     Tree::new(changed_files)
         .rows()
         .iter()
-        .map(|r| {
-            let row = match &r.kind {
+        .map(|row| {
+            let content = match &row.kind {
                 RowKind::Dir { name, count, .. } => {
-                    icons + text(name) + GAP + 2. + text(&count_label(*count))
+                    ICON_SIZE + GAP + measure(name) + GAP + measure(&count.to_string())
                 }
-                &RowKind::File(f) => {
-                    let file = &changed_files[f];
+                &RowKind::File(file) => {
+                    let file = &changed_files[file];
                     let from = file
                         .renamed_from_label()
-                        .map_or(0., |label| GAP + 2. + text(&label));
-                    icons + text(file_name(&file.path)) + from
+                        .map_or(0., |label| GAP + measure(&label));
+                    ICON_SIZE + GAP + measure(file_name(&file.path)) + from
                 }
             };
-            PAD_LEFT + r.depth as f32 * INDENT + row
+            PAD_LEFT + row.depth as f32 * INDENT + content
         })
         .fold(0., f32::max)
         + PAD_RIGHT
+        + CURSOR_OUTLINE
 }
 
 #[cfg(test)]
@@ -277,14 +303,16 @@ mod tests {
             renamed_from: None,
             status: FileStatus::Modified,
         };
-        // The folder `src` with «1 file» is wider than `a.rs` one level in
-        let dir = PAD_LEFT + 2. * (ICON_SIZE + GAP) + 30. + GAP + 2. + 60.;
+        let measure = |text: &str| text.chars().count() as f32 * 10.;
+        let edges = PAD_LEFT + PAD_RIGHT + CURSOR_OUTLINE;
+        // The folder `source` with its count 1 is wider than `a.rs` one level in
+        let folder = ICON_SIZE + GAP + 60. + GAP + 10.;
         assert_eq!(
-            content_width(&[changed_file("src/a.rs")], 10.),
-            dir + PAD_RIGHT
+            content_width(&[changed_file("source/a.rs")], measure),
+            edges + folder
         );
-        let file = PAD_LEFT + INDENT + 2. * (ICON_SIZE + GAP) + 200.;
         let long = format!("src/{}.rs", "x".repeat(17));
-        assert_eq!(content_width(&[changed_file(&long)], 10.), file + PAD_RIGHT);
+        let file = INDENT + ICON_SIZE + GAP + 200.;
+        assert_eq!(content_width(&[changed_file(&long)], measure), edges + file);
     }
 }

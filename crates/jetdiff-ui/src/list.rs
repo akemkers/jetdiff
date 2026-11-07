@@ -1,8 +1,9 @@
-//! What the tree and the commit list have in common: sizes, keys and row colors.
+//! What the tree and the commit list have in common: sizes, keys and how the selection and the
+//! cursor look.
 
-use gpui::{Hsla, KeyDownEvent};
+use gpui::{Div, FontWeight, Hsla, KeyDownEvent, Stateful, prelude::*};
 
-use crate::theme::UiTheme;
+use crate::theme::{UiPalette, UiTheme};
 
 pub const ROW_HEIGHT: f32 = 22.;
 pub const TEXT_SIZE: f32 = 14.;
@@ -37,4 +38,27 @@ pub fn row_bg(theme: &UiTheme, cursor: bool, selected: bool, focused: bool) -> O
     } else {
         None
     }
+}
+
+/// The selection is filled, whatever else the row shows. The cursor, shown only with focus, is an
+/// outline in the accent color. On the same row both show. Text in the row that has a color of its
+/// own takes the strong color while selected.
+pub fn selection_and_cursor(
+    row: Stateful<Div>,
+    selected: bool,
+    cursor: bool,
+    focused: bool,
+    palette: &UiPalette,
+) -> Stateful<Div> {
+    row.border_1()
+        .border_color(if cursor && focused {
+            palette.accent
+        } else {
+            gpui::transparent_black()
+        })
+        .when(selected, |row| {
+            row.bg(palette.selected)
+                .text_color(palette.strong)
+                .font_weight(FontWeight::SEMIBOLD)
+        })
 }
