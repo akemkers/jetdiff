@@ -30,11 +30,13 @@ pub fn branch_icon() -> Icon {
 pub fn file_icon(path: &str) -> Icon {
     use Language::*;
     let (glyph, color) = match Language::from_path(path) {
+        Some(Dockerfile) => ('\u{e7b0}', 0x548AF7),
         Some(Java) => ('\u{e738}', 0xC77D55),
         Some(JavaScript) => ('\u{e60c}', 0xF2C55C),
         Some(Json) => ('\u{e80b}', 0xB589EC),
         Some(Kotlin) => ('\u{e634}', 0xA571E6),
         Some(Markdown) => ('\u{e609}', 0x548AF7),
+        Some(Sql) => ('\u{e706}', 0xB589EC),
         Some(Toml) => ('\u{e6b2}', 0x548AF7),
         Some(Tsx | TypeScript) => ('\u{e628}', 0x548AF7),
         Some(Xml) => ('\u{e619}', 0xC77D55),
@@ -54,7 +56,15 @@ mod tests {
 
     #[test]
     fn the_icons_are_one_column() {
-        for path in ["a.rs", "a.kt", "a.ts", "a.txt", "a.go"] {
+        for path in [
+            "a.rs",
+            "a.kt",
+            "a.ts",
+            "a.txt",
+            "a.go",
+            "a.sql",
+            "Dockerfile",
+        ] {
             assert_eq!(file_icon(path).glyph.width(), Some(1), "{path}");
         }
         assert_eq!(folder_icon().glyph.width(), Some(1));
