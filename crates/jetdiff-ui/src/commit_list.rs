@@ -23,6 +23,8 @@ const AGE_SIZE: f32 = 12.;
 const LANE_WIDTH: f32 = 16.;
 const LINE_WIDTH: f32 = 2.;
 const DOT_SIZE: f32 = 8.;
+/// The cursor's outline. The line reaches across it, so it stays connected between rows.
+const CURSOR_OUTLINE: f32 = 1.;
 /// Per level, so the slices sit one lane in under Branch.
 const INDENT: f32 = LANE_WIDTH;
 
@@ -186,9 +188,10 @@ impl CommitList {
                 .absolute()
                 .left(s((LANE_WIDTH - LINE_WIDTH) / 2.))
                 .w(s(LINE_WIDTH))
-                .h(relative(0.5))
                 .bg(color)
         };
+        let up = || line().top(px(-CURSOR_OUTLINE)).bottom(relative(0.5));
+        let down = || line().top(relative(0.5)).bottom(px(-CURSOR_OUTLINE));
         let is_commit = matches!(row, CommitRow::Commit(_));
         let dot = div().size(s(DOT_SIZE)).rounded_full().map(|dot| {
             if is_commit {
@@ -203,10 +206,8 @@ impl CommitList {
                     })
             }
         });
-        lane.when(is_commit, |lane| lane.child(line().top_0()))
-            .when(i + 1 < self.commits.len(), |lane| {
-                lane.child(line().bottom_0())
-            })
+        lane.when(is_commit, |lane| lane.child(up()))
+            .when(i + 1 < self.commits.len(), |lane| lane.child(down()))
             .child(dot)
     }
 }
