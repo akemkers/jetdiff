@@ -1,6 +1,7 @@
 //! The walkthrough view: the diff read as steps, one page each, with the step's code under its
-//! explanation and the contents on the left. It reads the diff, and writes the walkthrough when asked
-//! to, while the diff is shown. Whoever shows it asks first and tells how it goes.
+//! explanation. Its contents are drawn in the side panel. It reads the diff, and writes the
+//! walkthrough when asked to, while the diff is shown. Whoever shows it asks first and tells how it
+//! goes.
 
 mod contents;
 mod notes;

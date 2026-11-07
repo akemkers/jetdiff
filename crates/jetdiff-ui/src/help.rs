@@ -70,7 +70,7 @@ pub fn keymap_bar(
         .child(notification_slot)
 }
 
-fn key_label(key: &'static str, palette: &UiPalette, scale: f32) -> Div {
+pub(crate) fn key_label(key: &'static str, palette: &UiPalette, scale: f32) -> Div {
     let scaled = |size: f32| px(size * scale);
     div()
         .px(scaled(KEY_LABEL_PADDING))

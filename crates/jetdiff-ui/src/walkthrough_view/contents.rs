@@ -1,16 +1,15 @@
-//! The contents on the left: the overview, each part with its steps, and the files no step covers. A
+//! The contents in the side panel: the overview, each part with its steps, and the files no step covers. A
 //! step's box has its number, and a check once it has been read. At the bottom, what the marks mean,
 //! and how much is read. A click on a row goes to its page.
 
 use gpui::{Context, Div, FontWeight, SharedString, Stateful, div, prelude::*, px, relative};
 use jetdiff_app::walkthrough::{ContentsRow, Reading, Weight};
 
-use super::{WalkthroughView, plural};
+use super::{State, WalkthroughView, plural};
 use crate::settings::Settings;
 use crate::text::{FAMILY, SANS};
 use crate::theme::UiPalette;
 
-const WIDTH: f32 = 300.;
 const PADDING: f32 = 14.;
 const TEXT_SIZE: f32 = 14.;
 const LINE_HEIGHT: f32 = 20.;
@@ -23,7 +22,11 @@ const KEY_DOT_SIZE: f32 = 8.;
 const PROGRESS_HEIGHT: f32 = 4.;
 
 impl WalkthroughView {
-    pub(super) fn contents(&self, reading: &Reading, cx: &mut Context<Self>) -> Div {
+    /// `None` until the walkthrough is written. The side panel gives the width and the background.
+    pub(crate) fn contents(&self, cx: &mut Context<Self>) -> Option<Div> {
+        let State::Ready(reading) = &self.state else {
+            return None;
+        };
         let s = |v: f32| px(v * self.scale);
         let palette = cx.global::<Settings>().theme.palette;
         let mut rows = Vec::new();
@@ -91,15 +94,10 @@ impl WalkthroughView {
             };
             rows.push(element);
         }
-        div()
-            .flex_none()
-            .w(s(WIDTH))
-            .h_full()
+        let contents = div()
+            .size_full()
             .flex()
             .flex_col()
-            .bg(palette.surface)
-            .border_r_1()
-            .border_color(palette.border)
             .font_family(SANS)
             .text_size(s(TEXT_SIZE))
             .line_height(s(LINE_HEIGHT))
@@ -116,7 +114,8 @@ impl WalkthroughView {
                     .gap(s(2.))
                     .children(rows),
             )
-            .child(self.key(reading, &palette))
+            .child(self.key(reading, &palette));
+        Some(contents)
     }
 
     /// A row that goes to `page` when clicked. The selected one stands out.

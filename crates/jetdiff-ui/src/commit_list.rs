@@ -200,7 +200,7 @@ impl CommitList {
                     d.border(s(LINE_WIDTH))
                         .border_color(color)
                         // Covers the line below, in the same color as the row
-                        .bg(bg.unwrap_or(theme.editor_bg))
+                        .bg(bg.unwrap_or(theme.palette.surface))
                 }
             });
         lane.when(is_commit, |d| d.child(line().top_0()))

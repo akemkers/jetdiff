@@ -1,12 +1,14 @@
-//! File tree and diff next to each other, with the commit list under the tree. Loads the selected file, and reads
-//! the repo source again when a row in the commit list is selected, a hunk is rolled back, files change on disk
-//! or HEAD moves. `w` shows the walkthrough in their place. The keymap bar spans the window under both.
+//! The side panel and the diff next to each other. Loads the selected file, and reads the repo source
+//! again when a row in the commit list is selected, a hunk is rolled back, files change on disk or
+//! HEAD moves. `w` shows the walkthrough in place of the diff, and its contents in the side panel. The
+//! keymap bar spans the window under both.
 
+mod side_panel;
 mod walkthrough;
 
 use gpui::{
-    App, Context, Div, Entity, FocusHandle, Focusable, Render, Stateful, Subscription, Task,
-    Window, actions, div, prelude::*, px,
+    AnyElement, App, Context, Entity, FocusHandle, Focusable, Render, Subscription, Task, Window,
+    actions, div, prelude::*,
 };
 use jetdiff_app::help::{DIFF_KEYMAP_BAR, WALKTHROUGH_KEYMAP_BAR};
 use jetdiff_app::{
@@ -19,11 +21,9 @@ use crate::confirm_dialog::confirm_dialog;
 use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp, keymap_bar};
-use crate::list::{GAP, PAD_LEFT, ROW_HEIGHT, TEXT_SIZE};
 use crate::notification_slot_view::NotificationSlotView;
 use crate::settings::Settings;
 use crate::side_panel_size::{SectionHeight, SidePanelWidth};
-use crate::text::FAMILY;
 use crate::watcher::Watcher;
 
 // Vim's window keys, and file and commit switching. The tree and the commit list are on the left, the diff on the right.
@@ -274,7 +274,7 @@ impl RepoView {
         cx: &mut Context<Self>,
     ) {
         self.side_panel_open = !self.side_panel_open;
-        if !self.side_panel_open {
+        if !self.side_panel_open && self.walkthrough_view().is_none() {
             window.focus(&self.diff.focus_handle(cx));
         }
         cx.notify();
@@ -308,95 +308,6 @@ impl RepoView {
             window.focus(&tree);
         }
     }
-
-    /// Heading with + or −. A click opens or closes the section.
-    fn heading(
-        &self,
-        title: &'static str,
-        open: bool,
-        cx: &mut Context<Self>,
-        toggle: fn(&mut Self) -> &mut bool,
-    ) -> Stateful<Div> {
-        let s = |v: f32| px(v * self.scale);
-        div()
-            .id(title)
-            .flex_none()
-            .h(s(ROW_HEIGHT))
-            .flex()
-            .items_center()
-            .gap(s(GAP))
-            .pl(s(PAD_LEFT))
-            .text_color(cx.global::<Settings>().theme.line_number)
-            .cursor_pointer()
-            .child(title)
-            .child(if open { "−" } else { "+" })
-            .on_click(cx.listener(move |this, _, window, cx| {
-                let open = toggle(this);
-                *open = !*open;
-                // Focus in a closed section goes to the diff
-                let tree = this.files.focus_handle(cx);
-                let commits = this.commits.as_ref().map(|c| c.focus_handle(cx));
-                let hidden = (!this.files_open && tree.is_focused(window))
-                    || (!this.commits_open && commits.is_some_and(|c| c.is_focused(window)));
-                if hidden {
-                    window.focus(&this.diff.focus_handle(cx));
-                }
-                cx.notify();
-            }))
-    }
-
-    /// The tree with the commit list under it. The width follows the tree.
-    fn side_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        let viewport = window.viewport_size();
-        let unscaled = |v: gpui::Pixels| f32::from(v) / self.scale;
-        let content = self.files.update(cx, |t, _| t.content_width(window));
-        let width = self.width.resolve(content, unscaled(viewport.width));
-        let theme = cx.global::<Settings>().theme;
-        let mut side_panel = div()
-            .flex_none()
-            .w(px(width * self.scale))
-            .h_full()
-            .flex()
-            .flex_col()
-            .bg(theme.editor_bg)
-            .border_r_1()
-            .border_color(theme.indent_guide)
-            .font_family(FAMILY)
-            .text_size(px(TEXT_SIZE * self.scale))
-            .child(self.heading("Files", self.files_open, cx, |this| &mut this.files_open))
-            .when(self.files_open, |d| {
-                d.child(div().flex_1().min_h_0().child(self.files.clone()))
-            });
-        if let Some(commits) = self.commits.clone() {
-            let section = div()
-                .flex()
-                .flex_col()
-                .border_t_1()
-                .border_color(theme.indent_guide)
-                .child(self.heading("Commits", self.commits_open, cx, |this| {
-                    &mut this.commits_open
-                }))
-                .when(self.commits_open, |d| {
-                    d.child(div().flex_1().min_h_0().child(commits))
-                });
-            // When closed, the section moves to the bottom. Without the tree, the commit list takes the rest.
-            side_panel = match (self.files_open, self.commits_open) {
-                (true, true) => {
-                    let height = self.commits_height.resolve(unscaled(viewport.height));
-                    SectionHeight::attach(
-                        side_panel,
-                        section.h(px(height * self.scale)),
-                        cx,
-                        |this| (&mut this.commits_height, this.scale),
-                    )
-                }
-                (false, true) => side_panel.child(section.flex_1().min_h_0()),
-                (true, false) => side_panel.child(section),
-                (false, false) => side_panel.child(div().flex_1()).child(section),
-            };
-        }
-        SidePanelWidth::attach(side_panel, cx, |this| (&mut this.width, this.scale))
-    }
 }
 
 impl Focusable for RepoView {
@@ -422,24 +333,25 @@ impl Render for RepoView {
             &theme.palette,
             self.scale,
         );
-        let content = match walkthrough {
-            Some(walkthrough) => div().size_full().child(walkthrough),
-            None => div()
-                .size_full()
-                .flex()
-                .when(self.side_panel_open, |d| {
-                    d.child(self.side_panel(window, cx))
-                })
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .flex()
-                        .flex_col()
-                        .child(div().flex_1().min_h_0().child(self.diff.clone())),
-                ),
+        let main: AnyElement = match walkthrough {
+            Some(walkthrough) => walkthrough.into_any_element(),
+            None => self.diff.clone().into_any_element(),
         };
+        let content = div()
+            .size_full()
+            .flex()
+            .when(self.side_panel_open, |d| {
+                d.child(self.side_panel(window, cx))
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .child(div().flex_1().min_h_0().child(main)),
+            );
         div()
             .relative()
             .size_full()

@@ -1,5 +1,6 @@
 //! The GPUI layer. Draws only what `jetdiff-viewmodel` computes.
 
+mod button_group;
 mod cache;
 mod code_viewer;
 mod commit_list;

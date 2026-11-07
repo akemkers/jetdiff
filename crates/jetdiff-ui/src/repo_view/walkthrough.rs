@@ -23,6 +23,8 @@ pub(super) struct OpenWalkthrough {
     /// `w` was pressed while the diff was read, so it is shown or asked about when it is.
     opening: bool,
     _events: gpui::Subscription,
+    /// Its contents are drawn in the side panel, so the repo view draws again with it.
+    _redraw: gpui::Subscription,
 }
 
 /// What the popup over the diff asks. Enter answers yes.
@@ -57,6 +59,7 @@ impl RepoView {
             let (description, scale) = (what.clone(), self.scale);
             let view = cx.new(|cx| WalkthroughView::new(repo, files, description, scale, cx));
             let events = cx.subscribe_in(&view, window, Self::walkthrough_event);
+            let redraw = cx.observe(&view, |_, _, cx| cx.notify());
             self.walkthrough = Some(OpenWalkthrough {
                 view,
                 what,
@@ -64,6 +67,7 @@ impl RepoView {
                 shown: false,
                 opening: false,
                 _events: events,
+                _redraw: redraw,
             });
         }
         self.open_walkthrough(window, cx);
