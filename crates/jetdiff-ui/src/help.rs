@@ -31,8 +31,6 @@ const POPUP_HORIZONTAL_PADDING: f32 = 20.;
 const POPUP_VERTICAL_PADDING: f32 = 16.;
 const POPUP_RADIUS: f32 = 6.;
 const POPUP_TEXT_SIZE: f32 = 13.;
-/// The popup doesn't follow the zoom.
-const POPUP_SCALE: f32 = 1.;
 
 /// The bar with the notification slot lying over whatever is above it.
 pub fn keymap_bar(
@@ -137,13 +135,10 @@ fn section(title: &'static str, keys: &[Keys], palette: &UiPalette) -> Div {
         div()
             .flex()
             .items_center()
-            .child(
-                div().w(px(KEYS_WIDTH)).flex().gap(px(LABEL_GAP)).children(
-                    labels
-                        .iter()
-                        .map(|&label| key_label(label, palette, POPUP_SCALE)),
-                ),
-            )
+            .child(div().w(px(KEYS_WIDTH)).flex().gap(px(LABEL_GAP)).children(
+                // The popup doesn't follow the zoom
+                labels.iter().map(|&label| key_label(label, palette, 1.)),
+            ))
             .child(what)
     });
     div()

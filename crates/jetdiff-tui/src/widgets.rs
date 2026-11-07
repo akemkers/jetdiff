@@ -1,7 +1,7 @@
 //! The path, the keymap bar, the notification, the help and the rollback dialog.
 
 use jetdiff_app::Notification;
-use jetdiff_app::help::{ALL, DIFF_KEYMAP_BAR};
+use jetdiff_app::help::{ALL, DIFF_KEYMAP_BAR, ZOOM};
 use jetdiff_viewmodel::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -88,7 +88,8 @@ pub fn help(area: Rect, theme: &Theme, buf: &mut Buffer) {
     let mut lines = Vec::new();
     for (section, rows) in ALL {
         lines.push(Line::styled(section, title));
-        for (labels, description) in rows {
+        // A terminal can't zoom
+        for (labels, description) in rows.iter().filter(|&&row| row != ZOOM) {
             let key = labels.join(" ");
             lines.push(Line::from(vec![
                 Span::styled(format!("{key:<KEY_COLUMN$}"), keys),
@@ -113,4 +114,19 @@ pub fn confirm_rollback(area: Rect, theme: &Theme, buf: &mut Buffer) {
         ),
     ];
     popup(CONFIRM_WIDTH, lines, area, theme, buf);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn help_leaves_out_zoom_since_a_terminal_cannot_zoom() {
+        let area = Rect::new(0, 0, 80, 40);
+        let mut buf = Buffer::empty(area);
+        help(area, &Theme::built_in(), &mut buf);
+        let text: String = buf.content().iter().map(|cell| cell.symbol()).collect();
+        assert!(text.contains("split/unified"));
+        assert!(!text.contains("zoom"));
+    }
 }

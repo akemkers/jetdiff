@@ -46,7 +46,6 @@ impl Notification {
 #[cfg(test)]
 mod tests {
     use jetdiff_viewmodel::Theme;
-    use jetdiff_viewmodel::theme::Pill;
 
     use super::*;
 

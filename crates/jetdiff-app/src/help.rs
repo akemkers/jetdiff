@@ -23,6 +23,13 @@ pub const WALKTHROUGH_KEYMAP_BAR: [Keys; 7] = [
     (&["q"], "quit"),
 ];
 
+/// Zoom is on the secondary modifier, which is Cmd only on macOS.
+pub const ZOOM: Keys = if cfg!(target_os = "macos") {
+    (&["⌘+", "⌘-", "⌘0"], "zoom")
+} else {
+    (&["⌃+", "⌃-", "⌃0"], "zoom")
+};
+
 /// The Ctrl variants from vim are not included.
 pub const ALL: [(&str, &[Keys]); 4] = [
     (
@@ -55,7 +62,7 @@ pub const ALL: [(&str, &[Keys]); 4] = [
             (&["v"], "split/unified"),
             (&["y"], "copy file:line"),
             (&["r"], "roll back hunk"),
-            (&["⌘+", "⌘-", "⌘0"], "zoom"),
+            ZOOM,
             (&["q"], "quit"),
         ],
     ),
