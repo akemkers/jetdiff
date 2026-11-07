@@ -411,7 +411,7 @@ impl Render for RepoView {
         let theme = cx.global::<Settings>().theme;
         let question = self
             .question
-            .map(|question| confirm_dialog(self.question_text(question, cx), &theme));
+            .map(|question| confirm_dialog(self.question_text(question, cx), &theme.palette));
         let keys = match walkthrough {
             Some(_) => WALKTHROUGH_KEYMAP_BAR.as_slice(),
             None => DIFF_KEYMAP_BAR.as_slice(),
