@@ -112,6 +112,7 @@ impl CommitList {
         i: usize,
         now: i64,
         focused: bool,
+        scale_factor: f32,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let s = |v: f32| px(v * self.scale);
@@ -139,7 +140,7 @@ impl CommitList {
             .pr(s(PAD_RIGHT))
             .whitespace_nowrap();
         selection_and_cursor(row, selected, self.commits.is_cursor(i), focused, &palette)
-            .child(self.graph(i, selected, &theme))
+            .child(self.graph(i, selected, scale_factor, &theme))
             .child(
                 div()
                     .flex_1()
@@ -165,12 +166,23 @@ impl CommitList {
 
     /// The branch icon on Branch. Under it one line through the slices, with a dot per commit, and a
     /// ring for Local changes. The ring is filled with the row's background, so it covers the line.
-    fn graph(&self, i: usize, selected: bool, theme: &UiTheme) -> Div {
+    ///
+    /// GPUI rounds the layout to device pixels, so the line and the dot are whole device pixels
+    /// with the lane's parity. Otherwise they are rounded apart and the line is off the dot's center.
+    fn graph(&self, i: usize, selected: bool, scale_factor: f32, theme: &UiTheme) -> Div {
         let s = |v: f32| px(v * self.scale);
+        let device = |v: f32| (v * self.scale * scale_factor).round().max(1.);
+        let lane_width = device(LANE_WIDTH);
+        let centered = |v: f32| {
+            let width = device(v);
+            width + (lane_width - width) % 2.
+        };
+        let logical = |device: f32| px(device / scale_factor);
+        let (line_width, dot_size) = (centered(LINE_WIDTH), centered(DOT_SIZE));
         let lane = div()
             .relative()
             .flex_none()
-            .w(s(LANE_WIDTH))
+            .w(logical(lane_width))
             .h_full()
             .flex()
             .items_center()
@@ -186,14 +198,14 @@ impl CommitList {
         let line = || {
             div()
                 .absolute()
-                .left(s((LANE_WIDTH - LINE_WIDTH) / 2.))
-                .w(s(LINE_WIDTH))
+                .left(logical((lane_width - line_width) / 2.))
+                .w(logical(line_width))
                 .bg(color)
         };
         let up = || line().top(px(-CURSOR_OUTLINE)).bottom(relative(0.5));
         let down = || line().top(relative(0.5)).bottom(px(-CURSOR_OUTLINE));
         let is_commit = matches!(row, CommitRow::Commit(_));
-        let dot = div().size(s(DOT_SIZE)).rounded_full().map(|dot| {
+        let dot = div().size(logical(dot_size)).rounded_full().map(|dot| {
             if is_commit {
                 dot.bg(color)
             } else {
@@ -221,6 +233,7 @@ impl Focusable for CommitList {
 impl Render for CommitList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focused = self.focus.is_focused(window);
+        let scale_factor = window.scale_factor();
         let s = |v: f32| px(v * self.scale);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -240,7 +253,7 @@ impl Render for CommitList {
                     self.commits.len(),
                     cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                         range
-                            .map(|i| this.render_row(i, now, focused, cx))
+                            .map(|i| this.render_row(i, now, focused, scale_factor, cx))
                             .collect::<Vec<_>>()
                     }),
                 )
