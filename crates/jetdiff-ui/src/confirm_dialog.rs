@@ -2,7 +2,8 @@
 
 use gpui::{Div, SharedString, div, prelude::*, px, relative};
 
-use crate::text::FAMILY;
+use crate::help::key_label;
+use crate::text::SANS;
 use crate::theme::UiPalette;
 
 /// Long questions wrap. The width is fixed, since GPUI measures text without one as a single line,
@@ -15,6 +16,7 @@ const HORIZONTAL_PADDING: f32 = 16.;
 const VERTICAL_PADDING: f32 = 12.;
 const RADIUS: f32 = 6.;
 const TEXT_SIZE: f32 = 13.;
+const LABEL_GAP: f32 = 4.;
 
 pub fn confirm_dialog(question: impl Into<SharedString>, palette: &UiPalette) -> Div {
     div()
@@ -37,14 +39,21 @@ pub fn confirm_dialog(question: impl Into<SharedString>, palette: &UiPalette) ->
                 .border_color(palette.border)
                 .rounded(px(RADIUS))
                 .shadow_lg()
-                .font_family(FAMILY)
+                .font_family(SANS)
                 .text_size(px(TEXT_SIZE))
                 .text_color(palette.primary)
                 .child(question.into())
                 .child(
                     div()
+                        .flex()
+                        .items_center()
+                        .gap(px(LABEL_GAP))
                         .text_color(palette.muted)
-                        .child("[Enter] yes / [Esc] no"),
+                        // The dialog doesn't follow the zoom, like the help popup
+                        .child(key_label("Enter", palette, 1.))
+                        .child("yes")
+                        .child(div().ml(px(LABEL_GAP)).child(key_label("Esc", palette, 1.)))
+                        .child("no"),
                 ),
         )
 }
