@@ -54,8 +54,8 @@ impl Row {
 pub enum RowLayout {
     /// Deleted lines above the added ones.
     Unified,
-    /// Deleted and added line next to each other, for Split in the terminal. The shorter side gets rows
-    /// without a line. Split with the diff divider in GPUI is `DiffState`, not this.
+    /// Deleted and added line next to each other, for Aligned Split. The shorter side gets rows
+    /// without a line.
     Split,
 }
 

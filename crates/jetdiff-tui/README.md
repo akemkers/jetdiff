@@ -22,7 +22,7 @@ run_repo_source(repo, changed_files, &title, settings)?; // a repo source
 
 Differences from the GPUI view:
 
-- Split is aligned rows, without the diff divider and sync scroll
+- Split is Aligned Split, without the diff divider and sync scroll
 - Split folds too, since both diff modes are rows. A closed fold is a row of `~`
 - One side at a time, so `H` and `L` do nothing
 - No zoom and no scroll animation

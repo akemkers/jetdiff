@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use jetdiff_viewmodel::{RowLayout, SplitShare};
+use jetdiff_viewmodel::{DiffMode, SplitShare};
 
 use super::DiffView;
 use crate::diff_divider_grab::grab_offset;
@@ -47,9 +47,8 @@ impl DiffView {
 
     /// The column of the diff divider, `None` in Unified.
     fn diff_divider(&self) -> Option<u16> {
-        let diff = &self.state.diff;
-        (diff.row_layout() == RowLayout::Split)
-            .then(|| geometry::aligned(&diff.diff, self.area, self.split_share).divider)
+        matches!(self.mode, DiffMode::AlignedSplit(_))
+            .then(|| geometry::aligned(self.mode.diff(), self.area, self.split_share).divider)
     }
 
     /// The text width changes with the share, so horizontal scroll is kept within it.
