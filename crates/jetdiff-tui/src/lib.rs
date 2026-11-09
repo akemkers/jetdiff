@@ -5,6 +5,7 @@ mod backend;
 mod clipboard;
 mod code_viewer;
 mod color;
+mod diff_divider_grab;
 mod diff_view;
 mod geometry;
 mod icons;

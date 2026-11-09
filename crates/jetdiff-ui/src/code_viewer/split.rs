@@ -5,8 +5,13 @@ use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::{FileDiff, Folding, HunkMinimapMark, SideGeometry, Viewport};
+use jetdiff_viewmodel::divider::DIVIDER_WIDTH;
+use jetdiff_viewmodel::{
+    FileDiff, Folding, HunkMinimapMark, SideGeometry, SplitShare, Viewport, diff_divider_offset,
+    split_text_width,
+};
 
+use super::CodeLayout;
 use super::code_paint::HunkMinimapRects;
 use super::divider::Divider;
 use super::split_side::{CursorRow, SideCache, SplitSide};
@@ -25,6 +30,7 @@ pub struct SplitPainter {
     pub scroll_y: [f32; 2],
     pub scroll_x: f32,
     pub cursor_rows: [CursorRow; 2],
+    pub split_share: SplitShare,
 }
 
 impl SplitPainter {
@@ -40,7 +46,11 @@ impl SplitPainter {
         let top = f32::from(bounds.origin.y);
         let height = f32::from(bounds.size.height);
         let line_height = self.style.line_height();
-        let geometries = side_geometry(&self.diff, &self.style, bounds);
+        let code_layout = CodeLayout {
+            style: &self.style,
+            split_share: self.split_share,
+        };
+        let geometries = side_geometry(&self.diff, code_layout, bounds);
         let mut widest: f32 = 0.;
         for (index, geom) in geometries.iter().enumerate() {
             let side = SIDES[index];
@@ -88,11 +98,12 @@ impl SplitPainter {
 
 pub(super) fn side_geometry(
     diff: &FileDiff,
-    style: &TextStyle,
+    code_layout: CodeLayout,
     bounds: Bounds<Pixels>,
 ) -> [SideGeometry; 2] {
     let (x, width) = (f32::from(bounds.origin.x), f32::from(bounds.size.width));
-    jetdiff_viewmodel::side_geometry(diff, style.number_char_width, x, width)
+    let number_char_width = code_layout.style.number_char_width;
+    jetdiff_viewmodel::side_geometry(diff, number_char_width, x, width, code_layout.split_share)
 }
 
 fn index(side: Side) -> usize {
@@ -103,33 +114,33 @@ fn index(side: Side) -> usize {
 pub fn hit(
     diff: &FileDiff,
     folding: &Folding,
-    style: &TextStyle,
+    code_layout: CodeLayout,
     bounds: Bounds<Pixels>,
     scroll_y: [f32; 2],
     position: Point<Pixels>,
 ) -> Option<(Side, usize)> {
-    let geometries = side_geometry(diff, style, bounds);
+    let geometries = side_geometry(diff, code_layout, bounds);
     let x = f32::from(position.x);
     let side = SIDES
         .into_iter()
         .find(|&side| geometries[index(side)].bounds().contains(&x))?;
-    let layout = folding.layout(side, style.line_height());
+    let layout = folding.layout(side, code_layout.style.line_height());
     let y = f32::from(position.y - bounds.origin.y) + scroll_y[index(side)];
     let line = layout.y_to_logical_line(y).min(layout.line_count() - 1);
     Some((side, line))
 }
 
 /// The side the mouse wheel scrolls. The divider counts as the nearest side.
-pub fn side_at(bounds: Bounds<Pixels>, x: Pixels) -> Side {
-    if x < bounds.center().x {
+pub fn side_at(bounds: Bounds<Pixels>, split_share: SplitShare, x: Pixels) -> Side {
+    let offset = diff_divider_offset(f32::from(bounds.size.width), split_share);
+    if f32::from(x - bounds.origin.x) < offset + DIVIDER_WIDTH / 2. {
         Side::Left
     } else {
         Side::Right
     }
 }
 
-/// The width the text has on one side. The sides are equally wide, so Left is enough.
-pub fn text_width(diff: &FileDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
-    let [geom, _] = &side_geometry(diff, style, bounds);
-    geom.text.end - geom.text_x
+pub fn text_width(diff: &FileDiff, code_layout: CodeLayout, bounds: Bounds<Pixels>) -> f32 {
+    let geometries = side_geometry(diff, code_layout, bounds);
+    split_text_width(geometries.map(|geometry| geometry.text.end - geometry.text_x))
 }

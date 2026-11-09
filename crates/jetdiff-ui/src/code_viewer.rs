@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::{DiffMode, HunkMinimapMark, ScrollState, Viewport};
+use jetdiff_viewmodel::{DiffMode, HunkMinimapMark, ScrollState, SplitShare, Viewport};
 
 use self::code_paint::HunkMinimapRects;
 pub use self::excerpt::Excerpt;
@@ -83,6 +83,14 @@ fn new_side_caches() -> [SideCache; 2] {
     ]
 }
 
+/// What decides where things are on screen besides the bounds: the text style and, in Split, the
+/// share of the width Left gets.
+#[derive(Clone, Copy)]
+pub struct CodeLayout<'a> {
+    pub style: &'a TextStyle,
+    pub split_share: SplitShare,
+}
+
 /// What is under the mouse.
 pub enum Hit {
     Split(Side, usize),
@@ -91,7 +99,7 @@ pub enum Hit {
 
 pub fn hit(
     mode: &DiffMode,
-    style: &TextStyle,
+    code_layout: CodeLayout,
     bounds: Bounds<Pixels>,
     scroll_y: [f32; 2],
     position: Point<Pixels>,
@@ -100,7 +108,7 @@ pub fn hit(
         DiffMode::Split(state) => split::hit(
             &state.diff,
             &state.folding,
-            style,
+            code_layout,
             bounds,
             scroll_y,
             position,
@@ -109,7 +117,7 @@ pub fn hit(
         DiffMode::Unified(state) => unified::hit(
             &state.diff,
             &state.folding,
-            style,
+            code_layout.style,
             bounds,
             scroll_y[0],
             position,
@@ -122,13 +130,16 @@ pub fn hit(
 pub fn wheel(
     mode: &mut DiffMode,
     bounds: Option<Bounds<Pixels>>,
+    split_share: SplitShare,
     x: Pixels,
     delta_y: f32,
     viewport: Viewport,
 ) {
     match mode {
         DiffMode::Split(state) => {
-            let side = bounds.map_or(state.master, |bounds| split::side_at(bounds, x));
+            let side = bounds.map_or(state.master, |bounds| {
+                split::side_at(bounds, split_share, x)
+            });
             state.wheel(side, delta_y, viewport);
         }
         DiffMode::Unified(state) => {
@@ -137,10 +148,10 @@ pub fn wheel(
     }
 }
 
-pub fn text_width(mode: &DiffMode, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
+pub fn text_width(mode: &DiffMode, code_layout: CodeLayout, bounds: Bounds<Pixels>) -> f32 {
     match mode {
-        DiffMode::Split(state) => split::text_width(&state.diff, style, bounds),
-        DiffMode::Unified(state) => unified::text_width(&state.diff, style, bounds),
+        DiffMode::Split(state) => split::text_width(&state.diff, code_layout, bounds),
+        DiffMode::Unified(state) => unified::text_width(&state.diff, code_layout.style, bounds),
     }
 }
 
@@ -155,13 +166,14 @@ impl Painter {
     pub fn new(
         mode: &DiffMode,
         hunk_minimap_marks: &Rc<[Vec<HunkMinimapMark>; 2]>,
-        style: TextStyle,
+        code_layout: CodeLayout,
         shown: ScrollState,
         focused: bool,
         scale: f32,
         theme: UiTheme,
     ) -> Self {
         let scroll_x = snap(shown.x, scale);
+        let style = code_layout.style.clone();
         match mode {
             DiffMode::Split(state) => {
                 // The other side shows the mirrored cursor more faintly, so you see where H and L land.
@@ -188,6 +200,7 @@ impl Painter {
                     scroll_y: shown.y.map(|y| snap(y, scale)),
                     scroll_x,
                     cursor_rows,
+                    split_share: code_layout.split_share,
                 })
             }
             DiffMode::Unified(state) => Self::Unified(UnifiedPainter {
@@ -213,8 +226,9 @@ impl Painter {
         window: &mut Window,
         cx: &mut App,
     ) {
+        // The handle over the diff divider is placed from the bounds, so a new width needs a new frame too
         let previous = shared.bounds.replace(Some(bounds));
-        if previous.map(|previous| previous.size.height) != Some(bounds.size.height) {
+        if previous != Some(bounds) {
             window.refresh();
         }
         let widest = match self {

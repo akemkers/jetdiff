@@ -151,7 +151,19 @@ impl WalkthroughView {
                     return div().into_any_element();
                 };
                 let height = excerpt.line_count() as f32 * style.line_height();
-                let (excerpt, theme) = (excerpt.clone(), *theme);
+                let split_share = self.split_share;
+                let code = {
+                    let (excerpt, theme) = (excerpt.clone(), *theme);
+                    canvas(
+                        |_, _, _| {},
+                        move |bounds, _, window, cx| {
+                            excerpt.paint(style.clone(), split_share, theme, bounds, window, cx)
+                        },
+                    )
+                    .w_full()
+                    .h(px(height))
+                    .into_any_element()
+                };
                 let border = if is_cursor {
                     palette.accent
                 } else {
@@ -164,16 +176,7 @@ impl WalkthroughView {
                     .border_color(border)
                     .rounded(s(4.))
                     .overflow_hidden()
-                    .child(
-                        canvas(
-                            |_, _, _| {},
-                            move |bounds, _, window, cx| {
-                                excerpt.paint(style.clone(), theme, bounds, window, cx)
-                            },
-                        )
-                        .w_full()
-                        .h(px(height)),
-                    )
+                    .child(self.with_split_share_handle(item, excerpt, code, cx))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.cursor = Some(item);
                         cx.notify();

@@ -307,6 +307,12 @@ impl App {
             Event::Mouse(m) => {
                 match m.kind {
                     MouseEventKind::Down(MouseButton::Left) => self.click(m.column, m.row),
+                    MouseEventKind::Drag(MouseButton::Left)
+                        if self.diff.is_dragging_diff_divider() =>
+                    {
+                        self.diff.drag_diff_divider(m.column)
+                    }
+                    MouseEventKind::Up(MouseButton::Left) => self.diff.release_diff_divider(),
                     MouseEventKind::ScrollDown => self.wheel(m.column, m.row, true),
                     MouseEventKind::ScrollUp => self.wheel(m.column, m.row, false),
                     _ => {}
@@ -445,9 +451,10 @@ impl App {
     fn click(&mut self, x: u16, y: u16) {
         if !self.side_panel_contains(x, y) {
             self.focus = Focus::Diff;
-            self.diff.click(x, y);
+            self.diff.click(x, y, Instant::now());
             return;
         }
+        self.diff.press_elsewhere();
         let Some(repo) = &mut self.repository else {
             return;
         };

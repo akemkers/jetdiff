@@ -7,13 +7,13 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Window};
-use jetdiff_viewmodel::{FileDiff, Folding, UnifiedDiff, Viewport};
+use jetdiff_viewmodel::{FileDiff, Folding, SplitShare, UnifiedDiff, Viewport};
 
 use super::super::code_paint::paint_code_background;
 use super::super::divider::Divider;
 use super::super::split::side_geometry;
 use super::super::split_side::{SideCache, SplitSide};
-use super::super::{SIDES, new_side_caches, snap};
+use super::super::{CodeLayout, SIDES, new_side_caches, snap};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -48,6 +48,7 @@ impl SplitExcerpt {
     pub(super) fn paint(
         &self,
         style: TextStyle,
+        split_share: SplitShare,
         theme: UiTheme,
         bounds: Bounds<Pixels>,
         window: &mut Window,
@@ -61,7 +62,11 @@ impl SplitExcerpt {
             .lines
             .clone()
             .map(|lines| snap(lines.start as f32 * line_height, scale));
-        let geometries = side_geometry(&self.diff, &style, bounds);
+        let code_layout = CodeLayout {
+            style: &style,
+            split_share,
+        };
+        let geometries = side_geometry(&self.diff, code_layout, bounds);
         let mut caches = self.caches.borrow_mut();
         for (index, geom) in geometries.iter().enumerate() {
             let side_height = self.lines[index].len() as f32 * line_height;

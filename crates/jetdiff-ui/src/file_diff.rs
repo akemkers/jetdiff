@@ -4,6 +4,7 @@
 
 mod diff_header;
 mod file_controls;
+mod split_share;
 
 use std::rc::Rc;
 use std::time::Instant;
@@ -19,11 +20,11 @@ use jetdiff_core::side::Side;
 use jetdiff_viewmodel::metrics::{FONT_SIZE, zoomed};
 use jetdiff_viewmodel::{
     Command, DiffMode, FileDiff, FoldId, Horizontal, HunkMinimapMark, KeyParser, Parsed,
-    ScrollAnimator, Viewport, hunk_minimap_marks,
+    ScrollAnimator, SplitShare, Viewport, hunk_minimap_marks,
 };
 
 use crate::NAV_ANIMATION_MS;
-use crate::code_viewer::{self, Hit, Painter, Shared};
+use crate::code_viewer::{self, CodeLayout, Hit, Painter, Shared};
 use crate::confirm_dialog::confirm_dialog;
 use crate::help::{HideHelp, KEYMAP_BAR_HEIGHT, KeyHelp, ToggleHelp, keymap_bar};
 use crate::keystroke::to_key;
@@ -68,6 +69,8 @@ pub struct FileDiffView {
     unified: bool,
     /// Folds closed for all files, until `f` switches.
     fold_unchanged: bool,
+    /// Left's share of the width in Split, for all files until jetdiff is closed.
+    split_share: SplitShare,
     /// Right is a file in Local changes, so hunks can be rolled back.
     can_rollback: bool,
     overlay: Option<Overlay>,
@@ -103,6 +106,7 @@ impl FileDiffView {
             mode: DiffMode::new(Rc::new(diff), unified, fold_unchanged),
             unified,
             fold_unchanged,
+            split_share: SplitShare::default(),
             font_size: cx.global::<Settings>().font_size,
             style: None,
             scroll: ScrollAnimator::new(NAV_ANIMATION_MS),
@@ -169,8 +173,7 @@ impl FileDiffView {
         self.mode
             .replace_diff(Rc::new(diff), self.unified, self.fold_unchanged, vp);
         self.shared.clear();
-        self.clamp_scroll_x();
-        self.scroll.jump(self.mode.scroll());
+        self.jump_to_clamped_scroll();
         self.update_hunk_minimap_marks();
         cx.notify();
     }
@@ -213,16 +216,17 @@ impl FileDiffView {
             }
         }
         self.update_hunk_minimap_marks();
-        self.clamp_scroll_x();
-        self.scroll.jump(self.mode.scroll());
+        self.jump_to_clamped_scroll();
         cx.notify();
     }
 
-    /// The text width differs between Split and Unified, and the content may have become shorter.
-    fn clamp_scroll_x(&mut self) {
+    /// Shows the scroll target at once, with horizontal scroll kept within the text width. The width
+    /// differs between Split and Unified and with the split share, and the content may have become shorter.
+    fn jump_to_clamped_scroll(&mut self) {
         let max_x = self.max_scroll_x();
         let scroll = self.mode.scroll_mut();
         scroll.scroll_x_to(scroll.x, max_x);
+        self.scroll.jump(self.mode.scroll());
     }
 
     fn viewport(&self) -> Option<Viewport> {
@@ -260,13 +264,22 @@ impl FileDiffView {
             Rc::new(SIDES.map(|side| hunk_minimap_marks(diff, folding, side, line_height)));
     }
 
+    /// `None` before the text style is known.
+    fn code_layout(&self) -> Option<CodeLayout<'_>> {
+        Some(CodeLayout {
+            style: self.style.as_ref()?,
+            split_share: self.split_share,
+        })
+    }
+
     fn horizontal(&self) -> Horizontal {
-        let (Some(bounds), Some(style)) = (self.shared.bounds.get(), self.style.as_ref()) else {
+        let (Some(bounds), Some(code_layout)) = (self.shared.bounds.get(), self.code_layout())
+        else {
             return Horizontal::default();
         };
         Horizontal {
-            text_width: code_viewer::text_width(&self.mode, style, bounds),
-            char_width: style.char_width,
+            text_width: code_viewer::text_width(&self.mode, code_layout, bounds),
+            char_width: code_layout.style.char_width,
             max_x: self.max_scroll_x(),
         }
     }
@@ -394,8 +407,7 @@ impl FileDiffView {
             viewport,
             char_width / previous_char_width,
         );
-        self.clamp_scroll_x();
-        self.scroll.jump(self.mode.scroll());
+        self.jump_to_clamped_scroll();
     }
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -424,8 +436,9 @@ impl FileDiffView {
     }
 
     fn hit(&self, position: Point<Pixels>) -> Option<Hit> {
-        let (bounds, style) = (self.shared.bounds.get()?, self.style.as_ref()?);
-        code_viewer::hit(&self.mode, style, bounds, self.scroll.shown().y, position)
+        let (bounds, code_layout) = (self.shared.bounds.get()?, self.code_layout()?);
+        let scroll_y = self.scroll.shown().y;
+        code_viewer::hit(&self.mode, code_layout, bounds, scroll_y, position)
     }
 
     fn fold_at(&self, position: Point<Pixels>) -> Option<FoldId> {
@@ -447,28 +460,31 @@ impl FileDiffView {
     }
 
     fn max_scroll_x(&self) -> f32 {
-        let (Some(bounds), Some(style)) = (self.shared.bounds.get(), self.style.as_ref()) else {
+        let (Some(bounds), Some(code_layout)) = (self.shared.bounds.get(), self.code_layout())
+        else {
             return 0.;
         };
-        let content = (self.max_cols + 1) as f32 * style.char_width;
-        content.max(self.shared.widest.get()) - code_viewer::text_width(&self.mode, style, bounds)
+        let content = (self.max_cols + 1) as f32 * code_layout.style.char_width;
+        content.max(self.shared.widest.get())
+            - code_viewer::text_width(&self.mode, code_layout, bounds)
     }
 
     fn on_scroll(&mut self, ev: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(vp) = self.viewport() else {
+        let Some(viewport) = self.viewport() else {
             return;
         };
-        let delta = ev.delta.pixel_delta(px(vp.line_height));
-        let (dx, dy) = (f32::from(delta.x), f32::from(delta.y));
+        let delta = ev.delta.pixel_delta(px(viewport.line_height));
+        let (delta_x, delta_y) = (f32::from(delta.x), f32::from(delta.y));
         self.scroll.stop(self.mode.scroll_mut());
-        if dy != 0. {
-            let bounds = self.shared.bounds.get();
-            code_viewer::wheel(&mut self.mode, bounds, ev.position.x, -dy, vp);
+        if delta_y != 0. {
+            let (bounds, split_share, x) =
+                (self.shared.bounds.get(), self.split_share, ev.position.x);
+            code_viewer::wheel(&mut self.mode, bounds, split_share, x, -delta_y, viewport);
         }
-        if dx != 0. {
+        if delta_x != 0. {
             let max_x = self.max_scroll_x();
             let scroll = self.mode.scroll_mut();
-            scroll.scroll_x_to(scroll.x - dx, max_x);
+            scroll.scroll_x_to(scroll.x - delta_x, max_x);
         }
         self.scroll.jump(self.mode.scroll());
         cx.notify();
@@ -570,13 +586,13 @@ impl Render for FileDiffView {
 
         let theme = cx.global::<Settings>().theme;
         let focused = self.focus.is_focused(window) && window.is_window_active();
-        let painter = self.style.clone().map(|style| {
+        let painter = self.code_layout().map(|layout| {
             let shown = self.scroll.shown();
             let scale = window.scale_factor();
             Painter::new(
                 &self.mode,
                 &self.hunk_minimap_marks,
-                style,
+                layout,
                 shown,
                 focused,
                 scale,
@@ -585,6 +601,18 @@ impl Render for FileDiffView {
         });
         let hovered = self.mode.hovered_fold().is_some();
         let shared = self.shared.clone();
+        let code = canvas(
+            |_, _, _| {},
+            move |bounds, _, window, cx| {
+                if let Some(painter) = &painter {
+                    painter.paint(bounds, &shared, window, cx);
+                }
+            },
+        )
+        .flex_1()
+        .w_full()
+        .into_any_element();
+        let code = self.with_split_share_handle(code, cx);
 
         let scale = self.font_size / FONT_SIZE;
         let diff_header = self.diff_header(scale, cx);
@@ -621,18 +649,7 @@ impl Render for FileDiffView {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .when(hovered, |d| d.cursor_pointer())
             .children(diff_header)
-            .child(
-                canvas(
-                    |_, _, _| {},
-                    move |bounds, _, window, cx| {
-                        if let Some(painter) = &painter {
-                            painter.paint(bounds, &shared, window, cx);
-                        }
-                    },
-                )
-                .flex_1()
-                .w_full(),
-            )
+            .child(code)
             .children(footer)
             .children(overlay)
     }

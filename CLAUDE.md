@@ -11,3 +11,7 @@ Default vocabulary: needs-triage, needs-info, ready-for-agent, ready-for-human, 
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Coding standards
+
+`CODING_STANDARDS.md` describes how the code is written. When feedback on the code would apply beyond the case at hand, propose a change to `CODING_STANDARDS.md` with the rule it implies. Ask before writing it.
