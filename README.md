@@ -47,7 +47,9 @@ On the left is a file tree of changed files. Added and deleted files are always 
 
 Without arguments or with a folder, the commit list sits under the tree. Branch is the top row, with the branch name, and jetdiff starts there. Under it are its slices: Local changes, everything not yet committed against HEAD, and the branch's own commits, at most 50. Click a row to see it. On a branch without commits of its own, such as `main` with everything pushed, Branch is the same as Local changes, so only Local changes is shown. Click «Files» or «Commits» to open or close the section.
 
-Branch and Local changes are read again automatically when files change on disk, and so is the commit list when HEAD moves, after a commit, amend, reset or rebase. This also works in a worktree. The selected file is kept, and the diff starts at the top if the content has changed.
+Branch and Local changes are read again automatically when files change on disk, and so is the commit list when HEAD moves, after a commit, amend, reset or rebase. This also works in a worktree. The selected file is kept, and so are the cursor and scroll.
+
+`r` reads the source again by hand, in every source except a pull request so far. The selected file, cursor and scroll are kept the same way, and it also works when the watcher couldn't start. A file pair shows edits made since startup.
 
 Unchanged lines are folded, with 4 lines of context, in Split and Unified. Click a fold to open it.
 
@@ -91,7 +93,8 @@ A small, vim-inspired keymap for reading. The cursor is a whole line, with no co
 | `f`                                 | Open all folds, or close all if none are closed, for all files                                       |
 | `v`                                 | Switch between Split and Unified for all files. The cursor stays where it is                         |
 | `y`                                 | Copy the cursor location (`file:line`). The line is in the newest version, also from Left            |
-| `r`                                 | Roll back the hunk at the cursor to Left, after Enter. Local changes only                            |
+| `z`                                 | Roll back the hunk at the cursor to Left, after Enter. Local changes only                            |
+| `r`                                 | Read the source again. Also in the walkthrough, where the walkthrough stays as it is                 |
 | Cmd/Ctrl+Plus, Minus, 0             | Zoom in, out and back to 14pt. The tree follows                                                      |
 | `?`                                 | Show or hide all the keys. Esc also closes                                                           |
 | `q`, Cmd/Ctrl+Q, Cmd/Ctrl+W         | Quit                                                                                                 |

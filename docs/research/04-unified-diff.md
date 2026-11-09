@@ -340,7 +340,7 @@ Choices where IntelliJ is not a good model:
   1/3 in both makes the switch calmer.
 - `y` (`DiffState::location`) works unchanged. A deleted row has the Left side, and `location` transfers
   to Right. IntelliJ gives `start2` here; our `LineMapping::transfer` goes line by line in the hunk.
-- `r` (rollback) works unchanged via `cursor_block`, since the whole hunk is rolled back in IntelliJ too.
+- `z` (rollback) works unchanged via `cursor_block`, since the whole hunk is rolled back in IntelliJ too.
 - Toggle: IntelliJ stores the choice per place. We only have one place, so one key in `config.toml` is enough.
 
 Chosen when Unified was built:

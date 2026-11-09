@@ -41,6 +41,11 @@ impl Notification {
             level: NotificationLevel::Warning,
         }
     }
+
+    /// The brief after every source reload that worked, so `r` is seen to have done something.
+    pub(crate) fn reloaded() -> Self {
+        Self::info("Reloaded")
+    }
 }
 
 #[cfg(test)]

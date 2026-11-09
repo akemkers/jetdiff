@@ -61,7 +61,8 @@ pub const ALL: [(&str, &[Keys]); 4] = [
         &[
             (&["v"], "split/unified"),
             (&["y"], "copy file:line"),
-            (&["r"], "roll back hunk"),
+            (&["r"], "reload"),
+            (&["z"], "roll back hunk"),
             ZOOM,
             (&["q"], "quit"),
         ],

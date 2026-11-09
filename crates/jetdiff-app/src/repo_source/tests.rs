@@ -228,6 +228,48 @@ fn source_autoreload_keeps_selected_file() {
 }
 
 #[test]
+fn source_reload_keeps_selected_file() {
+    let temp_repo = TempRepo::new("reload");
+    temp_repo.write("a.rs", "a\n");
+    temp_repo.write("b.rs", "b\n");
+    temp_repo.commit();
+    temp_repo.write("a.rs", "a2\n");
+    temp_repo.write("b.rs", "b2\n");
+    let (mut source, _) = temp_repo.open();
+    let b = position(&source, "b.rs");
+    assert!(matches!(source.load(b), Show::Diff(_)));
+
+    temp_repo.write("b.rs", "b3\n");
+    let job = source.source_reload();
+    let Applied::Done { file, brief, .. } = apply(&mut source, job) else {
+        panic!("read failed");
+    };
+    assert_eq!(path(&source, file), "b.rs");
+    assert_eq!(brief, Some(Notification::info("Reloaded")));
+    assert!(matches!(source.load(file), Show::Diff(shown) if shown.same_file));
+}
+
+#[test]
+fn source_reload_of_a_commit_gives_the_same_commit() {
+    let temp_repo = TempRepo::feature_branch("reload-commit");
+    temp_repo.commit();
+    let mut source = RepoSource::commit(&temp_repo.0, "feature").unwrap();
+    assert_eq!(paths(&source), ["a.rs"]);
+    let a = position(&source, "a.rs");
+    assert!(matches!(source.load(a), Show::Diff(_)));
+
+    // The branch moves, but the commit shown is the one it pointed at
+    temp_repo.write("a.rs", "a3\n");
+    temp_repo.commit();
+    let job = source.source_reload();
+    let Applied::Done { file, brief, .. } = apply(&mut source, job) else {
+        panic!("read failed");
+    };
+    assert_eq!(brief, Some(Notification::info("Reloaded")));
+    assert!(matches!(source.load(file), Show::Unchanged));
+}
+
+#[test]
 fn another_commit_starts_from_the_first_file() {
     let temp_repo = TempRepo::new("another");
     temp_repo.write("a.rs", "a\n");

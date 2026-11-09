@@ -16,7 +16,7 @@ The rows are made by `UnifiedDiff::with_layout` with `RowLayout::Split`, so Spli
 use jetdiff_tui::{Settings, run_file_pair, run_repo_source};
 
 let settings = Settings { theme, unified: false, side_panel_open: false, icons: true };
-run_file_pair(diff, paths, &title, settings)?;           // a file pair
+run_file_pair(file_pair, diff, &title, settings)?;       // a file pair
 run_repo_source(repo, changed_files, &title, settings)?; // a repo source
 ```
 
@@ -35,7 +35,8 @@ graph TD
     app[app: the loop] --> diff[diff_view: DiffView]
     app --> side_panel[side_panel: tree and commits]
     app --> widgets[widgets: path, keys, notification, help]
-    app --> source[jetdiff-app: RepoSource, Watcher]
+    app --> source[app/source: Source, Repository]
+    source --> app_crate[jetdiff-app: RepoSource, FilePair, Watcher]
     app --> backend[backend: sends only the colors that change]
     diff --> viewer[code_viewer: Split and Unified]
     viewer --> text[text: one line]

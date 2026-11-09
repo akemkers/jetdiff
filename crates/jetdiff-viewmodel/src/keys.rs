@@ -119,7 +119,7 @@ fn command(key: Key) -> Option<Command> {
             'o' => FoldOpen,
             'f' => ToggleFolds,
             'y' => CopyCursorLocation,
-            'r' => Rollback,
+            'z' => Rollback,
             'G' => GoToBottom,
             'H' => FocusSide(Side::Left),
             'L' => FocusSide(Side::Right),
@@ -179,7 +179,9 @@ mod tests {
         assert_eq!(last(&chars("o")), c(FoldOpen));
         assert_eq!(last(&chars("f")), c(ToggleFolds));
         assert_eq!(last(&chars("y")), c(CopyCursorLocation));
-        assert_eq!(last(&chars("r")), c(Rollback));
+        assert_eq!(last(&chars("z")), c(Rollback));
+        // `r` is a source reload, outside the diff
+        assert_eq!(run(&chars("r")), [Parsed::Ignored]);
         assert_eq!(last(&chars("G")), c(GoToBottom));
         assert_eq!(last(&chars("H")), c(FocusSide(Side::Left)));
         assert_eq!(last(&chars("L")), c(FocusSide(Side::Right)));

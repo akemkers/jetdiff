@@ -19,10 +19,10 @@ See the main [README](../../README.md) for the arguments, settings and keys.
 ```mermaid
 graph LR
     args[arguments] --> source{Source}
-    source -- file pair --> fd[FileDiff] --> fdv[FileDiffView]
+    source -- file pair --> fp[FilePair] --> fpv[FilePairView]
     source -- folder --> local[Repo::local_changes] --> rv[RepoView]
-    source -- commit --> c[Repo::commit] --> rv
-    source -- pull request --> pr[Repo::pull_request] --> rv
+    source -- commit --> c[RepoSource::commit] --> rv
+    source -- pull request --> pr[RepoSource::pull_request] --> rv
 ```
 
 The source is read before the window opens, so errors like an unknown commit are written to the terminal with exit code 1. Errors in the arguments or the config file give exit code 2.

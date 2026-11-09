@@ -14,7 +14,7 @@ use crate::commits::{Commits, Selected};
 use crate::content::build_diff;
 use crate::notification::Notification;
 use crate::watcher::DiskChange;
-use read::Trigger;
+use read::{Opened, Trigger};
 pub use read::{ReadJob, RepoRead};
 pub use show::{Applied, Show, Shown};
 
@@ -28,8 +28,9 @@ struct ShownFile {
 
 pub struct RepoSource {
     repo: Repo,
-    /// What the commit list has selected. A commit or pull request opened directly has no commit list
-    /// and is never read again.
+    opened: Opened,
+    /// What the commit list has selected. A commit or pull request opened directly has no commit list,
+    /// and is only read again on a source reload.
     selected: Selected,
     /// What `changed_files` is from. Becomes equal to `selected` when a read is applied.
     last_read_selected: Selected,
@@ -39,15 +40,26 @@ pub struct RepoSource {
 }
 
 impl RepoSource {
-    /// A commit or a pull request.
-    pub fn new(repo: Repo, changed_files: Vec<ChangedFile>) -> Self {
-        Self {
+    /// `rev` against its parent, in the repo `dir` is in.
+    pub fn commit(dir: &Path, rev: &str) -> Result<Self, String> {
+        let repo = Repo::commit(dir, rev)?;
+        Self::without_commit_list(repo.clone(), Opened::Commit(repo))
+    }
+
+    pub fn pull_request(repo: Repo) -> Result<Self, String> {
+        Self::without_commit_list(repo, Opened::PullRequest)
+    }
+
+    fn without_commit_list(repo: Repo, opened: Opened) -> Result<Self, String> {
+        let changed_files = repo.changed_files()?;
+        Ok(Self {
             repo,
+            opened,
             selected: Selected::Branch,
             last_read_selected: Selected::Branch,
             changed_files: changed_files.into(),
             shown: None,
-        }
+        })
     }
 
     /// The repo or worktree `dir` is in, with the commit list. Starts on Branch, or on Local changes
@@ -55,6 +67,7 @@ impl RepoSource {
     pub fn open(dir: &Path) -> Result<(Self, Commits), String> {
         let job = ReadJob {
             root: dir.to_owned(),
+            opened: Opened::Branch,
             selected: Selected::Branch,
             trigger: Trigger::SelectionChanged,
         };
@@ -68,6 +81,7 @@ impl RepoSource {
         } = job.run()?;
         let source = Self {
             repo,
+            opened: Opened::Branch,
             selected: selected.clone(),
             last_read_selected: selected,
             changed_files: changed_files.into(),
@@ -110,9 +124,14 @@ impl RepoSource {
         self.read(Trigger::RolledBack)
     }
 
+    pub fn source_reload(&self) -> ReadJob {
+        self.read(Trigger::SourceReload)
+    }
+
     fn read(&self, trigger: Trigger) -> ReadJob {
         ReadJob {
             root: self.repo.root().to_owned(),
+            opened: self.opened.clone(),
             selected: self.selected.clone(),
             trigger,
         }
@@ -145,7 +164,8 @@ impl RepoSource {
             Trigger::FilesChanged(_)
             | Trigger::HeadMoved
             | Trigger::SelectionChanged
-            | Trigger::RolledBack => 0,
+            | Trigger::RolledBack
+            | Trigger::SourceReload => 0,
         };
         // Another source starts from the top, also when the shown file is in it
         if selected != self.last_read_selected {
@@ -163,10 +183,11 @@ impl RepoSource {
         let file = shown_path
             .and_then(|path| self.changed_files.iter().position(|file| file.path == path))
             .or_else(|| self.first());
-        let brief = match touched {
-            0 => None,
-            1 => Some(Notification::info("1 file changed")),
-            n => Some(Notification::info(format!("{n} files changed"))),
+        let brief = match (trigger, touched) {
+            (Trigger::SourceReload, _) => Some(Notification::reloaded()),
+            (_, 0) => None,
+            (_, 1) => Some(Notification::info("1 file changed")),
+            (_, n) => Some(Notification::info(format!("{n} files changed"))),
         };
         Applied::Done {
             branch_name,

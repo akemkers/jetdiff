@@ -1,7 +1,7 @@
 //! The side panel and the diff next to each other. Loads the selected file, and reads the repo source
-//! again when a row in the commit list is selected, a hunk is rolled back, files change on disk or
-//! HEAD moves. `w` shows the walkthrough in place of the diff, and its contents in the side panel. The
-//! keymap bar spans the window under both.
+//! again on a source reload, when a row in the commit list is selected, a hunk is rolled back,
+//! files change on disk or HEAD moves. `w` shows the walkthrough in place of the diff, and its
+//! contents in the side panel. The keymap bar spans the window under both.
 
 mod side_panel;
 mod walkthrough;
@@ -39,7 +39,8 @@ actions!(
         PrevFile,
         NextCommit,
         PrevCommit,
-        ToggleWalkthrough
+        ToggleWalkthrough,
+        SourceReload
     ]
 );
 
@@ -156,6 +157,12 @@ impl RepoView {
                 slot.show_brief(Notification::warning(text), cx)
             }),
         }
+    }
+
+    /// Also without a watcher, and also in the walkthrough, where only the diff behind it changes.
+    fn source_reload(&mut self, _: &SourceReload, _: &mut Window, cx: &mut Context<Self>) {
+        let job = self.repo_source.source_reload();
+        self.read(job, cx);
     }
 
     fn changed_on_disk(&mut self, change: DiskChange, cx: &mut Context<Self>) {
@@ -366,6 +373,7 @@ impl Render for RepoView {
             .on_action(cx.listener(Self::focus_down))
             .on_action(cx.listener(Self::focus_up))
             .on_action(cx.listener(Self::toggle_side_panel))
+            .on_action(cx.listener(Self::source_reload))
             .on_action(cx.listener(|this, _: &NextFile, _, cx| {
                 this.files.update(cx, |t, cx| t.step(true, cx))
             }))

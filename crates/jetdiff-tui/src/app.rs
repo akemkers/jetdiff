@@ -1,14 +1,14 @@
 //! The event loop: keys and mouse, the watcher and reading the repo source in the background.
 
+mod source;
+
 use std::io;
-use std::sync::mpsc::{Receiver, Sender, channel};
-use std::thread;
 use std::time::{Duration, Instant};
 
 use jetdiff_app::watcher::POLL;
 use jetdiff_app::{
-    AppCommand, Applied, Commits, Files, Notification, NotificationSlot, ReadJob, RepoRead,
-    RepoSource, Selected, Show, Shown, SlotContent, Watcher, app_command, empty_diff,
+    AppCommand, Applied, Commits, FilePair, Notification, NotificationSlot, Overlay, RepoSource,
+    Selected, Show, Shown, SlotContent, app_command, empty_diff,
 };
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Frame;
@@ -20,11 +20,12 @@ use ratatui::crossterm::{execute, queue};
 use ratatui::layout::Rect;
 
 use crate::clipboard;
-use crate::diff_view::{DiffView, Effect, Overlay};
+use crate::diff_view::{DiffView, Effect};
 use crate::input::to_key;
-use crate::side_panel::{Click, ListKey, Section, SidePanel, list_key};
+use crate::side_panel::{Click, ListKey, Section, list_key};
 use crate::widgets;
 use crate::{Settings, Term};
+use source::{Repository, Source};
 
 /// How often smooth scroll checks the row. A frame is drawn only when the row has changed.
 const ANIMATION_TICK: Duration = Duration::from_millis(8);
@@ -35,59 +36,39 @@ enum Focus {
     SidePanel(Section),
 }
 
-/// The answer from a read in the background.
-struct ReadAnswer {
-    generation: u64,
-    read: Result<RepoRead, String>,
-}
-
-struct Repository {
-    repo_source: RepoSource,
-    side_panel: SidePanel,
-    selected: Option<usize>,
-    side_panel_open: bool,
-    watcher: Option<Watcher>,
-    read_sender: Sender<ReadAnswer>,
-    read_receiver: Receiver<ReadAnswer>,
-    /// Only the answer to the last read is used.
-    generation: u64,
-}
-
-impl Repository {
-    fn read(&mut self, job: ReadJob) {
-        self.generation += 1;
-        let generation = self.generation;
-        let sender = self.read_sender.clone();
-        thread::spawn(move || {
-            let read = job.run();
-            let _ = sender.send(ReadAnswer { generation, read });
-        });
-    }
-
-    /// The answer to the last read, if it has arrived. Answers to earlier reads are dropped.
-    fn latest_read(&mut self) -> Option<ReadAnswer> {
-        let mut latest = None;
-        while let Ok(answer) = self.read_receiver.try_recv() {
-            if answer.generation == self.generation {
-                latest = Some(answer);
-            }
-        }
-        latest
-    }
-}
-
 pub struct App {
     theme: Theme,
     diff: DiffView,
     notification_slot: NotificationSlot,
-    repository: Option<Repository>,
+    source: Source,
     focus: Focus,
     side_panel_area: Rect,
     quit: bool,
 }
 
 impl App {
-    pub fn file(diff: FileDiff, paths: [String; 2], settings: &Settings) -> Self {
+    pub fn file_pair(file_pair: FilePair, diff: FileDiff, settings: &Settings) -> Self {
+        let paths = file_pair.paths().clone();
+        Self::new(diff, paths, Source::FilePair(file_pair), settings)
+    }
+
+    pub fn repo_source(
+        repo_source: RepoSource,
+        commits: Option<Commits>,
+        settings: &Settings,
+    ) -> Self {
+        let (repository, warning) = Repository::new(repo_source, commits, settings);
+        let selected = repository.selected();
+        let source = Source::RepoSource(Box::new(repository));
+        let mut app = Self::new(empty_diff(), Default::default(), source, settings);
+        if let Some(warning) = warning {
+            app.show_brief(warning);
+        }
+        app.select(selected);
+        app
+    }
+
+    fn new(diff: FileDiff, paths: [String; 2], source: Source, settings: &Settings) -> Self {
         Self {
             theme: settings.theme,
             diff: DiffView::new(
@@ -98,44 +79,11 @@ impl App {
                 settings.smooth_scroll,
             ),
             notification_slot: NotificationSlot::default(),
-            repository: None,
+            source,
             focus: Focus::Diff,
             side_panel_area: Rect::default(),
             quit: false,
         }
-    }
-
-    pub fn repo_source(
-        repo_source: RepoSource,
-        commits: Option<Commits>,
-        settings: &Settings,
-    ) -> Self {
-        let mut app = Self::file(empty_diff(), Default::default(), settings);
-        let mut watcher = None;
-        if commits.is_some() {
-            match Watcher::new(repo_source.repo()) {
-                Ok(started) => watcher = Some(started),
-                Err(e) => app.show_brief(Notification::warning(format!(
-                    "Can't watch for file changes: {e}"
-                ))),
-            }
-        }
-        let files = Files::new(repo_source.changed_files().clone());
-        let side_panel = SidePanel::new(files, commits, settings.icons);
-        let selected = repo_source.first();
-        let (read_sender, read_receiver) = channel();
-        app.repository = Some(Repository {
-            repo_source,
-            side_panel,
-            selected,
-            side_panel_open: settings.side_panel_open,
-            watcher,
-            read_sender,
-            read_receiver,
-            generation: 0,
-        });
-        app.select(selected);
-        app
     }
 
     pub fn run(mut self, terminal: &mut Term) -> io::Result<()> {
@@ -187,26 +135,23 @@ impl App {
     }
 
     fn background(&mut self) {
-        let Some(repo) = &mut self.repository else {
-            return;
-        };
-        if let Some(change) = repo.watcher.as_ref().and_then(|watcher| watcher.take()) {
-            let job = repo.repo_source.changed_on_disk(change);
-            repo.read(job);
-        }
-        if let Some(answer) = repo.latest_read() {
-            let applied = repo.repo_source.apply(answer.read);
+        if let Some(applied) = self
+            .source
+            .repository_mut()
+            .and_then(|repository| repository.background())
+        {
             self.show_applied(applied);
         }
     }
 
     fn show_applied(&mut self, applied: Applied) {
-        let Some(repo) = &mut self.repository else {
+        let Some(repo) = self.source.repository_mut() else {
             return;
         };
+        let side_panel = repo.side_panel_mut();
         match applied {
             Applied::Failed { selected, brief } => {
-                if let Some(commits) = &mut repo.side_panel.commits {
+                if let Some(commits) = &mut side_panel.commits {
                     commits.set_selected(selected);
                 }
                 self.show_brief(brief);
@@ -219,11 +164,11 @@ impl App {
                 file,
                 brief,
             } => {
-                if let Some(list) = &mut repo.side_panel.commits {
+                if let Some(list) = &mut side_panel.commits {
                     list.set_commits(branch_name, commits, selected);
                 }
                 if let Some(changed_files) = changed_files {
-                    repo.side_panel.files.set_changed_files(changed_files);
+                    side_panel.files.set_changed_files(changed_files);
                 }
                 self.select(file);
                 if let Some(brief) = brief {
@@ -233,20 +178,33 @@ impl App {
         }
     }
 
+    /// A repo source is read in the background, a File pair right away. The cursor and scroll are
+    /// kept for the same file.
+    fn source_reload(&mut self) {
+        match &mut self.source {
+            Source::RepoSource(repository) => repository.source_reload(),
+            Source::FilePair(file_pair) => {
+                let (diff, brief) = file_pair.source_reload();
+                if let Some(diff) = diff {
+                    self.diff.update_diff(diff, file_pair.paths().clone());
+                }
+                self.notification_slot.show_brief(brief, Instant::now());
+            }
+        }
+    }
+
     fn show_brief(&mut self, brief: Notification) {
         self.notification_slot.show_brief(brief, Instant::now());
     }
 
     fn select(&mut self, file: Option<usize>) {
-        let Some(repo) = &mut self.repository else {
-            return;
-        };
-        repo.selected = file;
-        if let Some(file) = file {
-            repo.side_panel.reveal_file(file);
+        if let Some(show) = self
+            .source
+            .repository_mut()
+            .map(|repository| repository.load(file))
+        {
+            self.show(show);
         }
-        let show = repo.repo_source.load(file);
-        self.show(show);
     }
 
     fn show(&mut self, show: Show) {
@@ -284,16 +242,12 @@ impl App {
                 self.show_brief(Notification::info(format!("Copied {cursor_location}")));
             }
             Some(Effect::Rollback(request)) => {
-                let Some(repo) = &mut self.repository else {
+                let Some(repo) = self.source.repository_mut() else {
                     return Ok(());
                 };
-                match repo.repo_source.rollback(&request) {
+                match repo.rollback(&request) {
                     None => {}
-                    Some(Ok(show)) => {
-                        let job = repo.repo_source.rolled_back();
-                        repo.read(job);
-                        self.show(show);
-                    }
+                    Some(Ok(show)) => self.show(show),
                     Some(Err(text)) => self.show_brief(Notification::warning(text)),
                 }
             }
@@ -353,11 +307,12 @@ impl App {
                 self.effect(effect)?;
             }
             AppCommand::ZoomIn | AppCommand::ZoomOut | AppCommand::ResetZoom => {}
+            AppCommand::SourceReload => self.source_reload(),
             AppCommand::NextFile | AppCommand::PrevFile => {
                 let forward = cmd == AppCommand::NextFile;
-                if let Some(repo) = &self.repository
-                    && let Some(file) = repo.selected
-                    && let Some(next) = repo.side_panel.files.next_file(file, forward)
+                if let Some(repo) = self.source.repository()
+                    && let Some(file) = repo.selected()
+                    && let Some(next) = repo.side_panel().files.next_file(file, forward)
                 {
                     self.select(Some(next));
                 }
@@ -365,18 +320,17 @@ impl App {
             // The walkthrough is only in the window so far
             AppCommand::ToggleWalkthrough => return Ok(false),
             AppCommand::NextCommit | AppCommand::PrevCommit => {
-                let selected = self
-                    .repository
-                    .as_mut()
-                    .and_then(|repo| repo.side_panel.step_commit(cmd == AppCommand::NextCommit));
+                let selected = self.source.repository_mut().and_then(|repo| {
+                    repo.side_panel_mut()
+                        .step_commit(cmd == AppCommand::NextCommit)
+                });
                 self.select_in_commit_list(selected);
             }
             AppCommand::ToggleSidePanel => {
-                if let Some(repo) = &mut self.repository {
-                    repo.side_panel_open = !repo.side_panel_open;
-                    if !repo.side_panel_open {
-                        self.focus = Focus::Diff;
-                    }
+                if let Some(repo) = self.source.repository_mut()
+                    && !repo.toggle_side_panel()
+                {
+                    self.focus = Focus::Diff;
                 }
             }
             AppCommand::FocusLeft => {
@@ -403,27 +357,27 @@ impl App {
     }
 
     fn section_open(&self, section: Section) -> bool {
-        self.repository
-            .as_ref()
-            .is_some_and(|repo| repo.side_panel_open && repo.side_panel.is_open(section))
+        self.source
+            .repository()
+            .is_some_and(|repo| repo.side_panel_open() && repo.side_panel().is_open(section))
     }
 
     fn list_key(&mut self, section: Section, key: jetdiff_viewmodel::Key) {
-        let Some(repo) = &mut self.repository else {
+        let Some(repo) = self.source.repository_mut() else {
             return;
         };
+        let side_panel = repo.side_panel_mut();
         match list_key(key) {
-            Some(ListKey::Down) => repo.side_panel.move_cursor(section, true),
-            Some(ListKey::Up) => repo.side_panel.move_cursor(section, false),
+            Some(ListKey::Down) => side_panel.move_cursor(section, true),
+            Some(ListKey::Up) => side_panel.move_cursor(section, false),
             Some(ListKey::Select) => match section {
                 Section::Files => {
-                    if let Some(file) = repo.side_panel.files.select_at_cursor() {
+                    if let Some(file) = side_panel.files.select_at_cursor() {
                         self.select(Some(file));
                     }
                 }
                 Section::Commits => {
-                    let selected = repo
-                        .side_panel
+                    let selected = side_panel
                         .commits
                         .as_mut()
                         .and_then(|commits| commits.select_at_cursor());
@@ -435,16 +389,15 @@ impl App {
     }
 
     fn select_in_commit_list(&mut self, selected: Option<Selected>) {
-        if let (Some(selected), Some(repo)) = (selected, &mut self.repository) {
-            let job = repo.repo_source.select(selected);
-            repo.read(job);
+        if let (Some(selected), Some(repo)) = (selected, self.source.repository_mut()) {
+            repo.select_commit(selected);
         }
     }
 
     fn side_panel_contains(&self, x: u16, y: u16) -> bool {
-        self.repository
-            .as_ref()
-            .is_some_and(|repo| repo.side_panel_open)
+        self.source
+            .repository()
+            .is_some_and(|repo| repo.side_panel_open())
             && self.side_panel_area.contains((x, y).into())
     }
 
@@ -455,26 +408,26 @@ impl App {
             return;
         }
         self.diff.press_elsewhere();
-        let Some(repo) = &mut self.repository else {
+        let Some(repo) = self.source.repository_mut() else {
             return;
         };
-        match repo.side_panel.click(y) {
+        let side_panel = repo.side_panel_mut();
+        match side_panel.click(y) {
             Some(Click::Heading(section)) => {
-                repo.side_panel.toggle(section);
-                if self.focus == Focus::SidePanel(section) && !repo.side_panel.is_open(section) {
+                side_panel.toggle(section);
+                if self.focus == Focus::SidePanel(section) && !side_panel.is_open(section) {
                     self.focus = Focus::Diff;
                 }
             }
             Some(Click::File(row)) => {
                 self.focus = Focus::SidePanel(Section::Files);
-                if let Some(file) = repo.side_panel.files.select(row) {
+                if let Some(file) = side_panel.files.select(row) {
                     self.select(Some(file));
                 }
             }
             Some(Click::Commit(row)) => {
                 self.focus = Focus::SidePanel(Section::Commits);
-                let selected = repo
-                    .side_panel
+                let selected = side_panel
                     .commits
                     .as_mut()
                     .and_then(|commits| commits.select(row));
@@ -486,8 +439,8 @@ impl App {
 
     fn wheel(&mut self, x: u16, y: u16, down: bool) {
         if self.side_panel_contains(x, y) {
-            if let Some(repo) = &mut self.repository {
-                repo.side_panel.wheel(y, down);
+            if let Some(repo) = self.source.repository_mut() {
+                repo.side_panel_mut().wheel(y, down);
             }
         } else {
             self.diff.wheel(down);
@@ -508,8 +461,14 @@ impl App {
             ..area
         };
         let focus = self.focus;
-        if let Some(repo) = self.repository.as_mut().filter(|repo| repo.side_panel_open) {
-            let width = repo.side_panel.width(area.width);
+        if let Some(repo) = self
+            .source
+            .repository_mut()
+            .filter(|repo| repo.side_panel_open())
+        {
+            let selected = repo.selected();
+            let side_panel = repo.side_panel_mut();
+            let width = side_panel.width(area.width);
             self.side_panel_area = Rect {
                 width: width.min(area.width),
                 ..main
@@ -518,15 +477,14 @@ impl App {
                 Focus::SidePanel(section) => Some(section),
                 Focus::Diff => None,
             };
-            repo.side_panel
-                .render(self.side_panel_area, section, repo.selected, &theme, buf);
+            side_panel.render(self.side_panel_area, section, selected, &theme, buf);
             main.x += self.side_panel_area.width;
             main.width -= self.side_panel_area.width;
         }
         if let Some(file) = self
-            .repository
-            .as_ref()
-            .and_then(|repository| repository.repo_source.shown())
+            .source
+            .repository()
+            .and_then(|repository| repository.shown())
         {
             widgets::header(&file.path, Rect { height: 1, ..main }, &theme, buf);
             main.y += 1;
@@ -554,9 +512,9 @@ impl App {
             };
             widgets::notification(&notification, row, &theme, buf);
         }
-        match &self.diff.overlay {
+        match self.diff.overlay() {
             Some(Overlay::Help) => widgets::help(area, &theme, buf),
-            Some(Overlay::Confirm(_)) => widgets::confirm_rollback(main, &theme, buf),
+            Some(Overlay::Rollback(_)) => widgets::confirm_rollback(main, &theme, buf),
             None => {}
         }
     }

@@ -15,7 +15,9 @@ use gpui::{
     actions, canvas, div, prelude::*, px,
 };
 use jetdiff_app::help::DIFF_KEYMAP_BAR;
-use jetdiff_app::{Notification, RollbackRequest, cursor_location, rollback_request};
+use jetdiff_app::{
+    Notification, Overlay, OverlaySlot, RollbackRequest, cursor_location, rollback_request,
+};
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::metrics::{FONT_SIZE, zoomed};
 use jetdiff_viewmodel::{
@@ -38,13 +40,6 @@ const SIDES: [Side; 2] = [Side::Left, Side::Right];
 
 /// The user wants to roll back a hunk. Sent to whoever can write the file.
 pub struct Rollback(pub RollbackRequest);
-
-/// Lies over the diff. Only one at a time.
-enum Overlay {
-    /// Waiting for confirmation of the rollback. Enter confirms, anything else cancels.
-    Confirm(Rollback),
-    Help,
-}
 
 /// New font size after zoom, so the rest of the window can follow.
 pub struct Zoomed {
@@ -73,7 +68,7 @@ pub struct FileDiffView {
     split_share: SplitShare,
     /// Right is a file in Local changes, so hunks can be rolled back.
     can_rollback: bool,
-    overlay: Option<Overlay>,
+    overlay: OverlaySlot,
     /// Left and Right path for `y`. Empty when there is no file.
     paths: [String; 2],
     /// Owned by whoever makes the diff, and drawn above the keymap bar.
@@ -85,9 +80,13 @@ pub struct FileDiffView {
 }
 
 impl FileDiffView {
-    /// One file, with its own notification slot.
-    pub fn standalone(diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) -> Self {
-        let notification_slot = cx.new(|_| NotificationSlotView::default());
+    /// One file, which draws the keymap bar itself.
+    pub(crate) fn standalone(
+        diff: FileDiff,
+        paths: [String; 2],
+        notification_slot: Entity<NotificationSlotView>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut view = Self::new(diff, paths, notification_slot, cx);
         view.draws_keymap_bar = true;
         view
@@ -116,7 +115,7 @@ impl FileDiffView {
             viewport_height: 0.,
             hunk_minimap_marks: Rc::new([Vec::new(), Vec::new()]),
             can_rollback: false,
-            overlay: None,
+            overlay: OverlaySlot::default(),
             paths,
             notification_slot,
             draws_keymap_bar: false,
@@ -146,9 +145,7 @@ impl FileDiffView {
 
     /// A new file in the same view. Zoom is kept; cursor and scroll start over.
     pub fn set_diff(&mut self, diff: FileDiff, paths: [String; 2], cx: &mut Context<Self>) {
-        if matches!(self.overlay, Some(Overlay::Confirm(_))) {
-            self.overlay = None;
-        }
+        self.overlay.cancel_rollback();
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         self.mode = DiffMode::new(Rc::new(diff), self.unified, self.fold_unchanged);
@@ -167,6 +164,7 @@ impl FileDiffView {
             self.set_diff(diff, paths, cx);
             return;
         };
+        self.overlay.cancel_rollback();
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         self.scroll.stop(self.mode.scroll_mut());
@@ -347,7 +345,7 @@ impl FileDiffView {
     fn rollback(&mut self, cx: &mut Context<Self>) {
         match rollback_request(self.mode.diff(), self.mode.cursor_hunk(), self.can_rollback) {
             Ok(request) => {
-                self.overlay = Some(Overlay::Confirm(Rollback(request)));
+                self.overlay.ask_rollback(request);
                 cx.notify();
             }
             Err(text) => self.show_brief(text, cx),
@@ -357,20 +355,16 @@ impl FileDiffView {
     /// Comes as an action, so `?` also works when the tree has focus. Cancels the rollback, which
     /// otherwise doesn't see the key.
     pub(crate) fn toggle_help(&mut self, _: &ToggleHelp, _: &mut Window, cx: &mut Context<Self>) {
-        self.overlay = match self.overlay {
-            Some(Overlay::Help) => None,
-            _ => Some(Overlay::Help),
-        };
+        self.overlay.toggle_help();
         cx.notify();
     }
 
     /// Esc passes through when help is not shown, so the rollback dialog gets it.
     pub(crate) fn hide_help(&mut self, _: &HideHelp, _: &mut Window, cx: &mut Context<Self>) {
-        if !matches!(self.overlay, Some(Overlay::Help)) {
+        if !self.overlay.hide_help() {
             cx.propagate();
             return;
         }
-        self.overlay = None;
         cx.notify();
     }
 
@@ -412,17 +406,14 @@ impl FileDiffView {
 
     fn on_key_down(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         // While the rollback waits for an answer, no keys go to the diff
-        match self.overlay.take() {
-            Some(Overlay::Confirm(rollback)) => {
-                let k = &ev.keystroke;
-                if k.key == "enter" && !k.modifiers.modified() {
-                    cx.emit(rollback);
-                }
-                cx.stop_propagation();
-                cx.notify();
-                return;
+        if let Some(request) = self.overlay.take_rollback() {
+            let k = &ev.keystroke;
+            if k.key == "enter" && !k.modifiers.modified() {
+                cx.emit(Rollback(request));
             }
-            other => self.overlay = other,
+            cx.stop_propagation();
+            cx.notify();
+            return;
         }
         match self.keys.feed(to_key(&ev.keystroke)) {
             Parsed::Command(cmd) => {
@@ -495,7 +486,7 @@ impl FileDiffView {
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus);
         self.keys.reset();
-        self.overlay = None;
+        self.overlay.close();
         let Some(hit) = self.hit(ev.position) else {
             return;
         };
@@ -625,9 +616,9 @@ impl Render for FileDiffView {
                 scale,
             )
         });
-        let overlay = self.overlay.as_ref().map(|overlay| match overlay {
+        let overlay = self.overlay.current().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
-            Overlay::Confirm(_) => confirm_dialog("Roll back this hunk?", &theme.palette),
+            Overlay::Rollback(_) => confirm_dialog("Roll back this hunk?", &theme.palette),
         });
 
         div()

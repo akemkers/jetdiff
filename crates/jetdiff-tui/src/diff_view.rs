@@ -6,7 +6,7 @@ mod split_share;
 use std::rc::Rc;
 use std::time::Instant;
 
-use jetdiff_app::{RollbackRequest, cursor_location, rollback_request};
+use jetdiff_app::{Overlay, OverlaySlot, RollbackRequest, cursor_location, rollback_request};
 use jetdiff_viewmodel::{
     Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, RowLayout, ScrollAnimator,
     SplitShare, Theme, UnifiedDiff, UnifiedState, Viewport,
@@ -20,12 +20,6 @@ use crate::{code_viewer, geometry};
 
 /// Longer than in GPUI, since whole rows need more time to look smooth.
 const NAV_ANIMATION_MS: f32 = 250.;
-
-pub enum Overlay {
-    /// Enter confirms, anything else cancels.
-    Confirm(RollbackRequest),
-    Help,
-}
 
 pub enum Effect {
     /// Shown as a brief info notification.
@@ -47,7 +41,7 @@ pub struct DiffView {
     split_share: SplitShare,
     diff_divider_grab: DiffDividerGrab,
     can_rollback: bool,
-    pub overlay: Option<Overlay>,
+    overlay: OverlaySlot,
     paths: [String; 2],
     max_cols: usize,
     initialized: bool,
@@ -73,7 +67,7 @@ impl DiffView {
             split_share: SplitShare::default(),
             diff_divider_grab: DiffDividerGrab::default(),
             can_rollback: false,
-            overlay: None,
+            overlay: OverlaySlot::default(),
             paths,
             initialized: false,
             area: Rect::default(),
@@ -84,10 +78,12 @@ impl DiffView {
         self.can_rollback = can_rollback;
     }
 
+    pub fn overlay(&self) -> Option<&Overlay> {
+        self.overlay.current()
+    }
+
     pub fn set_diff(&mut self, diff: FileDiff, paths: [String; 2]) {
-        if matches!(self.overlay, Some(Overlay::Confirm(_))) {
-            self.overlay = None;
-        }
+        self.overlay.cancel_rollback();
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         self.state = state(Rc::new(diff), self.unified, self.fold_unchanged);
@@ -101,6 +97,7 @@ impl DiffView {
         let Some(viewport) = self.viewport().filter(|_| self.initialized) else {
             return self.set_diff(diff, paths);
         };
+        self.overlay.cancel_rollback();
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         let row_layout = row_layout(&diff, self.unified);
@@ -192,23 +189,16 @@ impl DiffView {
     }
 
     pub fn toggle_help(&mut self) {
-        self.overlay = match self.overlay {
-            Some(Overlay::Help) => None,
-            _ => Some(Overlay::Help),
-        };
+        self.overlay.toggle_help();
     }
 
     /// `false` when help is not shown, so Esc passes through.
     pub fn hide_help(&mut self) -> bool {
-        if !matches!(self.overlay, Some(Overlay::Help)) {
-            return false;
-        }
-        self.overlay = None;
-        true
+        self.overlay.hide_help()
     }
 
     pub fn key(&mut self, key: Key) -> Option<Effect> {
-        if let Some(Overlay::Confirm(request)) = self.overlay.take() {
+        if let Some(request) = self.overlay.take_rollback() {
             let plain = !key.ctrl && !key.shift && !key.cmd;
             return (key.code == KeyCode::Enter && plain).then_some(Effect::Rollback(request));
         }
@@ -224,7 +214,7 @@ impl DiffView {
                 let diff = &self.state.diff.diff;
                 match rollback_request(diff, self.state.cursor_hunk(), self.can_rollback) {
                     Ok(request) => {
-                        self.overlay = Some(Overlay::Confirm(request));
+                        self.overlay.ask_rollback(request);
                         None
                     }
                     Err(text) => Some(Effect::ShowBrief(text.into())),
@@ -267,7 +257,7 @@ impl DiffView {
     /// A click on a closed fold opens it, as in GPUI.
     pub fn click(&mut self, x: u16, y: u16, now: Instant) {
         self.keys.reset();
-        self.overlay = None;
+        self.overlay.close();
         if self.grab_diff_divider(x, y, now) || !self.area.contains((x, y).into()) {
             return;
         }

@@ -23,7 +23,7 @@ pub enum Applied {
         /// Only when the list has changed.
         changed_files: Option<Rc<[ChangedFile]>>,
         file: Option<usize>,
-        /// Only after files changed on disk, not after HEAD moved.
+        /// After files changed on disk, not after HEAD moved, and after a source reload.
         brief: Option<Notification>,
     },
 }

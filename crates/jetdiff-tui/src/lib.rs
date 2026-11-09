@@ -16,7 +16,7 @@ mod widgets;
 
 use std::io::{self, BufWriter, Stdout};
 
-use jetdiff_app::{Commits, RepoSource};
+use jetdiff_app::{Commits, FilePair, RepoSource};
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Terminal;
 use ratatui::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
@@ -42,12 +42,12 @@ pub struct Settings {
 }
 
 pub fn run_file_pair(
+    file_pair: FilePair,
     diff: FileDiff,
-    paths: [String; 2],
     title: &str,
     settings: Settings,
 ) -> io::Result<()> {
-    run(App::file(diff, paths, &settings), title)
+    run(App::file_pair(file_pair, diff, &settings), title)
 }
 
 /// `commits` only for a folder, not for a commit or a PR.
