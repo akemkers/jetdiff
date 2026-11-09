@@ -45,6 +45,7 @@ jetdiff-git      git CLI: changed files for Branch, Local changes, a commit or a
 jetdiff-app      the state around the diff, still without a GUI. Shared by all UIs
   repo_source    the repo source and the file being shown. Reading it again per trigger, and the selected file
   content        from git content to FileDiff, with a pinned notification when it can't be shown
+  file_pair      the two files of a File pair, read again on a source reload
   files          the file tree's rows and cursor
   commits        the commit list's rows, cursor and selection
   actions        rollback and file:line for the cursor's line
@@ -53,6 +54,7 @@ jetdiff-app      the state around the diff, still without a GUI. Shared by all U
   notification   a notification and its level, Info or Warning
   notification_slot
                  one pinned and one brief notification, shared by the GPUI view and the terminal
+  overlay_slot   help or a rollback waiting for Enter, over the diff
   watcher        changed paths, collected until it is quiet
 
 jetdiff-ui       GPUI

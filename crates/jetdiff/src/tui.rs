@@ -16,7 +16,9 @@ pub fn run(content: Content, title: &str, config: Config) -> Result<(), String> 
         smooth_scroll: config.terminal.smooth_scroll,
     };
     match content {
-        Content::FilePair(diff, paths) => jetdiff_tui::run_file_pair(*diff, paths, title, settings),
+        Content::FilePair(file_pair, diff) => {
+            jetdiff_tui::run_file_pair(file_pair, *diff, title, settings)
+        }
         Content::Repo(repo_source, commits) => {
             jetdiff_tui::run_repo_source(*repo_source, commits, title, settings)
         }

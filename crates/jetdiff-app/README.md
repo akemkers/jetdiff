@@ -11,15 +11,17 @@ The state around the diff: the changed files in the repo, the file being shown, 
 | Owns                                                                                                    | Module    |
 | ------------------------------------------------------------------------------------------------------- | --------- |
 | The repo source: what is selected in the commit list, the changed files and the file being shown. Reading it again on each trigger, and which file is selected afterwards | `repo_source` |
+| The two files of a File pair, read again on a source reload                                            | `file_pair` |
 | From the content git gives to `FileDiff`: binary file, too big, identical content and syntax          | `content` |
 | The file tree's rows and cursor, and folders being open or closed                                       | `files`   |
 | The commit list's rows (Branch with its slices under it), cursor and selection, and the age like "3 hours ago" | `commits` |
 | Rollback and `file:line` for the cursor's line: what is rolled back, or why it can't be               | `actions` |
 | The keys in the keymap bar and in the help on `?`                                                     | `help`    |
-| The keys outside the diff: switching files, moving focus, the side panel, help, zoom and quit         | `keys`    |
+| The keys outside the diff: switching files, moving focus, the side panel, source reload, help, zoom and quit | `keys`    |
 | Paths changed on disk, and whether HEAD moved, collected until it is quiet                             | `watcher` |
 | A notification and its level (`Notification`, `NotificationLevel`)                                    | `notification` |
 | One pinned and one brief notification, and which one shows now (`NotificationSlot`)                  | `notification_slot` |
+| What lies over the diff: help, or a rollback waiting for Enter (`OverlaySlot`)                        | `overlay_slot` |
 
 ## What the crate doesn't own
 
@@ -40,7 +42,7 @@ The crate starts no threads and has no timers. Work that takes time comes as a j
 ```rust
 use jetdiff_app::{Applied, RepoSource, Show, Watcher};
 
-// A folder, with the commit list. A commit or a PR is `RepoSource::new(repo, changed_files)`
+// A folder, with the commit list. A commit is `RepoSource::commit(dir, rev)`, a PR `RepoSource::pull_request(repo)`
 let (mut repo_source, mut commits) = RepoSource::open(Path::new("."))?;
 let mut selected = repo_source.first();
 
@@ -54,7 +56,7 @@ match repo_source.load(selected) {
 // The watcher is asked every `watcher::POLL`
 let watcher = Watcher::new(repo_source.repo())?;
 if let Some(change) = watcher.take() {
-    // Also `select` and `rolled_back`, each with its own trigger
+    // Also `select`, `rolled_back` and `source_reload`, each with its own trigger
     let job = repo_source.changed_on_disk(change);   // Send, can run on another thread
     let read = job.run();
     match repo_source.apply(read) {

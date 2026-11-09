@@ -13,7 +13,7 @@ The modules don't know each other. Shared state, like the selected file, lives i
 Two views are public:
 
 ```rust
-use jetdiff_ui::{Assets, FileDiffView, RepoView, Settings, UiTheme, load_font};
+use jetdiff_ui::{Assets, FilePairView, RepoView, Settings, UiTheme, load_font};
 
 Application::new().with_assets(Assets).run(|cx| {
     load_font(cx);
@@ -24,8 +24,8 @@ Application::new().with_assets(Assets).run(|cx| {
         unified: false,
         side_panel_open: false,
     });
-    // One file:
-    cx.new(|cx| FileDiffView::standalone(diff, paths, cx));
+    // A File pair:
+    cx.new(|cx| FilePairView::new(file_pair, diff, cx));
     // A repo source, with the tree and commits:
     cx.new(|cx| RepoView::new(repo, changed_files, cx));
 });
@@ -33,7 +33,7 @@ Application::new().with_assets(Assets).run(|cx| {
 
 `Settings` is a GPUI global that all the views read. `font_size` is where zoom starts, `fold_unchanged` closes the folds in each file that is loaded, and `unified` is the diff mode at startup.
 
-The keys go through `KeyParser` in `jetdiff-viewmodel`. Actions like zoom and moving focus (`ZoomIn`, `ToggleDiffMode`, `FocusLeft`, `ToggleSidePanel` etc.) are exported, and whoever makes the window binds them to keys.
+The keys go through `KeyParser` in `jetdiff-viewmodel`. Actions like zoom, moving focus and source reload (`ZoomIn`, `ToggleDiffMode`, `FocusLeft`, `ToggleSidePanel`, `SourceReload` etc.) are exported, and whoever makes the window binds them to keys.
 
 ```mermaid
 graph TD
@@ -56,6 +56,7 @@ graph TD
 
 - `repo_view`: the tree and the commit list on the left, the diff on the right. Runs the read jobs from `jetdiff_app::RepoSource` in the background and applies the result
 - `file_diff`: the diff of one file, Split or Unified. Keys, mouse, zoom and scroll animation
+- `file_pair_view`: the diff of a File pair, read again on a source reload
 - `code_viewer`: picks Split or Unified for drawing and mouse. Below it are:
   - `split`: two `SplitSide` with the divider between them
   - `split_side`: one side in Split: backgrounds, folds, text and line numbers

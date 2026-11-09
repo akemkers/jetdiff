@@ -19,6 +19,7 @@ pub enum AppCommand {
     /// The walkthrough, in and out.
     ToggleWalkthrough,
     PrevCommit,
+    SourceReload,
     ToggleHelp,
     HideHelp,
     Quit,
@@ -44,6 +45,7 @@ pub const BINDINGS: &[(&str, AppCommand)] = &[
     ("N", AppCommand::NextCommit),
     ("w", AppCommand::ToggleWalkthrough),
     ("P", AppCommand::PrevCommit),
+    ("r", AppCommand::SourceReload),
     ("?", AppCommand::ToggleHelp),
     ("escape", AppCommand::HideHelp),
     ("q", AppCommand::Quit),
@@ -134,6 +136,8 @@ mod tests {
             Some(AppCommand::NextCommit)
         );
         assert_eq!(app_command(Key::char('n')), None);
+        assert_eq!(app_command(Key::char('r')), Some(AppCommand::SourceReload));
+        assert_eq!(app_command(Key::char('z')), None);
         assert_eq!(app_command(Key::ctrl('h')), Some(AppCommand::FocusLeft));
         assert_eq!(app_command(secondary('-')), Some(AppCommand::ZoomOut));
         assert_eq!(app_command(secondary('+')), Some(AppCommand::ZoomIn));

@@ -7,9 +7,9 @@ use gpui::{
 use jetdiff_app::walkthrough::Writer;
 use jetdiff_app::{AppCommand, BINDINGS};
 use jetdiff_ui::{
-    Assets, FileDiffView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextCommit,
-    NextFile, PrevCommit, PrevFile, RepoView, ResetZoom, Settings, ToggleDiffMode, ToggleHelp,
-    ToggleSidePanel, ToggleWalkthrough, UiTheme, ZoomIn, ZoomOut, load_font,
+    Assets, FilePairView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextCommit,
+    NextFile, PrevCommit, PrevFile, RepoView, ResetZoom, Settings, SourceReload, ToggleDiffMode,
+    ToggleHelp, ToggleSidePanel, ToggleWalkthrough, UiTheme, ZoomIn, ZoomOut, load_font,
 };
 use jetdiff_viewmodel::Theme;
 
@@ -37,9 +37,9 @@ pub fn run(content: Content, title: String, config: Config) {
                 },
             });
             match content {
-                Content::FilePair(diff, paths) => open(cx, title, move |cx| {
-                    FileDiffView::standalone(*diff, paths, cx)
-                }),
+                Content::FilePair(file_pair, diff) => {
+                    open(cx, title, move |cx| FilePairView::new(file_pair, *diff, cx))
+                }
                 Content::Repo(repo_source, commits) => open(cx, title, move |cx| {
                     RepoView::new(*repo_source, commits, cx)
                 }),
@@ -71,6 +71,7 @@ fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
         AppCommand::NextCommit => KeyBinding::new(keys, NextCommit, None),
         AppCommand::ToggleWalkthrough => KeyBinding::new(keys, ToggleWalkthrough, None),
         AppCommand::PrevCommit => KeyBinding::new(keys, PrevCommit, None),
+        AppCommand::SourceReload => KeyBinding::new(keys, SourceReload, None),
         AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),
         AppCommand::HideHelp => KeyBinding::new(keys, HideHelp, None),
         AppCommand::Quit => KeyBinding::new(keys, Quit, None),

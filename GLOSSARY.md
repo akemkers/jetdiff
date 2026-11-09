@@ -65,9 +65,13 @@ _Avoid_: changes, multi file
 Two files on disk compared directly, without a repo.
 _Avoid_: files, two files
 
+**Source reload**:
+Reading the source again, so the diff shows its current state.
+_Avoid_: refresh, update
+
 **Source autoreload**:
-Branch or Local changes read again automatically when files change on disk.
-_Avoid_: reload, refresh, update
+A source reload of Branch or Local changes that happens by itself when files change on disk.
+_Avoid_: refresh, update
 
 ### Walkthrough
 

@@ -22,9 +22,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use jetdiff_app::{Commits, RepoSource};
+use jetdiff_app::{Commits, FilePair, RepoSource};
 use jetdiff_git::{PullRequest, Repo};
-use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, Language};
+use jetdiff_viewmodel::FileDiff;
 
 enum Source {
     Branch(PathBuf),
@@ -84,15 +84,9 @@ fn parse_source(paths: &[String]) -> Result<Source, String> {
     }
 }
 
-fn read(path: &str) -> Result<String, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
-    // Binary files and wrong encoding are shown with replacement characters instead of failing
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
-}
-
 /// What the window should show, ready before the app starts so errors can be written to the terminal.
 pub enum Content {
-    FilePair(Box<FileDiff>, [String; 2]),
+    FilePair(FilePair, Box<FileDiff>),
     /// The commit list only for a folder, not for a commit or a PR.
     Repo(Box<RepoSource>, Option<Commits>),
 }
@@ -100,19 +94,20 @@ pub enum Content {
 fn read_source(source: &Source) -> Result<(Content, String), String> {
     let (repo_source, commits, title) = match source {
         Source::FilePair(left_side, right_side) => {
-            let diff = file_diff(left_side, right_side)?;
+            let file_pair = FilePair::new(left_side.clone(), right_side.clone());
+            let diff = file_pair.read()?;
             let title = format!("{left_side} ↔ {right_side}");
-            let paths = [left_side.clone(), right_side.clone()];
-            return Ok((Content::FilePair(Box::new(diff), paths), title));
+            return Ok((Content::FilePair(file_pair, Box::new(diff)), title));
         }
         Source::Commit(rev) => {
-            let repo = Repo::commit(Path::new("."), rev)?;
-            (repo_source(repo)?, None, rev.clone())
+            let repo_source = RepoSource::commit(Path::new("."), rev)?;
+            (repo_source, None, rev.clone())
         }
         Source::PullRequest(pr) => {
             let text = format!("Fetching PR #{} from {}", pr.number, pr.slug);
             let repo = with_progress(&text, || Repo::pull_request(Path::new("."), pr))?;
-            (repo_source(repo)?, None, format!("PR #{}", pr.number))
+            let pull_request_title = format!("PR #{}", pr.number);
+            (RepoSource::pull_request(repo)?, None, pull_request_title)
         }
         Source::Branch(dir) => {
             let (repo_source, commits) = RepoSource::open(dir)?;
@@ -123,11 +118,6 @@ fn read_source(source: &Source) -> Result<(Content, String), String> {
     // Several windows open at the same time must be told apart in the title
     let title = format!("{}: {title}", repo_source.repo().name());
     Ok((Content::Repo(Box::new(repo_source), commits), title))
-}
-
-fn repo_source(repo: Repo) -> Result<RepoSource, String> {
-    let changed_files = repo.changed_files()?;
-    Ok(RepoSource::new(repo, changed_files))
 }
 
 /// Shows that `work` is working, with a spinner and time in a terminal.
@@ -166,17 +156,6 @@ fn with_progress<T>(text: &str, work: impl FnOnce() -> Result<T, String>) -> Res
     };
     eprintln!("{mark}\x1b[0m {text} \x1b[2m{}\x1b[0m", seconds());
     out
-}
-
-fn file_diff(left_side: &str, right_side: &str) -> Result<FileDiff, String> {
-    let (left_side_text, right_side_text) = (read(left_side)?, read(right_side)?);
-    let mut diff = FileDiff::new(&left_side_text, &right_side_text, ComparisonPolicy::Default)
-        .map_err(|_| "the files are too big to diff".to_owned())?;
-    // Right first; Left can be a temporary file from git difftool
-    if let Some(lang) = Language::from_path(right_side).or_else(|| Language::from_path(left_side)) {
-        diff.highlight_syntax(lang);
-    }
-    Ok(diff)
 }
 
 fn main() -> ExitCode {
