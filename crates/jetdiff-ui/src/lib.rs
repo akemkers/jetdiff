@@ -13,7 +13,6 @@ mod keystroke;
 mod list;
 mod notification_slot_view;
 mod repo_view;
-mod scroll_animator;
 mod settings;
 mod side_panel_size;
 mod text;
@@ -31,3 +30,6 @@ pub use repo_view::{
 pub use settings::Settings;
 pub use text::load_font;
 pub use theme::UiTheme;
+
+/// Duration of an animated jump, in the diff and the walkthrough.
+const NAV_ANIMATION_MS: f32 = 170.;

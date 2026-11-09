@@ -12,7 +12,9 @@ use jetdiff_app::{
 };
 use jetdiff_viewmodel::{FileDiff, Theme};
 use ratatui::Frame;
-use ratatui::crossterm::event::{self, Event, KeyEventKind, MouseButton, MouseEventKind};
+use ratatui::crossterm::event::{
+    self, Event, KeyEventKind, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
 use ratatui::crossterm::{execute, queue};
 use ratatui::layout::Rect;
@@ -23,6 +25,9 @@ use crate::input::to_key;
 use crate::side_panel::{Click, ListKey, Section, SidePanel, list_key};
 use crate::widgets;
 use crate::{Settings, Term};
+
+/// How often smooth scroll checks the row. A frame is drawn only when the row has changed.
+const ANIMATION_TICK: Duration = Duration::from_millis(8);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
@@ -85,7 +90,13 @@ impl App {
     pub fn file(diff: FileDiff, paths: [String; 2], settings: &Settings) -> Self {
         Self {
             theme: settings.theme,
-            diff: DiffView::new(diff, paths, settings.unified, settings.fold_unchanged),
+            diff: DiffView::new(
+                diff,
+                paths,
+                settings.unified,
+                settings.fold_unchanged,
+                settings.smooth_scroll,
+            ),
             notification_slot: NotificationSlot::default(),
             repository: None,
             focus: Focus::Diff,
@@ -132,14 +143,47 @@ impl App {
             queue!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
             terminal.draw(|frame| self.draw(frame))?;
             execute!(terminal.backend_mut(), EndSynchronizedUpdate)?;
-            let mut timeout = POLL;
-            while event::poll(timeout)? {
-                self.event(event::read()?)?;
-                timeout = Duration::ZERO;
-            }
+            self.wait()?;
             self.background();
         }
         Ok(())
+    }
+
+    /// Handles the events that come within `POLL`. During smooth scroll it returns as soon as the
+    /// row shown changes, so a frame is drawn per row and not per tick.
+    fn wait(&mut self) -> io::Result<()> {
+        let deadline = Instant::now() + POLL;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let timeout = if self.diff.is_animating() {
+                remaining.min(ANIMATION_TICK)
+            } else {
+                remaining
+            };
+            let handled = event::poll(timeout)? && self.handle_events()?;
+            let now = Instant::now();
+            let moved = self.diff.step_animation(now);
+            if handled || moved || now >= deadline {
+                return Ok(());
+            }
+        }
+    }
+
+    /// All the events that are waiting. `false` when there was only mouse motion, which changes nothing.
+    fn handle_events(&mut self) -> io::Result<bool> {
+        let mut handled = false;
+        while event::poll(Duration::ZERO)? {
+            let event = event::read()?;
+            handled |= !matches!(
+                event,
+                Event::Mouse(MouseEvent {
+                    kind: MouseEventKind::Moved,
+                    ..
+                })
+            );
+            self.event(event)?;
+        }
+        Ok(handled)
     }
 
     fn background(&mut self) {

@@ -67,6 +67,7 @@ open = false               # true shows the file tree and the commit list at sta
 
 [terminal]
 icons = true               # file icons in the terminal view, requires a Nerd Font
+smooth_scroll = true       # animated jumps like n, d and G in the terminal view
 ```
 
 ### Keys

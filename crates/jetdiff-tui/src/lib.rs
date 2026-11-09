@@ -36,6 +36,8 @@ pub struct Settings {
     pub side_panel_open: bool,
     /// Nerd Font characters in front of the files in the tree.
     pub icons: bool,
+    /// Animated jumps, in whole rows.
+    pub smooth_scroll: bool,
 }
 
 pub fn run_file_pair(

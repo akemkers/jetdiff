@@ -40,6 +40,7 @@ pub struct SidePanel {
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Terminal {
     pub icons: bool,
+    pub smooth_scroll: bool,
 }
 
 pub fn load() -> Result<Config, String> {
@@ -116,7 +117,7 @@ fn path() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    const OK: &str = "font_size = 16\nfold_unchanged = false\ndiff_mode = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\n";
+    const OK: &str = "font_size = 16\nfold_unchanged = false\ndiff_mode = \"unified\"\n[side_panel]\nopen = true\n[terminal]\nicons = false\nsmooth_scroll = false\n";
 
     #[test]
     fn template_is_valid() {
@@ -126,6 +127,7 @@ mod tests {
         assert!(!config.unified);
         assert!(!config.side_panel.open);
         assert!(config.terminal.icons);
+        assert!(config.terminal.smooth_scroll);
     }
 
     #[test]
@@ -136,6 +138,7 @@ mod tests {
         assert!(config.unified);
         assert!(config.side_panel.open);
         assert!(!config.terminal.icons);
+        assert!(!config.terminal.smooth_scroll);
     }
 
     #[test]

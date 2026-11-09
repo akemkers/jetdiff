@@ -13,6 +13,7 @@ pub fn run(content: Content, title: &str, config: Config) -> Result<(), String> 
         fold_unchanged: config.fold_unchanged,
         side_panel_open: config.side_panel.open,
         icons: config.terminal.icons,
+        smooth_scroll: config.terminal.smooth_scroll,
     };
     match content {
         Content::FilePair(diff, paths) => jetdiff_tui::run_file_pair(*diff, paths, title, settings),
