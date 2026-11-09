@@ -6,6 +6,7 @@ mod diff_header;
 mod file_controls;
 
 use std::rc::Rc;
+use std::time::Instant;
 
 use gpui::{
     ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
@@ -17,16 +18,16 @@ use jetdiff_app::{Notification, RollbackRequest, cursor_location, rollback_reque
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::metrics::{FONT_SIZE, zoomed};
 use jetdiff_viewmodel::{
-    Command, DiffMode, FileDiff, FoldId, Horizontal, HunkMinimapMark, KeyParser, Parsed, Viewport,
-    hunk_minimap_marks,
+    Command, DiffMode, FileDiff, FoldId, Horizontal, HunkMinimapMark, KeyParser, Parsed,
+    ScrollAnimator, Viewport, hunk_minimap_marks,
 };
 
+use crate::NAV_ANIMATION_MS;
 use crate::code_viewer::{self, Hit, Painter, Shared};
 use crate::confirm_dialog::confirm_dialog;
 use crate::help::{HideHelp, KEYMAP_BAR_HEIGHT, KeyHelp, ToggleHelp, keymap_bar};
 use crate::keystroke::to_key;
 use crate::notification_slot_view::NotificationSlotView;
-use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
 use crate::text::TextStyle;
 
@@ -104,7 +105,7 @@ impl FileDiffView {
             fold_unchanged,
             font_size: cx.global::<Settings>().font_size,
             style: None,
-            scroll: ScrollAnimator::default(),
+            scroll: ScrollAnimator::new(NAV_ANIMATION_MS),
             keys: KeyParser::default(),
             initialized: false,
             landing: None,
@@ -133,9 +134,9 @@ impl FileDiffView {
             self.landing = Some(hunk);
             return;
         };
-        self.stop_animation();
+        self.scroll.stop(self.mode.scroll_mut());
         self.mode.land_on_hunk(hunk, viewport);
-        self.scroll.animate(self.mode.scroll());
+        self.scroll.animate(self.mode.scroll(), Instant::now());
         cx.notify();
     }
 
@@ -147,7 +148,7 @@ impl FileDiffView {
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         self.mode = DiffMode::new(Rc::new(diff), self.unified, self.fold_unchanged);
-        self.scroll = ScrollAnimator::default();
+        self.scroll = ScrollAnimator::new(NAV_ANIMATION_MS);
         self.keys.reset();
         self.initialized = false;
         self.landing = None;
@@ -164,7 +165,7 @@ impl FileDiffView {
         };
         self.paths = paths;
         self.max_cols = diff.max_display_width();
-        self.stop_animation();
+        self.scroll.stop(self.mode.scroll_mut());
         self.mode
             .replace_diff(Rc::new(diff), self.unified, self.fold_unchanged, vp);
         self.shared.clear();
@@ -202,7 +203,7 @@ impl FileDiffView {
         if !self.mode.diff().can_split() {
             return;
         }
-        self.stop_animation();
+        self.scroll.stop(self.mode.scroll_mut());
         match self.viewport().filter(|_| self.initialized) {
             Some(vp) => self.mode.toggle(self.fold_unchanged, vp),
             // Nothing is shown yet, so `step` lands on the first hunk
@@ -270,13 +271,6 @@ impl FileDiffView {
         }
     }
 
-    /// Finishes an animation where it is, before anything else changes the scroll.
-    fn stop_animation(&mut self) {
-        if let Some(shown) = self.scroll.stop() {
-            *self.mode.scroll_mut() = shown;
-        }
-    }
-
     fn execute(&mut self, cmd: Command, window: &mut Window, cx: &mut Context<Self>) {
         let size = match cmd {
             Command::ZoomIn => Some(zoomed(self.font_size, 1.)),
@@ -328,7 +322,7 @@ impl FileDiffView {
             self.update_hunk_minimap_marks();
         }
         if out.animate {
-            self.scroll.animate(self.mode.scroll());
+            self.scroll.animate(self.mode.scroll(), Instant::now());
         } else {
             self.scroll.jump(self.mode.scroll());
         }
@@ -466,7 +460,7 @@ impl FileDiffView {
         };
         let delta = ev.delta.pixel_delta(px(vp.line_height));
         let (dx, dy) = (f32::from(delta.x), f32::from(delta.y));
-        self.stop_animation();
+        self.scroll.stop(self.mode.scroll_mut());
         if dy != 0. {
             let bounds = self.shared.bounds.get();
             code_viewer::wheel(&mut self.mode, bounds, ev.position.x, -dy, vp);
@@ -489,7 +483,7 @@ impl FileDiffView {
         let Some(hit) = self.hit(ev.position) else {
             return;
         };
-        self.stop_animation();
+        self.scroll.stop(self.mode.scroll_mut());
         match (hit, &mut self.mode) {
             (Hit::Split(side, line), DiffMode::Split(state)) => {
                 state.click(side, line);
@@ -534,7 +528,8 @@ impl FileDiffView {
             }
             self.scroll.jump(self.mode.scroll());
         }
-        if self.scroll.step() {
+        self.scroll.step(Instant::now());
+        if self.scroll.is_animating() {
             window.request_animation_frame();
         }
     }

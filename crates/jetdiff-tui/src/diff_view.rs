@@ -2,17 +2,21 @@
 //! fold the unchanged rows.
 
 use std::rc::Rc;
+use std::time::Instant;
 
 use jetdiff_app::{RollbackRequest, cursor_location, rollback_request};
 use jetdiff_viewmodel::{
-    Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, RowLayout, Theme, UnifiedDiff,
-    UnifiedState, Viewport,
+    Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, RowLayout, ScrollAnimator,
+    Theme, UnifiedDiff, UnifiedState, Viewport,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::WHEEL_ROWS;
 use crate::{code_viewer, geometry};
+
+/// Longer than in GPUI, since whole rows need more time to look smooth.
+const NAV_ANIMATION_MS: f32 = 250.;
 
 pub enum Overlay {
     /// Enter confirms, anything else cancels.
@@ -29,6 +33,9 @@ pub enum Effect {
 
 pub struct DiffView {
     state: UnifiedState,
+    /// What is shown. The target is `state.scroll`.
+    scroll: ScrollAnimator,
+    smooth_scroll: bool,
     keys: KeyParser,
     unified: bool,
     /// Folds closed for all files, until `f` switches.
@@ -42,10 +49,18 @@ pub struct DiffView {
 }
 
 impl DiffView {
-    pub fn new(diff: FileDiff, paths: [String; 2], unified: bool, fold_unchanged: bool) -> Self {
+    pub fn new(
+        diff: FileDiff,
+        paths: [String; 2],
+        unified: bool,
+        fold_unchanged: bool,
+        smooth_scroll: bool,
+    ) -> Self {
         Self {
             max_cols: diff.max_display_width(),
             state: state(Rc::new(diff), unified, fold_unchanged),
+            scroll: ScrollAnimator::in_whole_cells(NAV_ANIMATION_MS),
+            smooth_scroll,
             keys: KeyParser::default(),
             unified,
             fold_unchanged,
@@ -68,6 +83,7 @@ impl DiffView {
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         self.state = state(Rc::new(diff), self.unified, self.fold_unchanged);
+        self.scroll.jump(self.state.scroll);
         self.keys.reset();
         self.initialized = false;
     }
@@ -88,6 +104,7 @@ impl DiffView {
         self.state
             .replace_diff(Rc::new(diff), self.fold_unchanged, viewport);
         self.clamp_scroll_x();
+        self.scroll.retarget(self.state.scroll, Instant::now());
     }
 
     fn viewport(&self) -> Option<Viewport> {
@@ -124,7 +141,7 @@ impl DiffView {
 
     /// Before drawing.
     pub fn layout(&mut self, area: Rect) {
-        let resized = area.height != self.area.height;
+        let resized = area.as_size() != self.area.as_size();
         self.area = area;
         let Some(viewport) = self.viewport() else {
             return;
@@ -134,8 +151,11 @@ impl DiffView {
             self.state.init(viewport);
         } else if resized {
             self.state.resize(viewport);
+        } else {
+            return;
         }
         self.clamp_scroll_x();
+        self.scroll.jump(self.state.scroll);
     }
 
     pub fn toggle_diff_mode(&mut self) -> Option<Effect> {
@@ -143,6 +163,7 @@ impl DiffView {
             return None;
         }
         self.unified = !self.unified;
+        self.scroll.stop(&mut self.state.scroll);
         match self.viewport().filter(|_| self.initialized) {
             Some(viewport) => {
                 let row_layout = row_layout(&self.state.diff.diff, self.unified);
@@ -156,6 +177,7 @@ impl DiffView {
             }
         }
         self.clamp_scroll_x();
+        self.scroll.jump(self.state.scroll);
         Some(Effect::ShowBrief(
             if self.unified { "Unified" } else { "Split" }.into(),
         ))
@@ -205,8 +227,13 @@ impl DiffView {
             }
             _ => {
                 let viewport = self.viewport()?;
-                let out = self.state.execute(cmd, viewport, self.horizontal());
-                if cmd != Command::ToggleFolds || !out.changed {
+                let outcome = self.state.execute(cmd, viewport, self.horizontal());
+                if outcome.animate && self.smooth_scroll {
+                    self.scroll.animate(self.state.scroll, Instant::now());
+                } else if outcome.changed {
+                    self.scroll.retarget(self.state.scroll, Instant::now());
+                }
+                if cmd != Command::ToggleFolds || !outcome.changed {
                     return None;
                 }
                 self.fold_unchanged = self.state.folding.any_closed();
@@ -220,6 +247,15 @@ impl DiffView {
         }
     }
 
+    pub fn is_animating(&self) -> bool {
+        self.scroll.is_animating()
+    }
+
+    /// `true` when the row shown has changed and a new frame is needed.
+    pub fn step_animation(&mut self, now: Instant) -> bool {
+        self.scroll.step(now)
+    }
+
     /// A click on a closed fold opens it, as in GPUI.
     pub fn click(&mut self, x: u16, y: u16) {
         self.keys.reset();
@@ -227,6 +263,7 @@ impl DiffView {
         if !self.area.contains((x, y).into()) {
             return;
         }
+        self.scroll.stop(&mut self.state.scroll);
         let layout = self.state.folding.layout(1.);
         let screen = y - self.area.y;
         let Some(row) = code_viewer::row_at(&layout, self.state.scroll_y(), screen) else {
@@ -240,13 +277,19 @@ impl DiffView {
 
     pub fn wheel(&mut self, down: bool) {
         if let Some(viewport) = self.viewport() {
+            self.scroll.stop(&mut self.state.scroll);
             let rows = WHEEL_ROWS as f32;
             self.state.wheel(if down { rows } else { -rows }, viewport);
+            self.scroll.jump(self.state.scroll);
         }
     }
 
     pub fn render(&self, focused: bool, theme: &Theme, buf: &mut Buffer) {
-        code_viewer::paint(&self.state, focused, self.area, theme, buf);
+        let shown = UnifiedState {
+            scroll: self.scroll.shown(),
+            ..self.state.clone()
+        };
+        code_viewer::paint(&shown, focused, self.area, theme, buf);
     }
 }
 

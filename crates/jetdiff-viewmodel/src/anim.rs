@@ -20,6 +20,10 @@ impl ScrollAnimation {
         }
     }
 
+    pub fn target(&self) -> ScrollState {
+        self.to
+    }
+
     /// Position after `elapsed_ms`, and whether the animation is done. The slave is lerped with the same
     /// progress as the master, as the anchor in `syncVerticalScroll` does. If the master stands still,
     /// IntelliJ moves the slave afterwards; here it happens in the same motion.

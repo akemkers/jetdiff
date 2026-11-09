@@ -24,3 +24,5 @@ open = false
 [terminal]
 # File icons in the terminal view. Requires a Nerd Font, see the README.
 icons = true
+# Animated jumps in the terminal view, like n, d and G. false moves the view at once.
+smooth_scroll = true

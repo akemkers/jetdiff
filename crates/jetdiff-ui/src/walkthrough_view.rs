@@ -12,6 +12,7 @@ mod prose;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use gpui::{
     App, Context, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Render, ScrollHandle, Task,
@@ -23,12 +24,12 @@ use jetdiff_app::walkthrough::{Digest, FileContent, Job, Page, Reading, Walkthro
 use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::metrics::FONT_SIZE;
-use jetdiff_viewmodel::{ScrollState, UnifiedDiff};
+use jetdiff_viewmodel::{ScrollAnimator, ScrollState, UnifiedDiff};
 
+use crate::NAV_ANIMATION_MS;
 use crate::code_viewer::Excerpt;
 use crate::help::HideHelp;
 use crate::repo_view::{NextFile, PrevFile};
-use crate::scroll_animator::ScrollAnimator;
 use crate::settings::Settings;
 use crate::text::{FAMILY, TextStyle};
 
@@ -151,7 +152,7 @@ impl WalkthroughView {
             items: Vec::new(),
             cursor: None,
             scroll: ScrollHandle::new(),
-            animator: ScrollAnimator::default(),
+            animator: ScrollAnimator::new(NAV_ANIMATION_MS),
             style: None,
             scale,
             focus: cx.focus_handle(),
@@ -408,7 +409,7 @@ impl WalkthroughView {
         let max = f32::from(self.scroll.max_offset().height);
         let at = |y: f32| ScrollState { y: [y, y], x: 0. };
         self.animator.jump(at(shown));
-        self.animator.animate(at(y.clamp(0., max)));
+        self.animator.animate(at(y.clamp(0., max)), Instant::now());
         cx.notify();
     }
 
@@ -514,7 +515,8 @@ impl WalkthroughView {
         if !self.animator.is_animating() {
             return;
         }
-        if self.animator.step() {
+        self.animator.step(Instant::now());
+        if self.animator.is_animating() {
             window.request_animation_frame();
         }
         let y = self.animator.shown().y[0];
