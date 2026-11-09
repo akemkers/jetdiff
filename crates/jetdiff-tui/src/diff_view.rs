@@ -1,4 +1,5 @@
-//! The diff of one file, like `FileDiffView` in GPUI. Split is aligned rows and has no folding.
+//! The diff of one file, like `FileDiffView` in GPUI. Split is aligned rows, and both diff modes
+//! fold the unchanged rows.
 
 use std::rc::Rc;
 
@@ -30,6 +31,8 @@ pub struct DiffView {
     state: UnifiedState,
     keys: KeyParser,
     unified: bool,
+    /// Folds closed for all files, until `f` switches.
+    fold_unchanged: bool,
     can_rollback: bool,
     pub overlay: Option<Overlay>,
     paths: [String; 2],
@@ -39,12 +42,13 @@ pub struct DiffView {
 }
 
 impl DiffView {
-    pub fn new(diff: FileDiff, paths: [String; 2], unified: bool) -> Self {
+    pub fn new(diff: FileDiff, paths: [String; 2], unified: bool, fold_unchanged: bool) -> Self {
         Self {
             max_cols: diff.max_display_width(),
-            state: state(Rc::new(diff), unified),
+            state: state(Rc::new(diff), unified, fold_unchanged),
             keys: KeyParser::default(),
             unified,
+            fold_unchanged,
             can_rollback: false,
             overlay: None,
             paths,
@@ -63,7 +67,7 @@ impl DiffView {
         }
         self.paths = paths;
         self.max_cols = diff.max_display_width();
-        self.state = state(Rc::new(diff), self.unified);
+        self.state = state(Rc::new(diff), self.unified, self.fold_unchanged);
         self.keys.reset();
         self.initialized = false;
     }
@@ -77,9 +81,12 @@ impl DiffView {
         self.max_cols = diff.max_display_width();
         let row_layout = row_layout(&diff, self.unified);
         if row_layout != self.state.diff.row_layout() {
-            self.state = self.state.realign(row_layout, viewport);
+            self.state = self
+                .state
+                .realign(row_layout, self.fold_unchanged, viewport);
         }
-        self.state.replace_diff(Rc::new(diff), viewport);
+        self.state
+            .replace_diff(Rc::new(diff), self.fold_unchanged, viewport);
         self.clamp_scroll_x();
     }
 
@@ -139,9 +146,14 @@ impl DiffView {
         match self.viewport().filter(|_| self.initialized) {
             Some(viewport) => {
                 let row_layout = row_layout(&self.state.diff.diff, self.unified);
-                self.state = self.state.realign(row_layout, viewport);
+                self.state = self
+                    .state
+                    .realign(row_layout, self.fold_unchanged, viewport);
             }
-            None => self.state = state(self.state.diff.diff.clone(), self.unified),
+            None => {
+                let diff = self.state.diff.diff.clone();
+                self.state = state(diff, self.unified, self.fold_unchanged);
+            }
         }
         self.clamp_scroll_x();
         Some(Effect::ShowBrief(
@@ -193,22 +205,36 @@ impl DiffView {
             }
             _ => {
                 let viewport = self.viewport()?;
-                self.state.execute(cmd, viewport, self.horizontal());
-                None
+                let out = self.state.execute(cmd, viewport, self.horizontal());
+                if cmd != Command::ToggleFolds || !out.changed {
+                    return None;
+                }
+                self.fold_unchanged = self.state.folding.any_closed();
+                let text = if self.fold_unchanged {
+                    "Folds closed"
+                } else {
+                    "Folds opened"
+                };
+                Some(Effect::ShowBrief(text.into()))
             }
         }
     }
 
+    /// A click on a closed fold opens it, as in GPUI.
     pub fn click(&mut self, x: u16, y: u16) {
         self.keys.reset();
         self.overlay = None;
         if !self.area.contains((x, y).into()) {
             return;
         }
-        let layout = self.state.diff.layout(1.);
+        let layout = self.state.folding.layout(1.);
         let screen = y - self.area.y;
-        if let Some(row) = code_viewer::row_at(&layout, self.state.scroll_y(), screen) {
-            self.state.click(row);
+        let Some(row) = code_viewer::row_at(&layout, self.state.scroll_y(), screen) else {
+            return;
+        };
+        self.state.click(row);
+        if self.state.folding.fold_at_row(row).is_some() {
+            self.execute(Command::FoldOpen);
         }
     }
 
@@ -233,7 +259,10 @@ fn row_layout(diff: &FileDiff, unified: bool) -> RowLayout {
     }
 }
 
-fn state(diff: Rc<FileDiff>, unified: bool) -> UnifiedState {
+fn state(diff: Rc<FileDiff>, unified: bool, fold_unchanged: bool) -> UnifiedState {
     let row_layout = row_layout(&diff, unified);
-    UnifiedState::new(Rc::new(UnifiedDiff::with_layout(diff, row_layout)))
+    UnifiedState::new(
+        Rc::new(UnifiedDiff::with_layout(diff, row_layout)),
+        fold_unchanged,
+    )
 }

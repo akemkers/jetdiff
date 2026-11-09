@@ -192,7 +192,7 @@ impl DiffState {
             FocusSide(side) => self.focus_side(side, vp),
             FoldOpen => self.change_folding(vp, |s, f| f.open_at(s.0, s.1)),
             ToggleFolds => self.change_folding(vp, |_, f| {
-                let any_closed = f.visible(Side::Left).next().is_some();
+                let any_closed = f.any_closed();
                 f.set_all_open(any_closed)
             }),
             // Owned by the UI. After zoom, `rescale` is called.

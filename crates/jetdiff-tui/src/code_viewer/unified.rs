@@ -1,4 +1,5 @@
 //! One line per row, with a line number for each side in the gutter. The words get the row's color.
+//! A closed fold is a fold wave without numbers.
 
 use jetdiff_viewmodel::Side;
 use ratatui::layout::Rect;
@@ -14,6 +15,13 @@ pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
     let number_ends = [Side::Left, Side::Right].map(|side| cells.number_end(side));
     for visible in painter.visible_rows(area) {
         let (y, row) = (visible.y, visible.row);
+        if visible.fold {
+            painter.fold_wave(columns, y);
+            if visible.marked {
+                painter.cursor_row(columns, y);
+            }
+            continue;
+        }
         let hunk_color = HunkColor::of_row(painter.diff(), row);
         let inline_highlight_kind = Some(row.kind());
         painter.line(

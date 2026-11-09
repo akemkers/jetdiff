@@ -17,8 +17,8 @@ use jetdiff_app::{Notification, RollbackRequest, cursor_location, rollback_reque
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::metrics::{FONT_SIZE, zoomed};
 use jetdiff_viewmodel::{
-    Command, DiffMode, FileDiff, FoldId, Folding, Horizontal, HunkMinimapMark, KeyParser, Parsed,
-    Viewport, hunk_minimap_marks,
+    Command, DiffMode, FileDiff, FoldId, Horizontal, HunkMinimapMark, KeyParser, Parsed, Viewport,
+    hunk_minimap_marks,
 };
 
 use crate::code_viewer::{self, Hit, Painter, Shared};
@@ -99,7 +99,7 @@ impl FileDiffView {
         let (unified, fold_unchanged) = (settings.unified, settings.fold_unchanged);
         Self {
             max_cols: diff.max_display_width(),
-            mode: diff_mode(diff, unified, fold_unchanged),
+            mode: DiffMode::new(Rc::new(diff), unified, fold_unchanged),
             unified,
             fold_unchanged,
             font_size: cx.global::<Settings>().font_size,
@@ -146,7 +146,7 @@ impl FileDiffView {
         }
         self.paths = paths;
         self.max_cols = diff.max_display_width();
-        self.mode = diff_mode(diff, self.unified, self.fold_unchanged);
+        self.mode = DiffMode::new(Rc::new(diff), self.unified, self.fold_unchanged);
         self.scroll = ScrollAnimator::default();
         self.keys.reset();
         self.initialized = false;
@@ -165,9 +165,8 @@ impl FileDiffView {
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         self.stop_animation();
-        let folding = folding(&diff, self.fold_unchanged);
         self.mode
-            .replace_diff(Rc::new(diff), Rc::new(folding), self.unified, vp);
+            .replace_diff(Rc::new(diff), self.unified, self.fold_unchanged, vp);
         self.shared.clear();
         self.clamp_scroll_x();
         self.scroll.jump(self.mode.scroll());
@@ -204,12 +203,13 @@ impl FileDiffView {
             return;
         }
         self.stop_animation();
-        let diff = self.mode.diff().clone();
-        let folding = Rc::new(folding(&diff, self.fold_unchanged));
         match self.viewport().filter(|_| self.initialized) {
-            Some(vp) => self.mode.toggle(folding, vp),
+            Some(vp) => self.mode.toggle(self.fold_unchanged, vp),
             // Nothing is shown yet, so `step` lands on the first hunk
-            None => self.mode = DiffMode::new(diff, folding, self.unified),
+            None => {
+                let diff = self.mode.diff().clone();
+                self.mode = DiffMode::new(diff, self.unified, self.fold_unchanged);
+            }
         }
         self.update_hunk_minimap_marks();
         self.clamp_scroll_x();
@@ -309,9 +309,8 @@ impl FileDiffView {
             return;
         };
         let out = self.mode.execute(cmd, vp, self.horizontal());
-        if let (Command::ToggleFolds, true, DiffMode::Split(state)) = (cmd, out.changed, &self.mode)
-        {
-            let closed = state.folding.visible(Side::Left).next().is_some();
+        if let (Command::ToggleFolds, true) = (cmd, out.changed) {
+            let closed = self.mode.any_fold_closed();
             self.fold_unchanged = closed;
             self.show_brief(
                 if closed {
@@ -435,23 +434,20 @@ impl FileDiffView {
         code_viewer::hit(&self.mode, style, bounds, self.scroll.shown().y, position)
     }
 
-    /// Only Split has folds.
     fn fold_at(&self, position: Point<Pixels>) -> Option<FoldId> {
-        let (Some(Hit::Split(side, line)), DiffMode::Split(state)) =
-            (self.hit(position), &self.mode)
-        else {
-            return None;
-        };
-        state.folding.fold_at_line(side, line)
+        match (self.hit(position)?, &self.mode) {
+            (Hit::Split(side, line), DiffMode::Split(state)) => {
+                state.folding.fold_at_line(side, line)
+            }
+            (Hit::Unified(row), DiffMode::Unified(state)) => state.folding.fold_at_row(row),
+            _ => None,
+        }
     }
 
     /// `FoldingModelSupport.MyMouseListener`: hover applies to the fold on both sides.
     fn on_mouse_move(&mut self, ev: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
         let id = self.fold_at(ev.position);
-        if let DiffMode::Split(state) = &mut self.mode
-            && state.folding.hovered() != id
-        {
-            Rc::make_mut(&mut state.folding).set_hovered(id);
+        if self.mode.set_hovered_fold(id) {
             cx.notify();
         }
     }
@@ -501,7 +497,12 @@ impl FileDiffView {
                     self.execute(Command::FoldOpen, window, cx);
                 }
             }
-            (Hit::Unified(row), DiffMode::Unified(state)) => state.click(row),
+            (Hit::Unified(row), DiffMode::Unified(state)) => {
+                state.click(row);
+                if state.folding.fold_at_row(row).is_some() {
+                    self.execute(Command::FoldOpen, window, cx);
+                }
+            }
             _ => {}
         }
         self.scroll.jump(self.mode.scroll());
@@ -552,17 +553,6 @@ impl FileDiffView {
     }
 }
 
-fn diff_mode(diff: FileDiff, unified: bool, fold_unchanged: bool) -> DiffMode {
-    let folding = folding(&diff, fold_unchanged);
-    DiffMode::new(Rc::new(diff), Rc::new(folding), unified)
-}
-
-fn folding(diff: &FileDiff, fold_unchanged: bool) -> Folding {
-    let mut folding = Folding::new(diff);
-    folding.set_all_open(!fold_unchanged);
-    folding
-}
-
 impl EventEmitter<Zoomed> for FileDiffView {}
 impl EventEmitter<Rollback> for FileDiffView {}
 
@@ -598,8 +588,7 @@ impl Render for FileDiffView {
                 theme,
             )
         });
-        let hovered =
-            matches!(&self.mode, DiffMode::Split(state) if state.folding.hovered().is_some());
+        let hovered = self.mode.hovered_fold().is_some();
         let shared = self.shared.clone();
 
         let scale = self.font_size / FONT_SIZE;

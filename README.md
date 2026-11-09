@@ -49,7 +49,7 @@ Without arguments or with a folder, the commit list sits under the tree. Branch 
 
 Branch and Local changes are read again automatically when files change on disk, and so is the commit list when HEAD moves, after a commit, amend, reset or rebase. This also works in a worktree. The selected file is kept, and the diff starts at the top if the content has changed.
 
-Unchanged lines are folded, with 4 lines of context. Click a fold to open it. Unified has no folding.
+Unchanged lines are folded, with 4 lines of context, in Split and Unified. Click a fold to open it.
 
 Syntax colors for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, Python, JSON, YAML, TOML, XML, Markdown, SQL and Dockerfile. The language is picked from the file extension, or the file name for `Dockerfile` and `Containerfile`.
 
@@ -86,8 +86,8 @@ A small, vim-inspired keymap for reading. The cursor is a whole line, with no co
 | `d` `u`, Ctrl+d Ctrl+u              | Half a page down and up                                                                              |
 | `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Next and previous hunk                                                                               |
 | `H` `L`                             | To Left and Right. Split only                                                                        |
-| `o`                                 | Open the fold at the cursor. Split only                                                              |
-| `f`                                 | Open all folds, or close all if none are closed, for all files. Split only                           |
+| `o`                                 | Open the fold at the cursor                                                                          |
+| `f`                                 | Open all folds, or close all if none are closed, for all files                                       |
 | `v`                                 | Switch between Split and Unified for all files. The cursor stays where it is                         |
 | `y`                                 | Copy the cursor location (`file:line`). The line is in the newest version, also from Left            |
 | `r`                                 | Roll back the hunk at the cursor to Left, after Enter. Local changes only                            |

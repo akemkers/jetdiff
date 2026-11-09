@@ -37,15 +37,13 @@ impl FileDiffView {
         group("diff-mode", buttons, palette, scale)
     }
 
-    /// Does what `f` does, which only works in Split until folds come to Unified.
+    /// Does what `f` does.
     fn fold(&self, palette: &UiPalette, scale: f32, cx: &mut Context<Self>) -> Div {
-        let split = matches!(self.mode, DiffMode::Split(_));
         let fold = Button::new(
             "Fold",
             cx.listener(|this, _, window, cx| this.execute(Command::ToggleFolds, window, cx)),
         )
-        .active(split && self.fold_unchanged)
-        .enabled(split);
+        .active(self.fold_unchanged);
         toggle("fold", fold, palette, scale)
     }
 }

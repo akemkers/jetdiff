@@ -5,7 +5,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Window};
-use jetdiff_viewmodel::UnifiedDiff;
+use jetdiff_viewmodel::{UnifiedDiff, UnifiedFolding};
 
 use super::super::code_paint::HunkMinimapRects;
 use super::super::unified::{RowCache, UnifiedPainter};
@@ -15,6 +15,8 @@ use crate::theme::UiTheme;
 
 pub(super) struct UnifiedExcerpt {
     diff: Rc<UnifiedDiff>,
+    /// None, since an excerpt shows all of its rows.
+    folding: Rc<UnifiedFolding>,
     rows: Range<usize>,
     cache: RefCell<RowCache>,
     hunk_minimap: RefCell<HunkMinimapRects>,
@@ -25,6 +27,7 @@ impl UnifiedExcerpt {
         let mut cache = RowCache::new(CACHE_CAPACITY);
         cache.set_key(style.cache_key());
         Self {
+            folding: Rc::new(UnifiedFolding::unified_none(&diff)),
             diff,
             rows,
             cache: RefCell::new(cache),
@@ -47,6 +50,7 @@ impl UnifiedExcerpt {
         let scroll_y = self.rows.start as f32 * style.line_height();
         let painter = UnifiedPainter {
             diff: self.diff.clone(),
+            folding: self.folding.clone(),
             theme,
             style,
             scroll_y: snap(scroll_y, window.scale_factor()),

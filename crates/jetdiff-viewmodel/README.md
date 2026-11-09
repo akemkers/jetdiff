@@ -59,10 +59,10 @@ graph TD
 - `model`: hunks, lines and syntax per side
 - `mode`: Split or Unified, and switching between them
 - `state`: Split. Brings together the cursor, folding and scroll, and carries out `Command`
-- `unified`: rows over `FileDiff` where deleted lines sit above the added ones, and the state for them. No folding
+- `unified`: rows over `FileDiff` where deleted lines sit above the added ones, and the state for them, folded on one side
 - `scrolloff`: where the cursor can be without scrolling, shared by both
 - `scroll`: the master side scrolls, and the other is computed in the same frame
-- `folding`: unchanged lines are folded, shared by both sides
+- `folding`: unchanged lines are folded, shared by both sides in Split, and over the rows in Unified
 - `layout`, `geometry`: vertical and horizontal placement per side, and Unified with two number columns
 - `divider`, `fold_paths`, `hunk_minimap`: the diff divider, the fold wave and fold link, and the hunk minimap
 - `keys`, `command`: the keymap and the commands it gives

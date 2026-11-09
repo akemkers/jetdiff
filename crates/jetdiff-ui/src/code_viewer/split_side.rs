@@ -1,17 +1,17 @@
 //! One side in Split: backgrounds, inline highlights, text, line numbers and the hunk minimap. Draws only
 //! what `jetdiff-viewmodel` gives, and only visible lines.
 
-use std::ops::{Range, RangeInclusive};
+use std::ops::Range;
 
 use gpui::{App, Bounds, Pixels, ShapedLine, SharedString, Window, fill, point, px};
-use jetdiff_viewmodel::fold_paths::{fold_wave_path, stroke_width};
 use jetdiff_viewmodel::{FileDiff, Folding, LineLayout, SideGeometry};
 
 use super::code_paint::{
     HunkMinimapRects, ShapedText, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
     shape_number,
 };
-use super::divider::stroke_path;
+use super::fold_waves::FoldWaves;
+use super::visible::Visible;
 use crate::cache::LineCache;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
@@ -45,17 +45,6 @@ pub struct CursorRow {
     pub line: usize,
     /// The active side with focus gets full color, so you can see where `o` acts.
     pub active: bool,
-}
-
-/// What is visible in the viewport this frame.
-struct Visible {
-    /// Logical lines, also those hidden in a closed fold.
-    logical: RangeInclusive<usize>,
-    /// Visual lines, where a closed fold is one line.
-    visual: RangeInclusive<usize>,
-    /// The lines that have text and a number. Closed folds have neither
-    /// (`hideLineNumberPredicate`).
-    lines: Vec<usize>,
 }
 
 impl SplitSide<'_> {
@@ -105,20 +94,7 @@ impl SplitSide<'_> {
     }
 
     fn visible(&self) -> Visible {
-        let layout = self.layout();
-        let (first, last) = layout.painted_lines(self.scroll_y, self.height);
-        let (first_visual, last_visual) = layout.painted_visual_lines(self.scroll_y, self.height);
-        let visual = first_visual..=last_visual.min(layout.visual_line_count() - 1);
-        let lines = visual
-            .clone()
-            .filter(|&visual_line| layout.fold_at_visual(visual_line).is_none())
-            .map(|visual_line| layout.visual_to_logical(visual_line))
-            .collect();
-        Visible {
-            logical: first..=last.min(layout.line_count() - 1),
-            visual,
-            lines,
-        }
+        Visible::new(&self.layout(), self.scroll_y, self.height)
     }
 
     /// Per hunk, not per line, so a large hunk becomes one rectangle.
@@ -167,30 +143,24 @@ impl SplitSide<'_> {
         );
     }
 
-    /// `DiffLineSeparatorRenderer`: a fold wave over the gutter and text, with the phase from the divider.
+    /// With the phase from the divider.
     fn paint_folds(&self, visible: &Visible, window: &mut Window) {
         let geom = self.geom;
-        let line_height = self.style.line_height();
-        let layout = self.layout();
         let edge = if geom.mirrored {
             geom.gutter.end
         } else {
             geom.gutter.start
         };
-        let hovered = self.folding.hovered();
-        for (id, fold) in self.folding.visible(geom.side) {
-            if fold.visual < *visible.visual.start() {
-                continue;
-            }
-            if fold.visual > *visible.visual.end() {
-                break;
-            }
-            let y = self.screen_y(layout.visual_line_to_y(fold.visual));
-            let path = fold_wave_path(geom.bounds(), edge, geom.mirrored, y, line_height);
-            let width = stroke_width(hovered == Some(id));
-            let to_pixels = |p: jetdiff_viewmodel::Point| point(px(p.x), px(p.y));
-            stroke_path(window, &path, to_pixels, width, self.theme.fold_wave);
-        }
+        let waves = FoldWaves {
+            layout: &self.layout(),
+            x: geom.bounds(),
+            edge,
+            mirrored: geom.mirrored,
+            document_top: self.screen_y(0.),
+            hovered: self.folding.hovered(),
+            color: self.theme.fold_wave,
+        };
+        waves.paint(self.folding.visible(geom.side), visible, window);
     }
 
     /// Inline highlights and text, clipped so the text doesn't flow into the gutter on sideways scroll.

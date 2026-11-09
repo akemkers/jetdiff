@@ -1,4 +1,9 @@
 use super::*;
+use crate::command::Command;
+use crate::cursor::Cursor;
+use crate::folding::Folding;
+use crate::layout::Viewport;
+use crate::state::{DiffState, Horizontal, Outcome};
 use jetdiff_core::ComparisonPolicy;
 
 const LINE_HEIGHT: f32 = 10.;
@@ -40,9 +45,21 @@ fn three_hunks() -> Rc<FileDiff> {
 }
 
 fn state(diff: Rc<FileDiff>) -> UnifiedState {
-    let mut state = UnifiedState::new(Rc::new(UnifiedDiff::new(diff)));
+    let mut state = UnifiedState::new(Rc::new(UnifiedDiff::new(diff)), false);
     state.init(VIEWPORT);
     state
+}
+
+/// `three_hunks` with the folds on rows 0..6, 16..37, 47..88 and 98..104 closed.
+fn folded() -> UnifiedState {
+    let mut state = UnifiedState::new(Rc::new(UnifiedDiff::new(three_hunks())), true);
+    state.init(VIEWPORT);
+    state
+}
+
+/// Where the cursor's row is in the viewport.
+fn cursor_offset(state: &UnifiedState) -> f32 {
+    state.folding.layout(LINE_HEIGHT).line_top(state.row) - state.scroll_y()
 }
 
 fn run(state: &mut UnifiedState, command: Command) -> Outcome {
@@ -93,11 +110,92 @@ fn added_file_has_only_right_side_numbers() {
 #[test]
 fn modified_hunk_gives_two_marks() {
     let diff = unified("a\nb\nc\n", "a\nB\nc\n");
-    let marks = diff.hunk_minimap_marks(LINE_HEIGHT);
+    let marks = diff.hunk_minimap_marks(&UnifiedFolding::unified(&diff), LINE_HEIGHT);
     let types: Vec<_> = marks.iter().map(|mark| mark.kind).collect();
     assert_eq!(types, [HunkKind::Deleted, HunkKind::Added]);
     assert_eq!(marks[0].start_y, 10.);
     assert_eq!(marks[1].start_y, 20.);
+}
+
+#[test]
+fn marks_follow_the_visual_lines() {
+    let state = folded();
+    let marks = state.diff.hunk_minimap_marks(&state.folding, LINE_HEIGHT);
+    // The fold 0..6 is one line, so row 10 is visual line 5
+    assert_eq!(marks[0].start_y, 50.);
+    // and 16..37 is one line too, so row 41 is visual line 41 - 5 - 20
+    assert_eq!(marks[2].start_y, 160.);
+}
+
+#[test]
+fn j_and_k_skip_closed_folds() {
+    let mut state = folded();
+    state.click(6);
+    run(&mut state, Command::MoveUp);
+    assert_eq!(state.row, 0);
+    run(&mut state, Command::MoveDown);
+    assert_eq!(state.row, 6);
+    state.click(15);
+    run(&mut state, Command::MoveDown);
+    assert_eq!(state.row, 16);
+    run(&mut state, Command::MoveDown);
+    assert_eq!(state.row, 37);
+    // A click inside a fold lands on its start
+    state.click(20);
+    assert_eq!(state.row, 16);
+}
+
+#[test]
+fn o_opens_the_fold_at_the_cursor() {
+    let mut state = folded();
+    state.click(16);
+    let offset = cursor_offset(&state);
+    let out = run(&mut state, Command::FoldOpen);
+    assert!(out.folding_changed);
+    assert_eq!(state.folding.fold_at_row(16), None);
+    assert_eq!(state.row, 16);
+    assert_eq!(cursor_offset(&state), offset);
+    assert!(!run(&mut state, Command::FoldOpen).changed);
+}
+
+#[test]
+fn f_keeps_the_cursor_in_place() {
+    let mut state = state(three_hunks());
+    run(&mut state, Command::NextHunk);
+    let offset = cursor_offset(&state);
+    run(&mut state, Command::ToggleFolds);
+    assert!(state.folding.any_closed());
+    assert_eq!(state.row, 41);
+    assert_eq!(cursor_offset(&state), offset);
+    run(&mut state, Command::ToggleFolds);
+    assert!(!state.folding.any_closed());
+    assert_eq!(cursor_offset(&state), offset);
+}
+
+#[test]
+fn cursor_in_a_closing_fold_moves_to_its_start() {
+    let mut state = state(three_hunks());
+    state.click(60);
+    run(&mut state, Command::ToggleFolds);
+    assert_eq!(state.row, 47);
+    assert_eq!(state.folding.fold_at_row(47), Some(2));
+}
+
+#[test]
+fn n_and_p_land_on_hunks_with_folds_closed() {
+    let mut state = folded();
+    assert_eq!(state.row, 10);
+    run(&mut state, Command::NextHunk);
+    assert_eq!(state.row, 41);
+    run(&mut state, Command::NextHunk);
+    assert_eq!(state.row, 92);
+    run(&mut state, Command::PreviousHunk);
+    assert_eq!(state.row, 41);
+    // The bottom is the last fold, which goes to the end
+    run(&mut state, Command::GoToBottom);
+    assert_eq!(state.row, 98);
+    run(&mut state, Command::PreviousHunk);
+    assert_eq!(state.row, 92);
 }
 
 #[test]
@@ -162,24 +260,38 @@ fn switching_keeps_line_and_height() {
     let top = |line: usize, scroll_y: f32| line as f32 * LINE_HEIGHT - scroll_y;
     let before = top(split.cursor.line, split.scroll.y(Side::Right));
 
-    let unified = UnifiedState::from_split(&split, VIEWPORT);
+    let unified = UnifiedState::from_split(&split, false, VIEWPORT);
     let row = unified.diff.row(unified.row);
     assert_eq!((row.side(), row.line()), (Side::Right, split.cursor.line));
     assert_eq!(top(unified.row, unified.scroll_y()), before);
 
-    let back = unified.to_split(Rc::new(Folding::none(&diff)), VIEWPORT);
+    let back = unified.to_split(false, VIEWPORT);
     assert_eq!(back.cursor, split.cursor);
     assert_eq!(top(back.cursor.line, back.scroll.y(Side::Right)), before);
 }
 
 #[test]
 fn deleted_row_gives_left_side_in_split() {
-    let diff = three_hunks();
-    let state = state(diff.clone());
-    let split = state.to_split(Rc::new(Folding::none(&diff)), VIEWPORT);
+    let state = state(three_hunks());
+    let split = state.to_split(false, VIEWPORT);
     assert_eq!(split.cursor, Cursor::new(Side::Left, 10));
-    let back = UnifiedState::from_split(&split, VIEWPORT);
+    let back = UnifiedState::from_split(&split, false, VIEWPORT);
     assert_eq!(back.row, 10);
+}
+
+#[test]
+fn switching_with_folds_keeps_line_and_height() {
+    let mut state = folded();
+    run(&mut state, Command::NextHunk);
+    run(&mut state, Command::MoveDown);
+    let offset = cursor_offset(&state);
+    let split = state.to_split(true, VIEWPORT);
+    assert_eq!(split.cursor, Cursor::new(Side::Right, 40));
+    let layout = split.folding.layout(Side::Right, LINE_HEIGHT);
+    assert_eq!(layout.line_top(40) - split.scroll.y(Side::Right), offset);
+    let back = UnifiedState::from_split(&split, true, VIEWPORT);
+    assert_eq!(back.row, 42);
+    assert_eq!(cursor_offset(&back), offset);
 }
 
 #[test]
@@ -202,7 +314,7 @@ fn new_text_keeps_the_line() {
     // The hunk on line 10 is gone, so the rows move
     let left_side = numbered("a", 100);
     let right_side = left_side.replace("a40\n", "x40\n");
-    state.replace_diff(file_diff(&left_side, &right_side), VIEWPORT);
+    state.replace_diff(file_diff(&left_side, &right_side), false, VIEWPORT);
     assert_eq!(state.cursor_location(), Cursor::new(Side::Right, 40));
 }
 
@@ -223,14 +335,14 @@ fn split_places_lines_in_pairs() {
 
 #[test]
 fn realign_keeps_the_line() {
-    let mut state = UnifiedState::new(Rc::new(unified("a\nb\nc\n", "a\nB\nc\n")));
+    let mut state = UnifiedState::new(Rc::new(unified("a\nb\nc\n", "a\nB\nc\n")), false);
     state.init(VIEWPORT);
     // Unified: a, b, B, c. The cursor on c.
     state.click(3);
-    let split = state.realign(RowLayout::Split, VIEWPORT);
+    let split = state.realign(RowLayout::Split, false, VIEWPORT);
     assert_eq!(split.diff.row_layout(), RowLayout::Split);
     assert_eq!(split.diff.row(split.row).lines, [Some(2), Some(2)]);
-    let back = split.realign(RowLayout::Unified, VIEWPORT);
+    let back = split.realign(RowLayout::Unified, false, VIEWPORT);
     assert_eq!(back.row, 3);
 }
 

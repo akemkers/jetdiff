@@ -29,3 +29,34 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
     };
     scrollbar::paint(&mut painter, scrollbar, area);
 }
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use jetdiff_viewmodel::{ComparisonPolicy, FileDiff, UnifiedDiff};
+
+    use super::*;
+
+    #[test]
+    fn a_closed_fold_is_a_fold_wave_without_line_numbers() {
+        let left_side: String = (0..30).map(|i| format!("a{i}\n")).collect();
+        let right_side = left_side.replace("a20\n", "x\n");
+        let diff = FileDiff::new(&left_side, &right_side, ComparisonPolicy::Default).unwrap();
+        let diff = Rc::new(diff);
+        let area = Rect::new(0, 0, 40, 10);
+        for row_layout in [RowLayout::Unified, RowLayout::Split] {
+            let unified_diff = UnifiedDiff::with_layout(diff.clone(), row_layout);
+            let state = UnifiedState::new(Rc::new(unified_diff), true);
+            let mut buf = Buffer::empty(area);
+            paint(&state, true, area, &Theme::built_in(), &mut buf);
+            let screen_row =
+                |y: u16| -> String { (0..area.width - 1).map(|x| buf[(x, y)].symbol()).collect() };
+            // Lines 0..16 are the first fold, and line 16 comes after it
+            let fold = screen_row(0);
+            assert!(fold.contains('~'), "{fold}");
+            assert!(!fold.chars().any(|c| c.is_ascii_digit()), "{fold}");
+            assert!(screen_row(1).contains("a16"));
+        }
+    }
+}
