@@ -28,11 +28,11 @@ jetdiff-viewmodel
                  view model, still without a GUI
   model          FileDiff: hunks, lines, syntax per side
   state          cursor, commands, scroll and folding together
-  unified        rows over FileDiff and their own state, no folding
+  unified        rows over FileDiff and their own state, folded on one side
   mode           Split or Unified, and switching between them
   scrolloff      where the cursor can be, shared by both diff modes
   scroll         master scroll_y, the slave computed in the same frame (1/3 anchor)
-  folding        shared state for both sides
+  folding        shared state for both sides, or one side over the Unified rows
   geometry       gutter, text and scrollbar per side, and Unified with two number columns
   keys           key sequences to commands
 
@@ -71,7 +71,7 @@ jetdiff-ui       GPUI
 
 jetdiff-tui      the terminal, ratatui
   diff_view      keys, mouse and overlay for the diff
-  code_viewer    Split and Unified as rows of cells, without folding
+  code_viewer    Split and Unified as rows of cells, with folds
   side_panel     the file tree and the commit list
   app            the event loop, watcher and reading the repo source in a thread
 
@@ -89,7 +89,7 @@ The split between `viewmodel`/`app` and `ui` is the most important one. All logi
 | Diff core | Port IntelliJ's Myers core (about 650 lines) | Gives the same result as JetBrains, and golden tests against IntelliJ. `imara-diff` can be an alternative behind a trait |
 | Offsets | UTF-8 bytes | IntelliJ uses UTF-16; we convert in the golden tests |
 | Split | Not aligned, with a diff divider | The diff divider is the point. A 1/3 anchor and whole-line steps in empty hunks prevent stutter |
-| Unified | Rows that point into `FileDiff`, no folding | Syntax and inline highlights are reused. Added and deleted files are always shown Unified, so Split never has to show one side alone |
+| Unified | Rows that point into `FileDiff`, folded like Split | Syntax and inline highlights are reused. Added and deleted files are always shown Unified, so Split never has to show one side alone |
 | Commit view | Tree + one file | Like the commit dialog in IntelliJ. Keeps the diff divider and sync scroll |
 | Git | The `git` CLI | Same result as `git diff`, with the user's config and rename detection |
 | Syntax | tree-sitter, both files in full | Deleted lines get the right syntax |

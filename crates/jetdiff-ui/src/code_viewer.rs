@@ -4,9 +4,11 @@
 mod code_paint;
 mod divider;
 mod excerpt;
+mod fold_waves;
 mod split;
 mod split_side;
 mod unified;
+mod visible;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -104,9 +106,15 @@ pub fn hit(
             position,
         )
         .map(|(side, line)| Hit::Split(side, line)),
-        DiffMode::Unified(state) => {
-            unified::hit(&state.diff, style, bounds, scroll_y[0], position).map(Hit::Unified)
-        }
+        DiffMode::Unified(state) => unified::hit(
+            &state.diff,
+            &state.folding,
+            style,
+            bounds,
+            scroll_y[0],
+            position,
+        )
+        .map(Hit::Unified),
     }
 }
 
@@ -184,6 +192,7 @@ impl Painter {
             }
             DiffMode::Unified(state) => Self::Unified(UnifiedPainter {
                 diff: state.diff.clone(),
+                folding: state.folding.clone(),
                 theme,
                 style,
                 scroll_y: snap(shown.y[0], scale),

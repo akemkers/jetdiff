@@ -27,7 +27,7 @@ pub use command::Command;
 pub use cursor::Cursor;
 pub use divider::{Cubic, DividerBand, FoldLink, Point, divider_bands, fold_links};
 pub use fold_paths::PathSeg;
-pub use folding::{ClosedFold, FoldId, Folding};
+pub use folding::{ClosedFold, FoldId, Folding, UnifiedFolding};
 pub use geometry::{SideGeometry, UnifiedGeometry, side_geometry};
 pub use hunk_minimap::{HunkMinimapMark, hunk_minimap_marks, thumb_range};
 pub use jetdiff_core::ComparisonPolicy;

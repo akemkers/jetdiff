@@ -8,6 +8,10 @@ use crate::folding::Folding;
 use crate::layout::{LineLayout, Viewport};
 use crate::model::{FileDiff, Hunk, idx};
 
+mod code_view_keeper;
+
+pub(crate) use code_view_keeper::CodeViewKeeper;
+
 /// `Range` from IntelliJ seen from the master: 1 is the master, 2 is the slave.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct SyncRange {
@@ -237,13 +241,10 @@ impl ScrollState {
     }
 }
 
-/// `EditorScrollingPositionKeeper` per side: keeps the cursor, or the top line if the cursor is
-/// outside, at the same place on screen through a fold change.
+/// `CodeViewKeeper` per side.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PositionKeeper {
-    /// Logical line and distance from the top of the viewport.
-    anchors: [(usize, f32); 2],
-    keeps_cursor: [bool; 2],
+    sides: [CodeViewKeeper; 2],
 }
 
 impl PositionKeeper {
@@ -253,27 +254,12 @@ impl PositionKeeper {
         cursor_lines: [usize; 2],
         viewport: Viewport,
     ) -> Self {
-        let mut anchors = [(0, 0.); 2];
-        let mut keeps_cursor = [false; 2];
-        for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
+        let sides = [Side::Left, Side::Right].map(|side| {
             let layout = folding.layout(side, viewport.line_height);
-            let top = state.y[i];
-            let cursor_y = layout.line_top(cursor_lines[i]);
-            let off_screen =
-                cursor_y + layout.line_height() <= top || cursor_y >= top + viewport.height;
-            anchors[i] = if off_screen {
-                // `xyToLogicalPosition`: the first line of the fold if the top is on one
-                let line = layout.y_to_logical_line(top).min(layout.line_count() - 1);
-                (line, layout.line_top(line) - top)
-            } else {
-                (cursor_lines[i], cursor_y - top)
-            };
-            keeps_cursor[i] = !off_screen;
-        }
-        Self {
-            anchors,
-            keeps_cursor,
-        }
+            let i = idx(side);
+            CodeViewKeeper::save(&layout, state.y[i], cursor_lines[i], viewport)
+        });
+        Self { sides }
     }
 
     /// `cursor_lines` are after the change, moved out of closed folds. Left is restored
@@ -290,13 +276,7 @@ impl PositionKeeper {
         let before = state.y[1];
         for (i, side) in [Side::Left, Side::Right].into_iter().enumerate() {
             let layout = folding.layout(side, viewport.line_height);
-            let (line, shift) = self.anchors[i];
-            let line = if self.keeps_cursor[i] {
-                cursor_lines[i]
-            } else {
-                line
-            };
-            state.y[i] = layout.clamp_scroll(layout.line_top(line) - shift, viewport.height);
+            state.y[i] = self.sides[i].restore(&layout, cursor_lines[i], viewport);
         }
         if state.y[1] != before {
             state.sync_from(diff, folding, Side::Right, viewport);

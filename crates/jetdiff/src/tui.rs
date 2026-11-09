@@ -10,6 +10,7 @@ pub fn run(content: Content, title: &str, config: Config) -> Result<(), String> 
     let settings = Settings {
         theme: Theme::built_in(),
         unified: config.unified,
+        fold_unchanged: config.fold_unchanged,
         side_panel_open: config.side_panel.open,
         icons: config.terminal.icons,
     };

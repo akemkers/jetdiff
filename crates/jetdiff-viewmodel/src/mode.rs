@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::command::Command;
 use crate::cursor::Cursor;
-use crate::folding::Folding;
+use crate::folding::{FoldId, split_folding};
 use crate::layout::Viewport;
 use crate::model::FileDiff;
 use crate::scroll::ScrollState;
@@ -19,22 +19,55 @@ pub enum DiffMode {
 }
 
 impl DiffMode {
-    /// `folding` is only used in Split.
-    pub fn new(diff: Rc<FileDiff>, folding: Rc<Folding>, unified: bool) -> Self {
+    /// `fold_unchanged` closes the folds from the start, like `f`.
+    pub fn new(diff: Rc<FileDiff>, unified: bool, fold_unchanged: bool) -> Self {
         if unified || !diff.can_split() {
-            Self::Unified(UnifiedState::new(Rc::new(UnifiedDiff::new(diff))))
+            Self::Unified(UnifiedState::new(
+                Rc::new(UnifiedDiff::new(diff)),
+                fold_unchanged,
+            ))
         } else {
-            Self::Split(DiffState::new(diff, folding))
+            Self::Split(DiffState::new(
+                diff.clone(),
+                split_folding(&diff, fold_unchanged),
+            ))
         }
     }
 
-    /// Switches diff mode with the cursor on the same line and height. `folding` is used when
-    /// switching to Split, and is made again because Unified has no folding.
-    pub fn toggle(&mut self, folding: Rc<Folding>, viewport: Viewport) {
+    /// Switches diff mode with the cursor on the same line and height. The folding is made again
+    /// for the new diff mode, with the folds as `fold_unchanged` says.
+    pub fn toggle(&mut self, fold_unchanged: bool, viewport: Viewport) {
         *self = match self {
-            Self::Split(state) => Self::Unified(UnifiedState::from_split(state, viewport)),
-            Self::Unified(state) => Self::Split(state.to_split(folding, viewport)),
+            Self::Split(state) => {
+                Self::Unified(UnifiedState::from_split(state, fold_unchanged, viewport))
+            }
+            Self::Unified(state) => Self::Split(state.to_split(fold_unchanged, viewport)),
         };
+    }
+
+    pub fn any_fold_closed(&self) -> bool {
+        match self {
+            Self::Split(state) => state.folding.any_closed(),
+            Self::Unified(state) => state.folding.any_closed(),
+        }
+    }
+
+    pub fn hovered_fold(&self) -> Option<FoldId> {
+        match self {
+            Self::Split(state) => state.folding.hovered(),
+            Self::Unified(state) => state.folding.hovered(),
+        }
+    }
+
+    /// `true` if the hovered fold changed.
+    pub fn set_hovered_fold(&mut self, id: Option<FoldId>) -> bool {
+        if self.hovered_fold() == id {
+            return false;
+        }
+        match self {
+            Self::Split(state) => Rc::make_mut(&mut state.folding).set_hovered(id),
+            Self::Unified(state) => Rc::make_mut(&mut state.folding).set_hovered(id),
+        }
     }
 
     pub fn is_unified(&self) -> bool {
@@ -125,20 +158,23 @@ impl DiffMode {
     pub fn replace_diff(
         &mut self,
         diff: Rc<FileDiff>,
-        folding: Rc<Folding>,
         unified: bool,
+        fold_unchanged: bool,
         viewport: Viewport,
     ) {
         let unified = unified || !diff.can_split();
         if unified && !self.is_unified() {
-            self.toggle(folding.clone(), viewport);
+            self.toggle(fold_unchanged, viewport);
         }
         match self {
-            Self::Split(state) => state.replace_diff(diff, folding.clone(), viewport),
-            Self::Unified(state) => state.replace_diff(diff, viewport),
+            Self::Split(state) => {
+                let folding = split_folding(&diff, fold_unchanged);
+                state.replace_diff(diff, folding, viewport);
+            }
+            Self::Unified(state) => state.replace_diff(diff, fold_unchanged, viewport),
         }
         if !unified && self.is_unified() {
-            self.toggle(folding, viewport);
+            self.toggle(fold_unchanged, viewport);
         }
     }
 }
@@ -154,48 +190,63 @@ mod tests {
         line_height: 10.,
     };
 
+    fn diff(left_side: &str, right_side: &str) -> Rc<FileDiff> {
+        Rc::new(FileDiff::new(left_side, right_side, ComparisonPolicy::Default).unwrap())
+    }
+
     #[test]
     fn switch_back_and_forth() {
         let left_side: String = (0..100).map(|i| format!("a{i}\n")).collect();
         let right_side = left_side.replace("a50\n", "x\n");
-        let diff =
-            Rc::new(FileDiff::new(&left_side, &right_side, ComparisonPolicy::Default).unwrap());
-        let folding = || Rc::new(Folding::none(&diff));
-        let mut mode = DiffMode::new(diff.clone(), folding(), false);
+        let mut mode = DiffMode::new(diff(&left_side, &right_side), false, false);
         mode.init(VIEWPORT);
         let before = mode.cursor_location();
 
-        mode.toggle(folding(), VIEWPORT);
+        mode.toggle(false, VIEWPORT);
         assert!(mode.is_unified());
         assert_eq!(mode.cursor_location(), before);
         assert_eq!(mode.cursor_hunk(), Some(0));
 
-        mode.toggle(folding(), VIEWPORT);
+        mode.toggle(false, VIEWPORT);
         assert!(!mode.is_unified());
         assert_eq!(mode.cursor_location(), Cursor::new(Side::Right, 50));
     }
 
     #[test]
+    fn switch_closes_the_folds_opened_with_o() {
+        // One hunk on line 50 of 100, so the folds are 0..46 and 55..101
+        let left_side: String = (0..100).map(|i| format!("a{i}\n")).collect();
+        let right_side = left_side.replace("a50\n", "x\n");
+        let mut mode = DiffMode::new(diff(&left_side, &right_side), false, true);
+        mode.init(VIEWPORT);
+        let mut run = |command| mode.execute(command, VIEWPORT, Horizontal::default());
+        run(Command::GoToBottom);
+        run(Command::FoldOpen);
+        run(Command::GoToBottom);
+        run(Command::MoveUp);
+        assert_eq!(mode.cursor_location(), Cursor::new(Side::Right, 99));
+
+        // The line is in a closed fold in Unified, so the cursor moves out to the fold
+        mode.toggle(true, VIEWPORT);
+        assert!(mode.is_unified());
+        assert!(mode.any_fold_closed());
+        assert_eq!(mode.cursor_location(), Cursor::new(Side::Right, 55));
+
+        mode.toggle(true, VIEWPORT);
+        assert_eq!(mode.cursor_location(), Cursor::new(Side::Right, 55));
+    }
+
+    #[test]
     fn added_and_deleted_files_are_shown_unified() {
-        let diff = |left_side: &str, right_side: &str| {
-            Rc::new(FileDiff::new(left_side, right_side, ComparisonPolicy::Default).unwrap())
-        };
-        let added_file = diff("", "a\n");
-        let mode = DiffMode::new(
-            added_file.clone(),
-            Rc::new(Folding::none(&added_file)),
-            false,
-        );
+        let mode = DiffMode::new(diff("", "a\n"), false, true);
         assert!(mode.is_unified());
 
         let changed = diff("a\nb\n", "a\nc\n");
-        let folding = Rc::new(Folding::none(&changed));
-        let mut mode = DiffMode::new(changed.clone(), folding.clone(), false);
+        let mut mode = DiffMode::new(changed.clone(), false, true);
         mode.init(VIEWPORT);
-        let deleted = diff("a\nb\n", "");
-        mode.replace_diff(deleted, folding.clone(), false, VIEWPORT);
+        mode.replace_diff(diff("a\nb\n", ""), false, true, VIEWPORT);
         assert!(mode.is_unified());
-        mode.replace_diff(changed, folding, false, VIEWPORT);
+        mode.replace_diff(changed, false, true, VIEWPORT);
         assert!(!mode.is_unified());
     }
 }

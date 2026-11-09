@@ -85,7 +85,7 @@ impl App {
     pub fn file(diff: FileDiff, paths: [String; 2], settings: &Settings) -> Self {
         Self {
             theme: settings.theme,
-            diff: DiffView::new(diff, paths, settings.unified),
+            diff: DiffView::new(diff, paths, settings.unified, settings.fold_unchanged),
             notification_slot: NotificationSlot::default(),
             repository: None,
             focus: Focus::Diff,

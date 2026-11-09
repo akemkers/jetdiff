@@ -31,6 +31,8 @@ const WHEEL_ROWS: usize = 3;
 pub struct Settings {
     pub theme: Theme,
     pub unified: bool,
+    /// Folds closed from the start. `f` switches for the session.
+    pub fold_unchanged: bool,
     pub side_panel_open: bool,
     /// Nerd Font characters in front of the files in the tree.
     pub icons: bool,

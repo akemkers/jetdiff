@@ -15,6 +15,9 @@ use crate::text::{LineText, fill, paint_line, tint};
 /// The cursor's row when the diff doesn't have focus, as in GPUI.
 const UNFOCUSED_CURSOR_ROW_OPACITY: f32 = 0.4;
 
+/// The fold wave as text, across the gutter and the text.
+const FOLD_WAVE: &str = "~";
+
 pub(super) struct Painter<'a> {
     state: &'a UnifiedState,
     theme: &'a Theme,
@@ -27,6 +30,8 @@ pub(super) struct VisibleRow<'a> {
     pub(super) y: u16,
     pub(super) row: &'a Row,
     pub(super) marked: bool,
+    /// A closed fold, which is drawn as a fold wave without text or numbers.
+    pub(super) fold: bool,
 }
 
 impl<'a> Painter<'a> {
@@ -53,7 +58,7 @@ impl<'a> Painter<'a> {
         area: Rect,
     ) -> impl Iterator<Item = VisibleRow<'a>> + use<'a> {
         let state = self.state;
-        let layout = state.diff.layout(1.);
+        let layout = state.folding.layout(1.);
         let scroll_y = state.scroll_y();
         (0..area.height).filter_map(move |screen| {
             let index = row_at(&layout, scroll_y, screen)?;
@@ -61,16 +66,18 @@ impl<'a> Painter<'a> {
                 y: area.y + screen,
                 row: state.diff.row(index),
                 marked: index == state.row,
+                fold: state.folding.fold_at_row(index).is_some(),
             })
         })
     }
 
     pub(super) fn hunk_minimap_marks(&self) -> Vec<HunkMinimapMark> {
-        self.state.diff.hunk_minimap_marks(1.)
+        let state = self.state;
+        state.diff.hunk_minimap_marks(&state.folding, 1.)
     }
 
     pub(super) fn content_height(&self) -> f32 {
-        self.state.diff.layout(1.).content_height()
+        self.state.folding.layout(1.).content_height()
     }
 
     pub(super) fn scroll_y(&self) -> f32 {
@@ -131,6 +138,15 @@ impl<'a> Painter<'a> {
         let (x, number) = geometry::number(line, end);
         self.buf
             .set_string(x, y, number, Style::default().fg(color(number_color)));
+    }
+
+    /// A closed fold, like the fold wave in GPUI.
+    pub(super) fn fold_wave(&mut self, columns: &Columns, y: u16) {
+        let area = columns.row(y);
+        let style = Style::default().fg(color(self.theme.fold_wave));
+        let wave = FOLD_WAVE.repeat(area.width as usize);
+        self.buf
+            .set_stringn(area.x, area.y, wave, usize::MAX, style);
     }
 
     /// The side has no line on the row.

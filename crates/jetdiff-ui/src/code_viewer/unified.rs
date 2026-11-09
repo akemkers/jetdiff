@@ -1,18 +1,22 @@
 //! Unified: one code view where deleted rows sit above the added ones, with a line
 //! number for each side in the gutter. Drawing, and which row the mouse hits.
 
-use std::ops::{Range, RangeInclusive};
+use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{App, Bounds, Hsla, Pixels, Point, ShapedLine, SharedString, Window, point, px};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::{InlineHighlight, UnifiedDiff, UnifiedGeometry};
+use jetdiff_viewmodel::{
+    InlineHighlight, LineLayout, UnifiedDiff, UnifiedFolding, UnifiedGeometry,
+};
 
 use super::code_paint::{
     HunkMinimapRects, ShapedText, mask, paint_code_background, paint_cursor_row, paint_hunk, rect,
     shape_number,
 };
+use super::fold_waves::FoldWaves;
 use super::split_side::CursorRow;
+use super::visible::Visible;
 use crate::cache::LineCache;
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
@@ -28,6 +32,7 @@ pub type RowCache = LineCache<(SharedString, u32), CachedRow>;
 /// What to draw in one frame. Made in `render` and drawn in the canvas.
 pub struct UnifiedPainter {
     pub diff: Rc<UnifiedDiff>,
+    pub folding: Rc<UnifiedFolding>,
     pub theme: UiTheme,
     pub style: TextStyle,
     pub scroll_y: f32,
@@ -41,10 +46,12 @@ pub struct UnifiedPainter {
 /// The geometry and the rows that are visible in this frame.
 struct Frame<'a> {
     painter: &'a UnifiedPainter,
+    layout: LineLayout<'a>,
     geom: UnifiedGeometry,
     top: f32,
     bottom: f32,
-    visible: RangeInclusive<usize>,
+    /// The lines are rows.
+    visible: Visible,
 }
 
 impl UnifiedPainter {
@@ -60,19 +67,20 @@ impl UnifiedPainter {
     ) -> f32 {
         let top = f32::from(bounds.origin.y);
         let height = f32::from(bounds.size.height);
-        let layout = self.diff.layout(self.style.line_height());
+        let line_height = self.style.line_height();
+        let layout = self.folding.layout(line_height);
         let content_height = layout.content_height();
         if hunk_minimap.track_height != height {
-            let marks = self.diff.hunk_minimap_marks(self.style.line_height());
+            let marks = self.diff.hunk_minimap_marks(&self.folding, line_height);
             *hunk_minimap = HunkMinimapRects::new(&marks, content_height, height, &self.theme);
         }
-        let (first, last) = layout.painted_lines(self.scroll_y, height);
         let frame = Frame {
             painter: self,
+            layout,
             geom: geometry(&self.diff, &self.style, bounds),
             top,
             bottom: top + height,
-            visible: first..=last.min(self.diff.row_count() - 1),
+            visible: Visible::new(&layout, self.scroll_y, height),
         };
         let code = &frame.geom.code;
 
@@ -80,6 +88,7 @@ impl UnifiedPainter {
             paint_code_background(code, frame.top, frame.bottom, &self.theme, window);
             frame.paint_hunks(window);
             frame.paint_cursor_row(window);
+            frame.paint_folds(window);
             let widest = frame.paint_text(cache, window, cx);
             frame.paint_line_numbers(cache, window, cx);
             if self.hunk_minimap {
@@ -94,7 +103,8 @@ impl UnifiedPainter {
             }
             widest
         });
-        cache.trim(first..last + 1);
+        let logical = &frame.visible.logical;
+        cache.trim(*logical.start()..*logical.end() + 1);
         widest
     }
 
@@ -144,19 +154,19 @@ impl Frame<'_> {
     }
 
     fn row_top(&self, row: usize) -> f32 {
-        self.screen_y(row as f32 * self.painter.style.line_height())
+        self.screen_y(self.layout.line_top(row))
     }
 
     /// The deleted and added part of each hunk get a color each, without blue.
     fn paint_hunks(&self, window: &mut Window) {
         let diff = &self.painter.diff;
-        let layout = diff.layout(self.painter.style.line_height());
+        let layout = &self.layout;
         let hunks = diff.diff.hunks();
         for (index, rows) in diff.hunk_rows().iter().enumerate() {
-            if rows.end <= *self.visible.start() {
+            if rows.end <= *self.visible.logical.start() {
                 continue;
             }
-            if rows.start > *self.visible.end() {
+            if rows.start > *self.visible.logical.end() {
                 break;
             }
             let deleted = diff.rows()[rows.clone()]
@@ -188,7 +198,7 @@ impl Frame<'_> {
         let Some(cursor_row) = self.painter.cursor_row else {
             return;
         };
-        if !self.visible.contains(&cursor_row.line) {
+        if !self.visible.logical.contains(&cursor_row.line) {
             return;
         }
         let top = self.row_top(cursor_row.line);
@@ -204,6 +214,22 @@ impl Frame<'_> {
         );
     }
 
+    /// As on each side in Split, without a fold link.
+    fn paint_folds(&self, window: &mut Window) {
+        let painter = self.painter;
+        let code = &self.geom.code;
+        let waves = FoldWaves {
+            layout: &self.layout,
+            x: code.bounds(),
+            edge: code.gutter.start,
+            mirrored: false,
+            document_top: self.screen_y(0.),
+            hovered: painter.folding.hovered(),
+            color: painter.theme.fold_wave,
+        };
+        waves.paint(painter.folding.visible(), &self.visible, window);
+    }
+
     /// Inline highlights and text, clipped so the text doesn't flow into the gutter on sideways scroll.
     /// Returns the width of the widest row.
     fn paint_text(&self, cache: &mut RowCache, window: &mut Window, cx: &mut App) -> f32 {
@@ -213,7 +239,7 @@ impl Frame<'_> {
         let text_x = code.text_x - painter.scroll_x;
         let mut widest: f32 = 0.;
         window.with_content_mask(mask(self.area(code.text_x..code.text.end)), |window| {
-            for row_index in self.visible.clone() {
+            for &row_index in &self.visible.lines {
                 let row = painter.diff.row(row_index);
                 let top = self.row_top(row_index);
                 let entry =
@@ -252,7 +278,7 @@ impl Frame<'_> {
         let painter = self.painter;
         let line_height = painter.style.line_height();
         window.with_content_mask(mask(self.area(self.geom.code.gutter.clone())), |window| {
-            for row_index in self.visible.clone() {
+            for &row_index in &self.visible.lines {
                 let y = self.row_top(row_index) + painter.style.number_dy;
                 let cursor_numbers;
                 let is_cursor_row = painter
@@ -287,6 +313,7 @@ fn geometry(diff: &UnifiedDiff, style: &TextStyle, bounds: Bounds<Pixels>) -> Un
 /// The row under the mouse, `None` outside the code view.
 pub fn hit(
     diff: &UnifiedDiff,
+    folding: &UnifiedFolding,
     style: &TextStyle,
     bounds: Bounds<Pixels>,
     scroll_y: f32,
@@ -296,7 +323,7 @@ pub fn hit(
     if !code.bounds().contains(&f32::from(position.x)) {
         return None;
     }
-    let layout = diff.layout(style.line_height());
+    let layout = folding.layout(style.line_height());
     let y = f32::from(position.y - bounds.origin.y) + scroll_y;
     Some(layout.y_to_logical_line(y).min(layout.line_count() - 1))
 }

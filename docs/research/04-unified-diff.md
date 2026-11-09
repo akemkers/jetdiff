@@ -344,6 +344,7 @@ Choices where IntelliJ is not a good model:
 - Toggle: IntelliJ stores the choice per place. We only have one place, so one key in `config.toml` is enough.
 
 Chosen when Unified was built:
-- No folding in Unified, so folds are not kept on a switch. Split builds the folding again.
+- Unified folds as `UnifiedFoldingModel` does: one side over the rows, with each hunk's rows as the change.
+  Folds are not kept on a switch. Each diff mode builds its folding again, with the folds as `f` says.
 - Added and deleted files are always shown Unified, and `v` does nothing there. Split therefore never shows one
   side alone.
