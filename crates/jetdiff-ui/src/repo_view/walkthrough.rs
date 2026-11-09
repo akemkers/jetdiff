@@ -149,10 +149,12 @@ impl RepoView {
         match walkthrough.view.read(cx).status() {
             Status::Loading => walkthrough.opening = true,
             Status::Ready => {
-                let unified = self.diff.read(cx).is_unified();
-                walkthrough
-                    .view
-                    .update(cx, |view, cx| view.set_unified(unified, cx));
+                let diff = self.diff.read(cx);
+                let (unified, split_share) = (diff.is_unified(), diff.split_share());
+                walkthrough.view.update(cx, |view, cx| {
+                    view.set_unified(unified, cx);
+                    view.set_split_share(split_share, cx);
+                });
                 walkthrough.shown = true;
                 window.focus(&walkthrough.view.focus_handle(cx));
             }
@@ -230,9 +232,18 @@ impl RepoView {
             .update(cx, |slot, cx| slot.show_brief(brief, cx));
     }
 
+    /// The diff gets the share the diff divider was dragged to in the walkthrough.
     fn close_walkthrough(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(walkthrough) = &mut self.walkthrough {
+        // A walkthrough that wasn't shown never got the share from the diff
+        if let Some(walkthrough) = self
+            .walkthrough
+            .as_mut()
+            .filter(|walkthrough| walkthrough.shown)
+        {
             walkthrough.shown = false;
+            let split_share = walkthrough.view.read(cx).split_share();
+            self.diff
+                .update(cx, |diff, cx| diff.set_split_share(split_share, cx));
         }
         window.focus(&self.diff.focus_handle(cx));
         cx.notify();

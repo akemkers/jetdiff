@@ -9,6 +9,7 @@ use jetdiff_core::side::Side;
 
 use crate::divider::DIVIDER_WIDTH;
 use crate::model::FileDiff;
+use crate::split_share::SplitShare;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GutterLayout {
@@ -148,12 +149,19 @@ impl SideGeometry {
     }
 }
 
-/// Both sides for a window that starts at `x` and is `width` wide.
+/// Where the diff divider starts, from the left edge of a split `width` wide. It is also the width of
+/// Left, so it doesn't depend on the diff.
+pub fn diff_divider_offset(width: f32, share: SplitShare) -> f32 {
+    share.left_side_width(width - DIVIDER_WIDTH).floor().max(0.)
+}
+
+/// Both sides for a window that starts at `x` and is `width` wide, with `share` of it for Left.
 pub fn side_geometry(
     diff: &FileDiff,
     number_char_width: f32,
     x: f32,
     width: f32,
+    share: SplitShare,
 ) -> [SideGeometry; 2] {
     let geom = |side: Side, mirrored, x, width| {
         // The last line number decides the width, like `getMaxLineNumberString`
@@ -161,7 +169,7 @@ pub fn side_geometry(
         let gutter = gutter_layout(digits as f32 * number_char_width);
         SideGeometry::new(side, mirrored, x, width, gutter)
     };
-    let side_width = ((width - DIVIDER_WIDTH) / 2.).floor().max(0.);
+    let side_width = diff_divider_offset(width, share);
     [
         geom(Side::Left, true, x, side_width),
         geom(
@@ -272,6 +280,21 @@ mod tests {
         assert_eq!(g.code.gutter_layout.numbers, (8., 48.));
         assert_eq!(g.number_x(Side::Left, 7.), 115.);
         assert_eq!(g.number_x(Side::Right, 7.), 141.);
+    }
+
+    #[test]
+    fn the_share_gives_the_side_widths() {
+        use crate::ComparisonPolicy;
+        let diff = FileDiff::new("a\n", "b\n", ComparisonPolicy::Default).unwrap();
+        let width = 1024.;
+        let sides = |x: f32| {
+            let share = SplitShare::at(x, width, DIVIDER_WIDTH);
+            side_geometry(&diff, 7., 0., width, share).map(|geometry| geometry.bounds())
+        };
+        assert_eq!(sides(512.), [0. ..500., 524. ..1024.]);
+        assert_eq!(sides(212.), [0. ..200., 224. ..1024.]);
+        assert_eq!(sides(0.), [0. ..0., 24. ..1024.]);
+        assert_eq!(sides(width), [0. ..1000., 1024. ..1024.]);
     }
 
     #[test]

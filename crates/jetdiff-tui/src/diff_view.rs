@@ -1,18 +1,21 @@
 //! The diff of one file, like `FileDiffView` in GPUI. Split is aligned rows, and both diff modes
 //! fold the unchanged rows.
 
+mod split_share;
+
 use std::rc::Rc;
 use std::time::Instant;
 
 use jetdiff_app::{RollbackRequest, cursor_location, rollback_request};
 use jetdiff_viewmodel::{
     Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, RowLayout, ScrollAnimator,
-    Theme, UnifiedDiff, UnifiedState, Viewport,
+    SplitShare, Theme, UnifiedDiff, UnifiedState, Viewport,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::WHEEL_ROWS;
+use crate::diff_divider_grab::DiffDividerGrab;
 use crate::{code_viewer, geometry};
 
 /// Longer than in GPUI, since whole rows need more time to look smooth.
@@ -40,6 +43,9 @@ pub struct DiffView {
     unified: bool,
     /// Folds closed for all files, until `f` switches.
     fold_unchanged: bool,
+    /// Left's share of the width in Split, for all files until jetdiff is closed.
+    split_share: SplitShare,
+    diff_divider_grab: DiffDividerGrab,
     can_rollback: bool,
     pub overlay: Option<Overlay>,
     paths: [String; 2],
@@ -64,6 +70,8 @@ impl DiffView {
             keys: KeyParser::default(),
             unified,
             fold_unchanged,
+            split_share: SplitShare::default(),
+            diff_divider_grab: DiffDividerGrab::default(),
             can_rollback: false,
             overlay: None,
             paths,
@@ -117,7 +125,7 @@ impl DiffView {
     fn text_width(&self) -> u16 {
         let diff = &self.state.diff.diff;
         match self.state.diff.row_layout() {
-            RowLayout::Split => geometry::aligned(diff, self.area).sides[0].text_width(),
+            RowLayout::Split => geometry::aligned(diff, self.area, self.split_share).text_width(),
             RowLayout::Unified => geometry::unified(diff, self.area).columns.text_width(),
         }
     }
@@ -257,10 +265,10 @@ impl DiffView {
     }
 
     /// A click on a closed fold opens it, as in GPUI.
-    pub fn click(&mut self, x: u16, y: u16) {
+    pub fn click(&mut self, x: u16, y: u16, now: Instant) {
         self.keys.reset();
         self.overlay = None;
-        if !self.area.contains((x, y).into()) {
+        if self.grab_diff_divider(x, y, now) || !self.area.contains((x, y).into()) {
             return;
         }
         self.scroll.stop(&mut self.state.scroll);
@@ -289,7 +297,7 @@ impl DiffView {
             scroll: self.scroll.shown(),
             ..self.state.clone()
         };
-        code_viewer::paint(&shown, focused, self.area, theme, buf);
+        code_viewer::paint(&shown, self.split_share, focused, self.area, theme, buf);
     }
 }
 

@@ -5,6 +5,8 @@ mod cache;
 mod code_viewer;
 mod commit_list;
 mod confirm_dialog;
+mod diff_divider_handle;
+mod drag_handle;
 mod file_diff;
 mod file_tree;
 mod help;

@@ -8,7 +8,7 @@ mod scrollbar;
 mod split;
 mod unified;
 
-use jetdiff_viewmodel::{LineLayout, RowLayout, Theme, UnifiedState};
+use jetdiff_viewmodel::{LineLayout, RowLayout, SplitShare, Theme, UnifiedState};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
@@ -20,11 +20,18 @@ pub fn row_at(layout: &LineLayout, scroll_y: f32, screen: u16) -> Option<usize> 
     (row < layout.line_count()).then_some(row)
 }
 
-pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf: &mut Buffer) {
+pub fn paint(
+    state: &UnifiedState,
+    split_share: SplitShare,
+    focused: bool,
+    area: Rect,
+    theme: &Theme,
+    buf: &mut Buffer,
+) {
     let mut painter = Painter::new(state, theme, focused, buf);
     painter.background(area);
     let scrollbar = match state.diff.row_layout() {
-        RowLayout::Split => split::paint(&mut painter, area),
+        RowLayout::Split => split::paint(&mut painter, area, split_share),
         RowLayout::Unified => unified::paint(&mut painter, area),
     };
     scrollbar::paint(&mut painter, scrollbar, area);
@@ -49,7 +56,14 @@ mod tests {
             let unified_diff = UnifiedDiff::with_layout(diff.clone(), row_layout);
             let state = UnifiedState::new(Rc::new(unified_diff), true);
             let mut buf = Buffer::empty(area);
-            paint(&state, true, area, &Theme::built_in(), &mut buf);
+            paint(
+                &state,
+                SplitShare::default(),
+                true,
+                area,
+                &Theme::built_in(),
+                &mut buf,
+            );
             let screen_row =
                 |y: u16| -> String { (0..area.width - 1).map(|x| buf[(x, y)].symbol()).collect() };
             // Lines 0..16 are the first fold, and line 16 comes after it

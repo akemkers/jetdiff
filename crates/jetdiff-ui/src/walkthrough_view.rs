@@ -8,6 +8,7 @@ mod notes;
 mod overview;
 mod page;
 mod prose;
+mod split_share;
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -24,7 +25,7 @@ use jetdiff_app::walkthrough::{Digest, FileContent, Job, Page, Reading, Walkthro
 use jetdiff_files::ChangedFile;
 use jetdiff_git::Repo;
 use jetdiff_viewmodel::metrics::FONT_SIZE;
-use jetdiff_viewmodel::{ScrollAnimator, ScrollState, UnifiedDiff};
+use jetdiff_viewmodel::{ScrollAnimator, ScrollState, SplitShare, UnifiedDiff};
 
 use crate::NAV_ANIMATION_MS;
 use crate::code_viewer::Excerpt;
@@ -111,6 +112,9 @@ pub struct WalkthroughView {
     diffs: Vec<Option<Rc<UnifiedDiff>>>,
     /// Split or Unified, as in the diff. Set when the walkthrough is shown.
     unified: bool,
+    /// Left's share of the width in Split, as in the diff. The diff gets it back when the walkthrough
+    /// is closed.
+    split_share: SplitShare,
     state: State,
     items: Vec<Item>,
     /// The item `n` and `p` are on.
@@ -148,6 +152,7 @@ impl WalkthroughView {
             digest: None,
             diffs: Vec::new(),
             unified: cx.global::<Settings>().unified,
+            split_share: SplitShare::default(),
             state: State::Loading,
             items: Vec::new(),
             cursor: None,

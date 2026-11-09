@@ -1,7 +1,9 @@
 //! The size of the side panel, dragged with the mouse. The width follows the content until it is dragged
 //! at the right edge. The height of a section at the bottom of the side panel is dragged at its top edge.
 
-use gpui::{ClickEvent, Context, Div, DragMoveEvent, EmptyView, Stateful, div, prelude::*, px};
+use gpui::{Context, Div, DragMoveEvent, prelude::*, px};
+
+use crate::drag_handle::drag_handle;
 
 const MIN_WIDTH: f32 = 320.;
 /// Automatic width never takes more than this of the window.
@@ -13,7 +15,6 @@ const HANDLE_WIDTH: f32 = 20.;
 /// The height handle lies above the edge, so it doesn't cover the first row.
 const HANDLE_HEIGHT: f32 = 8.;
 
-/// Separate types, since `on_drag_move` listens to all drags of the same type.
 struct WidthDrag;
 struct HeightDrag;
 
@@ -50,9 +51,13 @@ impl SidePanelWidth {
                 }),
             )
             .child(
-                handle("resize-width", WidthDrag, cx, move |this| {
-                    get(this).0.manual = None
-                })
+                drag_handle(
+                    "resize-width",
+                    WidthDrag,
+                    cx,
+                    |_, _| {},
+                    move |this, _| get(this).0.manual = None,
+                )
                 .top_0()
                 .bottom_0()
                 .right_0()
@@ -95,9 +100,13 @@ impl SectionHeight {
             )
             .child(
                 section.flex_none().relative().child(
-                    handle("resize-height", HeightDrag, cx, move |this| {
-                        get(this).0.manual = None
-                    })
+                    drag_handle(
+                        "resize-height",
+                        HeightDrag,
+                        cx,
+                        |_, _| {},
+                        move |this, _| get(this).0.manual = None,
+                    )
                     .left_0()
                     .right_0()
                     .top(px(-HANDLE_HEIGHT / 2.))
@@ -106,25 +115,6 @@ impl SectionHeight {
                 ),
             )
     }
-}
-
-/// A handle that drags `drag`. A double click calls `reset`.
-fn handle<T: 'static, D: 'static>(
-    id: &'static str,
-    drag: D,
-    cx: &mut Context<T>,
-    reset: impl Fn(&mut T) + 'static,
-) -> Stateful<Div> {
-    div()
-        .id(id)
-        .absolute()
-        .on_drag(drag, |_, _, _, cx| cx.new(|_| EmptyView))
-        .on_click(cx.listener(move |this, e: &ClickEvent, _, cx| {
-            if e.click_count() == 2 {
-                reset(this);
-                cx.notify();
-            }
-        }))
 }
 
 #[cfg(test)]

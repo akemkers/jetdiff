@@ -1,7 +1,7 @@
 //! Left and Right line next to each other, with a separator line between. The side without a line is filled in.
 //! A closed fold is a fold wave on both sides.
 
-use jetdiff_viewmodel::Side;
+use jetdiff_viewmodel::{Side, SplitShare};
 use ratatui::layout::Rect;
 
 use super::hunk_color::HunkColor;
@@ -9,8 +9,8 @@ use super::painter::Painter;
 use crate::geometry;
 
 /// Gives the column the scrollbar is in.
-pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
-    let cells = geometry::aligned(painter.diff(), area);
+pub(super) fn paint(painter: &mut Painter, area: Rect, split_share: SplitShare) -> u16 {
+    let cells = geometry::aligned(painter.diff(), area, split_share);
     painter.divider(cells.divider, area);
     for visible in painter.visible_rows(area) {
         let (y, row) = (visible.y, visible.row);
@@ -20,7 +20,9 @@ pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
                 _ if visible.fold => painter.fold_wave(columns, y),
                 Some(line) => {
                     painter.line(columns, y, side, line, hunk_color, None);
-                    painter.line_number(columns.number_end(), y, line, hunk_color, visible.marked);
+                    if let Some(end) = columns.number_end() {
+                        painter.line_number(end, y, line, hunk_color, visible.marked);
+                    }
                 }
                 None => painter.filler(columns, y),
             }

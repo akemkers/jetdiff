@@ -33,7 +33,7 @@ pub(super) fn paint(painter: &mut Painter, area: Rect) -> u16 {
             inline_highlight_kind,
         );
         for (line, end) in row.lines.into_iter().zip(number_ends) {
-            if let Some(line) = line {
+            if let (Some(line), Some(end)) = (line, end) {
                 painter.line_number(end, y, line, hunk_color, visible.marked);
             }
         }
