@@ -17,9 +17,11 @@ use crate::settings::Settings;
 use crate::text::SANS;
 use crate::theme::UiPalette;
 
-/// One level in puts the row under the folder icon of its parent.
-const INDENT: f32 = ICON_SIZE + GAP;
 const ICON_SIZE: f32 = 16.;
+/// An icon and the gap after it.
+const ICON_SLOT: f32 = ICON_SIZE + GAP;
+/// One level in puts the row under the folder icon of its parent, past the chevron.
+const INDENT: f32 = ICON_SLOT;
 const ROW_HEIGHT: f32 = 26.;
 const GUIDE_LINE_WIDTH: f32 = 1.;
 /// The outline of the cursor, on both sides of the row.
@@ -271,13 +273,14 @@ fn content_width(changed_files: &[ChangedFile], measure: impl Fn(&str) -> f32) -
         .iter()
         .map(|row| {
             let content = match &row.kind {
-                RowKind::Dir { name, .. } => 2. * (ICON_SIZE + GAP) + measure(name),
+                // The chevron and the folder icon
+                RowKind::Dir { name, .. } => 2. * ICON_SLOT + measure(name),
                 &RowKind::File(file) => {
                     let file = &changed_files[file];
                     let from = file
                         .renamed_from_label()
                         .map_or(0., |label| GAP + measure(&label));
-                    ICON_SIZE + GAP + measure(file_name(&file.path)) + from
+                    ICON_SLOT + measure(file_name(&file.path)) + from
                 }
             };
             PAD_LEFT + row.depth as f32 * INDENT + content
@@ -301,13 +304,13 @@ mod tests {
         let measure = |text: &str| text.chars().count() as f32 * 10.;
         let edges = PAD_LEFT + PAD_RIGHT + CURSOR_OUTLINE;
         // The folder `source` is wider than `a.rs` one level in
-        let folder = 2. * (ICON_SIZE + GAP) + 60.;
+        let folder = 2. * ICON_SLOT + 60.;
         assert_eq!(
             content_width(&[changed_file("source/a.rs")], measure),
             edges + folder
         );
         let long = format!("src/{}.rs", "x".repeat(17));
-        let file = INDENT + ICON_SIZE + GAP + 200.;
+        let file = INDENT + ICON_SLOT + 200.;
         assert_eq!(content_width(&[changed_file(&long)], measure), edges + file);
     }
 }
