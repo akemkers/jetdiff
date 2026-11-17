@@ -21,7 +21,7 @@ use jetdiff_app::{
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::metrics::{FONT_SIZE, zoomed};
 use jetdiff_viewmodel::{
-    Command, DiffMode, FileDiff, FoldId, Horizontal, HunkMinimapMark, KeyParser, Parsed,
+    Command, DiffMode, FileDiff, FoldId, Horizontal, HunkMinimapMark, KeyParser, ModeState, Parsed,
     PointerTarget, ScrollAnimator, SplitRows, SplitShare, Viewport, hunk_minimap_marks,
 };
 
@@ -173,13 +173,8 @@ impl FileDiffView {
         self.paths = paths;
         self.max_cols = diff.max_display_width();
         self.scroll.stop(self.mode.scroll_mut());
-        self.mode.replace_diff(
-            Rc::new(diff),
-            self.unified,
-            self.fold_unchanged,
-            SplitRows::Synced,
-            vp,
-        );
+        self.mode
+            .replace_diff(Rc::new(diff), self.unified, self.fold_unchanged, vp);
         self.shared.clear();
         self.jump_to_clamped_scroll();
         self.update_hunk_minimap_marks();
@@ -216,7 +211,7 @@ impl FileDiffView {
         }
         self.scroll.stop(self.mode.scroll_mut());
         match self.viewport().filter(|_| self.initialized) {
-            Some(vp) => self.mode.toggle(self.fold_unchanged, SplitRows::Synced, vp),
+            Some(vp) => self.mode.toggle(self.fold_unchanged, vp),
             // Nothing is shown yet, so `step` lands on the first hunk
             None => {
                 let diff = self.mode.diff().clone();
@@ -264,7 +259,7 @@ impl FileDiffView {
     /// computes its marks when the hunk minimap is drawn.
     fn update_hunk_minimap_marks(&mut self) {
         self.shared.clear_hunk_minimaps();
-        let (Some(style), DiffMode::Split(state)) = (&self.style, &self.mode) else {
+        let (Some(style), ModeState::Split(state)) = (&self.style, self.mode.state()) else {
             return;
         };
         let line_height = style.line_height();

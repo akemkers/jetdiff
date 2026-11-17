@@ -1,7 +1,7 @@
 //! The file controls at the right of the diff header: the diff mode and Fold.
 
 use gpui::{App, ClickEvent, Context, Div, Window, div, prelude::*, px};
-use jetdiff_viewmodel::{Command, DiffMode};
+use jetdiff_viewmodel::Command;
 
 use super::{FileDiffView, ToggleDiffMode};
 use crate::button_group::{Button, group, toggle};
@@ -27,7 +27,7 @@ impl FileDiffView {
 
     /// A click on the side not shown does what `v` does.
     fn diff_mode(&self, palette: &UiPalette, scale: f32, cx: &mut Context<Self>) -> Div {
-        let split = matches!(self.mode, DiffMode::Split(_));
+        let split = !self.mode.is_unified();
         let buttons = vec![
             Button::new("Split", toggle_diff_mode(cx))
                 .active(split)

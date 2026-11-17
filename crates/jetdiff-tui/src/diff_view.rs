@@ -8,8 +8,8 @@ use std::time::Instant;
 
 use jetdiff_app::{Overlay, OverlaySlot, RollbackRequest, cursor_location, rollback_request};
 use jetdiff_viewmodel::{
-    Command, DiffMode, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, PointerTarget,
-    RowLayout, ScrollAnimator, SplitRows, SplitShare, Theme, UnifiedState, Viewport,
+    Command, DiffMode, FileDiff, Horizontal, Key, KeyCode, KeyParser, ModeState, Parsed,
+    PointerTarget, RowLayout, ScrollAnimator, SplitRows, SplitShare, Theme, UnifiedState, Viewport,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -105,13 +105,8 @@ impl DiffView {
         self.overlay.cancel_rollback();
         self.paths = paths;
         self.max_cols = diff.max_display_width();
-        self.mode.replace_diff(
-            Rc::new(diff),
-            self.unified,
-            self.fold_unchanged,
-            SplitRows::Aligned,
-            viewport,
-        );
+        self.mode
+            .replace_diff(Rc::new(diff), self.unified, self.fold_unchanged, viewport);
         self.clamp_scroll_x();
         self.scroll.retarget(self.mode.scroll(), Instant::now());
     }
@@ -178,9 +173,7 @@ impl DiffView {
         self.unified = !self.unified;
         self.scroll.stop(self.mode.scroll_mut());
         match self.viewport().filter(|_| self.initialized) {
-            Some(viewport) => self
-                .mode
-                .toggle(self.fold_unchanged, SplitRows::Aligned, viewport),
+            Some(viewport) => self.mode.toggle(self.fold_unchanged, viewport),
             None => {
                 let diff = self.mode.diff().clone();
                 self.mode =
@@ -301,9 +294,9 @@ impl DiffView {
 
     /// The terminal shows Split as Aligned Split, so both diff modes are rows.
     fn rows(&self) -> &UnifiedState {
-        match &self.mode {
-            DiffMode::AlignedSplit(state) | DiffMode::Unified(state) => state,
-            DiffMode::Split(_) => unreachable!("the terminal makes Aligned Split"),
+        match self.mode.state() {
+            ModeState::Rows(state) => state,
+            ModeState::Split(_) => unreachable!("DiffMode is made with SplitRows::Aligned"),
         }
     }
 }

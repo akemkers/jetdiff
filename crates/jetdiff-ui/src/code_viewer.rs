@@ -16,7 +16,7 @@ use std::rc::Rc;
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
 use jetdiff_viewmodel::{
-    DiffMode, HunkMinimapMark, PointerTarget, ScrollState, SplitShare, Viewport,
+    DiffMode, HunkMinimapMark, ModeState, PointerTarget, ScrollState, SplitShare, Viewport,
 };
 
 use self::code_paint::HunkMinimapRects;
@@ -100,8 +100,8 @@ pub fn hit(
     scroll_y: [f32; 2],
     position: Point<Pixels>,
 ) -> Option<PointerTarget> {
-    match mode {
-        DiffMode::Split(state) => split::hit(
+    match mode.state() {
+        ModeState::Split(state) => split::hit(
             &state.diff,
             &state.folding,
             code_layout,
@@ -110,7 +110,7 @@ pub fn hit(
             position,
         )
         .map(|(side, line)| PointerTarget::Line(side, line)),
-        DiffMode::AlignedSplit(state) | DiffMode::Unified(state) => unified::hit(
+        ModeState::Rows(state) => unified::hit(
             &state.diff,
             &state.folding,
             code_layout.style,
@@ -136,11 +136,9 @@ pub fn wheel(
 }
 
 pub fn text_width(mode: &DiffMode, code_layout: CodeLayout, bounds: Bounds<Pixels>) -> f32 {
-    match mode {
-        DiffMode::Split(state) => split::text_width(&state.diff, code_layout, bounds),
-        DiffMode::AlignedSplit(state) | DiffMode::Unified(state) => {
-            unified::text_width(&state.diff, code_layout.style, bounds)
-        }
+    match mode.state() {
+        ModeState::Split(state) => split::text_width(&state.diff, code_layout, bounds),
+        ModeState::Rows(state) => unified::text_width(&state.diff, code_layout.style, bounds),
     }
 }
 
@@ -163,8 +161,8 @@ impl Painter {
     ) -> Self {
         let scroll_x = snap(shown.x, scale);
         let style = code_layout.style.clone();
-        match mode {
-            DiffMode::Split(state) => {
+        match mode.state() {
+            ModeState::Split(state) => {
                 // The other side shows the mirrored cursor more faintly, so you see where H and L land.
                 // IntelliJ paints the cursor row only on the active side.
                 let cursor = state.cursor;
@@ -192,21 +190,19 @@ impl Painter {
                     split_share: code_layout.split_share,
                 })
             }
-            DiffMode::AlignedSplit(state) | DiffMode::Unified(state) => {
-                Self::Unified(UnifiedPainter {
-                    diff: state.diff.clone(),
-                    folding: state.folding.clone(),
-                    theme,
-                    style,
-                    scroll_y: snap(shown.y[0], scale),
-                    scroll_x,
-                    cursor_row: Some(CursorRow {
-                        line: state.row,
-                        active: focused,
-                    }),
-                    hunk_minimap: true,
-                })
-            }
+            ModeState::Rows(state) => Self::Unified(UnifiedPainter {
+                diff: state.diff.clone(),
+                folding: state.folding.clone(),
+                theme,
+                style,
+                scroll_y: snap(shown.y[0], scale),
+                scroll_x,
+                cursor_row: Some(CursorRow {
+                    line: state.row,
+                    active: focused,
+                }),
+                hunk_minimap: true,
+            }),
         }
     }
 

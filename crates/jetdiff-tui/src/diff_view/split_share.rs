@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use jetdiff_viewmodel::{DiffMode, SplitShare};
+use jetdiff_viewmodel::SplitShare;
 
 use super::DiffView;
 use crate::diff_divider_grab::grab_offset;
@@ -47,7 +47,7 @@ impl DiffView {
 
     /// The column of the diff divider, `None` in Unified.
     fn diff_divider(&self) -> Option<u16> {
-        matches!(self.mode, DiffMode::AlignedSplit(_))
+        (!self.mode.is_unified())
             .then(|| geometry::aligned(self.mode.diff(), self.area, self.split_share).divider)
     }
 
