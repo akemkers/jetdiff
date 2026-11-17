@@ -181,7 +181,7 @@ The bar over a file's excerpts in a walkthrough, with its path and file status.
 _Avoid_: file bar
 
 **Keymap bar**:
-The most important keys, shown at the bottom across the whole window, in the diff and the walkthrough.
+The most important keys, shown at the bottom under the diff or the walkthrough.
 _Avoid_: key bar, status bar
 
 **Notification**:

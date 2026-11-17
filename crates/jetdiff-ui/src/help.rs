@@ -1,4 +1,4 @@
-//! The keymap bar with the most important keys, across the bottom of the window with the
+//! The keymap bar with the most important keys, under the diff or the walkthrough with the
 //! notifications above it, and all the keys in a popup on `?`.
 
 use gpui::{Div, Entity, FontWeight, actions, div, prelude::*, px};
@@ -47,7 +47,7 @@ pub fn keymap_bar(
         .items_center()
         .gap(scaled(KEYS_GAP))
         .overflow_hidden()
-        .bg(palette.surface)
+        .bg(palette.page)
         .border_t_1()
         .border_color(palette.border)
         .font_family(SANS)

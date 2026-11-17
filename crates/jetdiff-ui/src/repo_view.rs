@@ -357,7 +357,8 @@ impl Render for RepoView {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .child(div().flex_1().min_h_0().child(main)),
+                    .child(div().flex_1().min_h_0().child(main))
+                    .child(keymap_bar),
             );
         div()
             .relative()
@@ -410,8 +411,7 @@ impl Render for RepoView {
                 this.diff.update(cx, |d, cx| d.hide_help(a, w, cx))
             }))
             .on_action(cx.listener(Self::toggle_diff_mode))
-            .child(div().flex_1().min_h_0().child(content))
-            .child(keymap_bar)
+            .child(content)
             .children(question)
     }
 }
