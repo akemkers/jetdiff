@@ -94,7 +94,7 @@ impl KeyHelp {
     pub fn popup(&self) -> Div {
         let palette = self.theme.palette;
         let scale = self.scale;
-        let s = |v: f32| px(v * scale);
+        let scaled = |size: f32| px(size * scale);
         let sections = ALL
             .iter()
             .map(|&(title, keys)| section(title, keys, &palette, scale));
@@ -108,24 +108,24 @@ impl KeyHelp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(s(POPUP_GAP))
-                    .px(s(POPUP_HORIZONTAL_PADDING))
-                    .py(s(POPUP_VERTICAL_PADDING))
+                    .gap(scaled(POPUP_GAP))
+                    .px(scaled(POPUP_HORIZONTAL_PADDING))
+                    .py(scaled(POPUP_VERTICAL_PADDING))
                     .bg(palette.surface)
                     .border_1()
                     .border_color(palette.border)
-                    .rounded(s(POPUP_RADIUS))
+                    .rounded(scaled(POPUP_RADIUS))
                     .shadow_lg()
                     .font_family(FAMILY)
-                    .text_size(s(POPUP_TEXT_SIZE))
+                    .text_size(scaled(POPUP_TEXT_SIZE))
                     .text_color(palette.muted)
                     .child(
                         div()
                             .flex()
                             .flex_wrap()
-                            .max_w(s(2. * SECTION_WIDTH + SECTION_GAP))
-                            .gap_x(s(SECTION_GAP))
-                            .gap_y(s(POPUP_GAP))
+                            .max_w(scaled(2. * SECTION_WIDTH + SECTION_GAP))
+                            .gap_x(scaled(SECTION_GAP))
+                            .gap_y(scaled(POPUP_GAP))
                             .children(sections),
                     )
                     .child("? or Esc closes"),
@@ -134,16 +134,16 @@ impl KeyHelp {
 }
 
 fn section(title: &'static str, keys: &[Keys], palette: &UiPalette, scale: f32) -> Div {
-    let s = |v: f32| px(v * scale);
+    let scaled = |size: f32| px(size * scale);
     let rows = keys.iter().map(|&(labels, what)| {
         div()
             .flex()
             .items_center()
             .child(
                 div()
-                    .w(s(KEYS_WIDTH))
+                    .w(scaled(KEYS_WIDTH))
                     .flex()
-                    .gap(s(LABEL_GAP))
+                    .gap(scaled(LABEL_GAP))
                     .children(labels.iter().map(|&label| key_label(label, palette, scale))),
             )
             .child(what)
@@ -151,11 +151,11 @@ fn section(title: &'static str, keys: &[Keys], palette: &UiPalette, scale: f32) 
     div()
         .flex()
         .flex_col()
-        .gap(s(ROW_GAP))
-        .w(s(SECTION_WIDTH))
+        .gap(scaled(ROW_GAP))
+        .w(scaled(SECTION_WIDTH))
         .child(
             div()
-                .pb(s(TITLE_PADDING))
+                .pb(scaled(TITLE_PADDING))
                 .font_weight(FontWeight::BOLD)
                 .text_color(palette.primary)
                 .child(title),

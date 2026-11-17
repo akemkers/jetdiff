@@ -19,7 +19,7 @@ const TEXT_SIZE: f32 = 13.;
 const LABEL_GAP: f32 = 4.;
 
 pub fn confirm_dialog(question: impl Into<SharedString>, palette: &UiPalette, scale: f32) -> Div {
-    let s = |v: f32| px(v * scale);
+    let scaled = |size: f32| px(size * scale);
     div()
         .absolute()
         .inset_0()
@@ -29,32 +29,32 @@ pub fn confirm_dialog(question: impl Into<SharedString>, palette: &UiPalette, sc
         .pt(relative(TOP_FRACTION))
         .child(
             div()
-                .w(s(WIDTH))
+                .w(scaled(WIDTH))
                 .flex()
                 .flex_col()
-                .gap(s(GAP))
-                .px(s(HORIZONTAL_PADDING))
-                .py(s(VERTICAL_PADDING))
+                .gap(scaled(GAP))
+                .px(scaled(HORIZONTAL_PADDING))
+                .py(scaled(VERTICAL_PADDING))
                 .bg(palette.surface)
                 .border_1()
                 .border_color(palette.border)
-                .rounded(s(RADIUS))
+                .rounded(scaled(RADIUS))
                 .shadow_lg()
                 .font_family(SANS)
-                .text_size(s(TEXT_SIZE))
+                .text_size(scaled(TEXT_SIZE))
                 .text_color(palette.primary)
                 .child(question.into())
                 .child(
                     div()
                         .flex()
                         .items_center()
-                        .gap(s(LABEL_GAP))
+                        .gap(scaled(LABEL_GAP))
                         .text_color(palette.muted)
                         .child(key_label("Enter", palette, scale))
                         .child("yes")
                         .child(
                             div()
-                                .ml(s(LABEL_GAP))
+                                .ml(scaled(LABEL_GAP))
                                 .child(key_label("Esc", palette, scale)),
                         )
                         .child("no"),
