@@ -15,7 +15,7 @@ use crate::icons::{chevron_icon, file_icon, folder_icon};
 use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, TEXT_SIZE, list_key, selection_and_cursor};
 use crate::settings::Settings;
 use crate::text::SANS;
-use crate::theme::UiPalette;
+use crate::theme::UiTheme;
 
 const ICON_SIZE: f32 = 16.;
 /// An icon and the gap after it.
@@ -128,11 +128,11 @@ impl FileTree {
         })
     }
 
-    fn status_color(palette: &UiPalette, status: FileStatus) -> Hsla {
+    fn status_color(theme: &UiTheme, status: FileStatus) -> Hsla {
         match status {
-            FileStatus::Added => palette.added_pill.text,
-            FileStatus::Deleted => palette.deleted_pill.text,
-            FileStatus::Modified | FileStatus::Renamed => palette.primary,
+            FileStatus::Added => theme.palette.added_pill.text,
+            FileStatus::Deleted => theme.palette.deleted_pill.text,
+            FileStatus::Modified | FileStatus::Renamed => theme.file_modified,
         }
     }
 
@@ -162,7 +162,8 @@ impl FileTree {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let row = &self.files.rows()[i];
-        let palette = cx.global::<Settings>().theme.palette;
+        let theme = cx.global::<Settings>().theme;
+        let palette = theme.palette;
         let s = |v: f32| px(v * self.scale);
         // Explicitly Embedded, otherwise GPUI reads `java.svg` as a URI and fetches it over HTTP
         let icon = |path: String| {
@@ -217,7 +218,7 @@ impl FileTree {
                 let name_color = if is_selected {
                     palette.strong
                 } else {
-                    Self::status_color(&palette, file.status)
+                    Self::status_color(&theme, file.status)
                 };
                 base.child(icon(file_icon(&file.path)))
                     .child(
