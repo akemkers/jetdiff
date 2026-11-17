@@ -11,7 +11,7 @@ use gpui::{
 use jetdiff_app::{Files, file_name};
 use jetdiff_files::{ChangedFile, FileStatus, RowKind, Tree};
 
-use crate::icons::{chevron_icon, file_icon};
+use crate::icons::{chevron_icon, file_icon, folder_icon};
 use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, list_key, selection_and_cursor};
 use crate::settings::Settings;
 use crate::text::SANS;
@@ -210,6 +210,7 @@ impl FileTree {
             } => base
                 .text_color(palette.secondary)
                 .child(icon(chevron_icon(*open)))
+                .child(icon(folder_icon()))
                 .child(name.clone())
                 .child(div().flex_1())
                 .child(div().text_color(palette.muted).child(count.to_string())),
@@ -275,7 +276,7 @@ fn content_width(changed_files: &[ChangedFile], measure: impl Fn(&str) -> f32) -
         .map(|row| {
             let content = match &row.kind {
                 RowKind::Dir { name, count, .. } => {
-                    ICON_SIZE + GAP + measure(name) + GAP + measure(&count.to_string())
+                    2. * (ICON_SIZE + GAP) + measure(name) + GAP + measure(&count.to_string())
                 }
                 &RowKind::File(file) => {
                     let file = &changed_files[file];
@@ -306,7 +307,7 @@ mod tests {
         let measure = |text: &str| text.chars().count() as f32 * 10.;
         let edges = PAD_LEFT + PAD_RIGHT + CURSOR_OUTLINE;
         // The folder `source` with its count 1 is wider than `a.rs` one level in
-        let folder = ICON_SIZE + GAP + 60. + GAP + 10.;
+        let folder = 2. * (ICON_SIZE + GAP) + 60. + GAP + 10.;
         assert_eq!(
             content_width(&[changed_file("source/a.rs")], measure),
             edges + folder

@@ -15,11 +15,12 @@ macro_rules! icons {
     };
 }
 
-const ICONS: [(&str, &[u8]); 18] = icons!(
+const ICONS: [(&str, &[u8]); 19] = icons!(
     "branch",
     "chevronDown",
     "chevronRight",
     "docker",
+    "folder",
     "go",
     "java",
     "javaScript",
@@ -77,6 +78,10 @@ pub fn chevron_icon(open: bool) -> String {
     icon(if open { "chevronDown" } else { "chevronRight" })
 }
 
+pub fn folder_icon() -> String {
+    icon("folder")
+}
+
 pub fn branch_icon() -> String {
     icon("branch")
 }
@@ -96,6 +101,7 @@ mod tests {
         assert_eq!(file_icon("main.rs"), "rust.svg");
         assert_eq!(file_icon("main.go"), "go.svg");
         assert_eq!(file_icon("Makefile"), "text.svg");
+        assert_eq!(folder_icon(), "folder.svg");
         assert_eq!(branch_icon(), "branch.svg");
     }
 
@@ -120,6 +126,7 @@ mod tests {
         ] {
             assert!(Assets.load(&file_icon(path)).unwrap().is_some(), "{path}");
         }
+        assert!(Assets.load(&folder_icon()).unwrap().is_some());
         assert!(Assets.load(&branch_icon()).unwrap().is_some());
     }
 }
