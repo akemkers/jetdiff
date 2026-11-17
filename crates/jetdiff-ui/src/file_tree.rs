@@ -12,7 +12,7 @@ use jetdiff_app::{Files, file_name};
 use jetdiff_files::{ChangedFile, FileStatus, RowKind, Tree};
 
 use crate::icons::{chevron_icon, file_icon, folder_icon};
-use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, list_key, selection_and_cursor};
+use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, TEXT_SIZE, list_key, selection_and_cursor};
 use crate::settings::Settings;
 use crate::text::SANS;
 use crate::theme::UiPalette;
@@ -20,7 +20,6 @@ use crate::theme::UiPalette;
 /// One level in puts the row under the folder icon of its parent.
 const INDENT: f32 = ICON_SIZE + GAP;
 const ICON_SIZE: f32 = 16.;
-const TEXT_SIZE: f32 = 14.;
 const ROW_HEIGHT: f32 = 26.;
 const GUIDE_LINE_WIDTH: f32 = 1.;
 /// The outline of the cursor, on both sides of the row.

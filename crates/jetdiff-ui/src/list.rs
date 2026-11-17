@@ -6,7 +6,7 @@ use gpui::{Div, KeyDownEvent, Stateful, prelude::*};
 use crate::theme::UiPalette;
 
 pub const ROW_HEIGHT: f32 = 22.;
-pub const TEXT_SIZE: f32 = 14.;
+pub const TEXT_SIZE: f32 = 15.;
 pub const PAD_LEFT: f32 = 8.;
 pub const PAD_RIGHT: f32 = 12.;
 pub const GAP: f32 = 4.;
