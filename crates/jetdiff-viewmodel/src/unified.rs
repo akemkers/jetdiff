@@ -1,7 +1,7 @@
 //! Unified diff: one code view where deleted lines sit above the added ones in each hunk. Port of
 //! `UnifiedFragmentBuilder`, but the rows point into `FileDiff` instead of building new
-//! text, so syntax and inline highlights are reused. `RowLayout::Split` gives the same rows with
-//! the deleted and added line next to each other, for Split in the terminal.
+//! text, so syntax and inline highlights are reused. `RowLayout::AlignedSplit` gives the same rows with
+//! the deleted and added line next to each other, for Aligned Split.
 
 use std::ops::Range;
 use std::rc::Rc;
@@ -54,9 +54,9 @@ impl Row {
 pub enum RowLayout {
     /// Deleted lines above the added ones.
     Unified,
-    /// Deleted and added line next to each other, for Split in the terminal. The shorter side gets rows
-    /// without a line. Split with the diff divider in GPUI is `DiffState`, not this.
-    Split,
+    /// Deleted and added line next to each other, for Aligned Split. The shorter side gets rows
+    /// without a line.
+    AlignedSplit,
 }
 
 #[derive(Debug, Clone)]
@@ -114,7 +114,7 @@ impl UnifiedDiff {
                         len = push([None, Some(line)], Some(index));
                     }
                 }
-                RowLayout::Split => {
+                RowLayout::AlignedSplit => {
                     for lines in pair_lines(&diff, hunk) {
                         len = push(lines, Some(index));
                     }
@@ -180,7 +180,7 @@ impl UnifiedDiff {
         let layout = folding.layout(line_height);
         let mut marks = Vec::new();
         for (rows, hunk) in self.hunk_rows.iter().zip(self.diff.hunks()) {
-            if self.row_layout == RowLayout::Split {
+            if self.row_layout == RowLayout::AlignedSplit {
                 let (start_y, end_y) = hunk_minimap_mark_y(&layout, rows.clone());
                 marks.push(HunkMinimapMark {
                     kind: hunk.kind,

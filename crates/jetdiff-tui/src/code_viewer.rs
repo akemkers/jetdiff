@@ -31,7 +31,7 @@ pub fn paint(
     let mut painter = Painter::new(state, theme, focused, buf);
     painter.background(area);
     let scrollbar = match state.diff.row_layout() {
-        RowLayout::Split => split::paint(&mut painter, area, split_share),
+        RowLayout::AlignedSplit => split::paint(&mut painter, area, split_share),
         RowLayout::Unified => unified::paint(&mut painter, area),
     };
     scrollbar::paint(&mut painter, scrollbar, area);
@@ -52,7 +52,7 @@ mod tests {
         let diff = FileDiff::new(&left_side, &right_side, ComparisonPolicy::Default).unwrap();
         let diff = Rc::new(diff);
         let area = Rect::new(0, 0, 40, 10);
-        for row_layout in [RowLayout::Unified, RowLayout::Split] {
+        for row_layout in [RowLayout::Unified, RowLayout::AlignedSplit] {
             let unified_diff = UnifiedDiff::with_layout(diff.clone(), row_layout);
             let state = UnifiedState::new(Rc::new(unified_diff), true);
             let mut buf = Buffer::empty(area);

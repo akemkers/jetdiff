@@ -15,7 +15,9 @@ use std::rc::Rc;
 
 use gpui::{App, Bounds, Pixels, Point, Window};
 use jetdiff_core::side::Side;
-use jetdiff_viewmodel::{DiffMode, HunkMinimapMark, ScrollState, SplitShare, Viewport};
+use jetdiff_viewmodel::{
+    DiffMode, HunkMinimapMark, ModeState, PointerTarget, ScrollState, SplitShare, Viewport,
+};
 
 use self::code_paint::HunkMinimapRects;
 pub use self::excerpt::Excerpt;
@@ -91,21 +93,15 @@ pub struct CodeLayout<'a> {
     pub split_share: SplitShare,
 }
 
-/// What is under the mouse.
-pub enum Hit {
-    Split(Side, usize),
-    Unified(usize),
-}
-
 pub fn hit(
     mode: &DiffMode,
     code_layout: CodeLayout,
     bounds: Bounds<Pixels>,
     scroll_y: [f32; 2],
     position: Point<Pixels>,
-) -> Option<Hit> {
-    match mode {
-        DiffMode::Split(state) => split::hit(
+) -> Option<PointerTarget> {
+    match mode.state() {
+        ModeState::Split(state) => split::hit(
             &state.diff,
             &state.folding,
             code_layout,
@@ -113,8 +109,8 @@ pub fn hit(
             scroll_y,
             position,
         )
-        .map(|(side, line)| Hit::Split(side, line)),
-        DiffMode::Unified(state) => unified::hit(
+        .map(|(side, line)| PointerTarget::Line(side, line)),
+        ModeState::Rows(state) => unified::hit(
             &state.diff,
             &state.folding,
             code_layout.style,
@@ -122,7 +118,7 @@ pub fn hit(
             scroll_y[0],
             position,
         )
-        .map(Hit::Unified),
+        .map(PointerTarget::Row),
     }
 }
 
@@ -135,23 +131,14 @@ pub fn wheel(
     delta_y: f32,
     viewport: Viewport,
 ) {
-    match mode {
-        DiffMode::Split(state) => {
-            let side = bounds.map_or(state.master, |bounds| {
-                split::side_at(bounds, split_share, x)
-            });
-            state.wheel(side, delta_y, viewport);
-        }
-        DiffMode::Unified(state) => {
-            state.wheel(delta_y, viewport);
-        }
-    }
+    let side = bounds.map(|bounds| split::side_at(bounds, split_share, x));
+    mode.wheel(side, delta_y, viewport);
 }
 
 pub fn text_width(mode: &DiffMode, code_layout: CodeLayout, bounds: Bounds<Pixels>) -> f32 {
-    match mode {
-        DiffMode::Split(state) => split::text_width(&state.diff, code_layout, bounds),
-        DiffMode::Unified(state) => unified::text_width(&state.diff, code_layout.style, bounds),
+    match mode.state() {
+        ModeState::Split(state) => split::text_width(&state.diff, code_layout, bounds),
+        ModeState::Rows(state) => unified::text_width(&state.diff, code_layout.style, bounds),
     }
 }
 
@@ -174,8 +161,8 @@ impl Painter {
     ) -> Self {
         let scroll_x = snap(shown.x, scale);
         let style = code_layout.style.clone();
-        match mode {
-            DiffMode::Split(state) => {
+        match mode.state() {
+            ModeState::Split(state) => {
                 // The other side shows the mirrored cursor more faintly, so you see where H and L land.
                 // IntelliJ paints the cursor row only on the active side.
                 let cursor = state.cursor;
@@ -203,7 +190,7 @@ impl Painter {
                     split_share: code_layout.split_share,
                 })
             }
-            DiffMode::Unified(state) => Self::Unified(UnifiedPainter {
+            ModeState::Rows(state) => Self::Unified(UnifiedPainter {
                 diff: state.diff.clone(),
                 folding: state.folding.clone(),
                 theme,

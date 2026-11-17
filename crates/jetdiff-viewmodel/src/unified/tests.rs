@@ -320,8 +320,10 @@ fn new_text_keeps_the_line() {
 
 #[test]
 fn split_places_lines_in_pairs() {
-    let diff =
-        UnifiedDiff::with_layout(file_diff("a\nb\nc\nd\n", "a\nB\nd\ne\n"), RowLayout::Split);
+    let diff = UnifiedDiff::with_layout(
+        file_diff("a\nb\nc\nd\n", "a\nB\nd\ne\n"),
+        RowLayout::AlignedSplit,
+    );
     let rows = lines(&diff);
     // `b c` against `B`, and `e` is added
     assert_eq!(rows[0], [Some(0), Some(0)]);
@@ -339,8 +341,8 @@ fn realign_keeps_the_line() {
     state.init(VIEWPORT);
     // Unified: a, b, B, c. The cursor on c.
     state.click(3);
-    let split = state.realign(RowLayout::Split, false, VIEWPORT);
-    assert_eq!(split.diff.row_layout(), RowLayout::Split);
+    let split = state.realign(RowLayout::AlignedSplit, false, VIEWPORT);
+    assert_eq!(split.diff.row_layout(), RowLayout::AlignedSplit);
     assert_eq!(split.diff.row(split.row).lines, [Some(2), Some(2)]);
     let back = split.realign(RowLayout::Unified, false, VIEWPORT);
     assert_eq!(back.row, 3);
@@ -350,7 +352,7 @@ fn realign_keeps_the_line() {
 fn split_pairs_lines_with_common_text() {
     let left_side = "a\nuse x::{\n    A,\n};\nuse app::{Keys, B};\nz\n";
     let right_side = "a\nuse app::C;\nz\n";
-    let diff = UnifiedDiff::with_layout(file_diff(left_side, right_side), RowLayout::Split);
+    let diff = UnifiedDiff::with_layout(file_diff(left_side, right_side), RowLayout::AlignedSplit);
     let rows = lines(&diff);
     // `use x::{ A, };` is gone, `use app::` sits against `use app::`
     assert_eq!(rows[1], [Some(1), None]);

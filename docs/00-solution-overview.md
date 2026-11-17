@@ -29,7 +29,7 @@ jetdiff-viewmodel
   model          FileDiff: hunks, lines, syntax per side
   state          cursor, commands, scroll and folding together
   unified        rows over FileDiff and their own state, folded on one side
-  mode           Split or Unified, and switching between them
+  mode           Split, Aligned Split or Unified, and switching between them
   scrolloff      where the cursor can be, shared by both diff modes
   scroll         master scroll_y, the slave computed in the same frame (1/3 anchor)
   folding        shared state for both sides, or one side over the Unified rows

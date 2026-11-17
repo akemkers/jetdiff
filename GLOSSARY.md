@@ -130,8 +130,12 @@ _Avoid_: snippet, context lines, chunk
 ### User Interface
 
 **Diff mode**:
-Split (the two sides next to each other) or Unified (one column).
+Split (the two sides next to each other) or Unified (one column). The terminal shows Split as Aligned Split.
 _Avoid_: side-by-side, view
+
+**Aligned Split**:
+Split where a line and its counterpart are in the same row, and the shorter side of a hunk gets empty rows. Used in the terminal. In the window each side scrolls on its own, held together by sync scroll.
+_Avoid_: terminal split, row split
 
 **Cursor**:
 The line in the diff, or the row in a list, that you are on. In the diff it is one line on one side, with no column.

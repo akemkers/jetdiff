@@ -1,7 +1,7 @@
 //! The share of the width Left gets in Split, and the handle over the diff divider that drags it.
 
 use gpui::{AnyElement, Context, Div, prelude::*};
-use jetdiff_viewmodel::{DiffMode, SplitShare, diff_divider_offset};
+use jetdiff_viewmodel::{SplitShare, diff_divider_offset};
 
 use super::FileDiffView;
 use crate::diff_divider_handle::with_diff_divider_handle;
@@ -44,7 +44,7 @@ impl FileDiffView {
             .shared
             .bounds
             .get()
-            .filter(|_| matches!(self.mode, DiffMode::Split(_)))?;
+            .filter(|_| !self.mode.is_unified())?;
         Some(diff_divider_offset(
             f32::from(bounds.size.width),
             self.split_share,

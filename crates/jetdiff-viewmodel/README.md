@@ -14,25 +14,28 @@ Most of what makes the diff in IntelliJ good is logic, not drawing. The sides sc
 
 ```rust
 use jetdiff_viewmodel::{
-    ComparisonPolicy, DiffMode, FileDiff, Folding, KeyParser, Language, Parsed,
+    ComparisonPolicy, DiffMode, FileDiff, KeyParser, Language, Parsed, SplitRows,
 };
 
 let mut diff = FileDiff::new(left, right, ComparisonPolicy::Default)?;
 diff.highlight_syntax(Language::Rust);
-let folding = Folding::new(&diff);
 
-// Added and deleted files become Unified regardless
-let mut mode = DiffMode::new(diff.into(), folding.into(), unified);
+// Added and deleted files become Unified regardless. The window takes `SplitRows::Synced`,
+// the terminal `SplitRows::Aligned` for Aligned Split.
+let mut mode = DiffMode::new(diff.into(), unified, fold_unchanged, SplitRows::Synced);
 mode.init(viewport);
 
 let mut keys = KeyParser::default();
 if let Parsed::Command(cmd) = keys.feed(key) {
     mode.execute(cmd, viewport, horizontal);
 }
-// mode.scroll() is the target. The UI animates there and draws.
+// mode.scroll() is the target. The UI animates there and draws from mode.state().
+
+// A click: the UI finds the PointerTarget, DiffMode moves the cursor
+mode.click(target);
 
 // `v`: the cursor stays on the same line and height
-mode.toggle(Folding::new(mode.diff()).into(), viewport);
+mode.toggle(fold_unchanged, viewport);
 ```
 
 ```mermaid
@@ -57,9 +60,9 @@ graph TD
 ```
 
 - `model`: hunks, lines and syntax per side
-- `mode`: Split or Unified, and switching between them
+- `mode`: Split, Aligned Split or Unified, and switching between them
 - `state`: Split. Brings together the cursor, folding and scroll, and carries out `Command`
-- `unified`: rows over `FileDiff` where deleted lines sit above the added ones, and the state for them, folded on one side
+- `unified`: rows over `FileDiff`, with deleted lines above the added ones or next to them for Aligned Split, and the state for them, folded on one side
 - `scrolloff`: where the cursor can be without scrolling, shared by both
 - `scroll`: the master side scrolls, and the other is computed in the same frame
 - `folding`: unchanged lines are folded, shared by both sides in Split, and over the rows in Unified

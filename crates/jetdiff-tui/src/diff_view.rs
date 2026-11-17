@@ -1,4 +1,4 @@
-//! The diff of one file, like `FileDiffView` in GPUI. Split is aligned rows, and both diff modes
+//! The diff of one file, like `FileDiffView` in GPUI. Split is Aligned Split, and both diff modes
 //! fold the unchanged rows.
 
 mod split_share;
@@ -8,8 +8,8 @@ use std::time::Instant;
 
 use jetdiff_app::{Overlay, OverlaySlot, RollbackRequest, cursor_location, rollback_request};
 use jetdiff_viewmodel::{
-    Command, FileDiff, Horizontal, Key, KeyCode, KeyParser, Parsed, RowLayout, ScrollAnimator,
-    SplitShare, Theme, UnifiedDiff, UnifiedState, Viewport,
+    Command, DiffMode, FileDiff, Horizontal, Key, KeyCode, KeyParser, ModeState, Parsed,
+    PointerTarget, RowLayout, ScrollAnimator, SplitRows, SplitShare, Theme, UnifiedState, Viewport,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -29,8 +29,8 @@ pub enum Effect {
 }
 
 pub struct DiffView {
-    state: UnifiedState,
-    /// What is shown. The target is `state.scroll`.
+    mode: DiffMode,
+    /// What is shown. The target is `mode.scroll()`.
     scroll: ScrollAnimator,
     smooth_scroll: bool,
     keys: KeyParser,
@@ -58,7 +58,7 @@ impl DiffView {
     ) -> Self {
         Self {
             max_cols: diff.max_display_width(),
-            state: state(Rc::new(diff), unified, fold_unchanged),
+            mode: DiffMode::new(Rc::new(diff), unified, fold_unchanged, SplitRows::Aligned),
             scroll: ScrollAnimator::in_whole_cells(NAV_ANIMATION_MS),
             smooth_scroll,
             keys: KeyParser::default(),
@@ -86,8 +86,13 @@ impl DiffView {
         self.overlay.cancel_rollback();
         self.paths = paths;
         self.max_cols = diff.max_display_width();
-        self.state = state(Rc::new(diff), self.unified, self.fold_unchanged);
-        self.scroll.jump(self.state.scroll);
+        self.mode = DiffMode::new(
+            Rc::new(diff),
+            self.unified,
+            self.fold_unchanged,
+            SplitRows::Aligned,
+        );
+        self.scroll.jump(self.mode.scroll());
         self.keys.reset();
         self.initialized = false;
     }
@@ -100,16 +105,10 @@ impl DiffView {
         self.overlay.cancel_rollback();
         self.paths = paths;
         self.max_cols = diff.max_display_width();
-        let row_layout = row_layout(&diff, self.unified);
-        if row_layout != self.state.diff.row_layout() {
-            self.state = self
-                .state
-                .realign(row_layout, self.fold_unchanged, viewport);
-        }
-        self.state
-            .replace_diff(Rc::new(diff), self.fold_unchanged, viewport);
+        self.mode
+            .replace_diff(Rc::new(diff), self.unified, self.fold_unchanged, viewport);
         self.clamp_scroll_x();
-        self.scroll.retarget(self.state.scroll, Instant::now());
+        self.scroll.retarget(self.mode.scroll(), Instant::now());
     }
 
     fn viewport(&self) -> Option<Viewport> {
@@ -120,9 +119,12 @@ impl DiffView {
     }
 
     fn text_width(&self) -> u16 {
-        let diff = &self.state.diff.diff;
-        match self.state.diff.row_layout() {
-            RowLayout::Split => geometry::aligned(diff, self.area, self.split_share).text_width(),
+        let rows = self.rows();
+        let diff = &rows.diff.diff;
+        match rows.diff.row_layout() {
+            RowLayout::AlignedSplit => {
+                geometry::aligned(diff, self.area, self.split_share).text_width()
+            }
             RowLayout::Unified => geometry::unified(diff, self.area).columns.text_width(),
         }
     }
@@ -141,7 +143,8 @@ impl DiffView {
 
     fn clamp_scroll_x(&mut self) {
         let max_x = self.max_scroll_x();
-        self.state.scroll.scroll_x_to(self.state.scroll.x, max_x);
+        let scroll = self.mode.scroll_mut();
+        scroll.scroll_x_to(scroll.x, max_x);
     }
 
     /// Before drawing.
@@ -153,36 +156,32 @@ impl DiffView {
         };
         if !self.initialized {
             self.initialized = true;
-            self.state.init(viewport);
+            self.mode.init(viewport);
         } else if resized {
-            self.state.resize(viewport);
+            self.mode.resize(viewport);
         } else {
             return;
         }
         self.clamp_scroll_x();
-        self.scroll.jump(self.state.scroll);
+        self.scroll.jump(self.mode.scroll());
     }
 
     pub fn toggle_diff_mode(&mut self) -> Option<Effect> {
-        if !self.state.diff.diff.can_split() {
+        if !self.mode.diff().can_split() {
             return None;
         }
         self.unified = !self.unified;
-        self.scroll.stop(&mut self.state.scroll);
+        self.scroll.stop(self.mode.scroll_mut());
         match self.viewport().filter(|_| self.initialized) {
-            Some(viewport) => {
-                let row_layout = row_layout(&self.state.diff.diff, self.unified);
-                self.state = self
-                    .state
-                    .realign(row_layout, self.fold_unchanged, viewport);
-            }
+            Some(viewport) => self.mode.toggle(self.fold_unchanged, viewport),
             None => {
-                let diff = self.state.diff.diff.clone();
-                self.state = state(diff, self.unified, self.fold_unchanged);
+                let diff = self.mode.diff().clone();
+                self.mode =
+                    DiffMode::new(diff, self.unified, self.fold_unchanged, SplitRows::Aligned);
             }
         }
         self.clamp_scroll_x();
-        self.scroll.jump(self.state.scroll);
+        self.scroll.jump(self.mode.scroll());
         Some(Effect::ShowBrief(
             if self.unified { "Unified" } else { "Split" }.into(),
         ))
@@ -211,8 +210,8 @@ impl DiffView {
     fn execute(&mut self, cmd: Command) -> Option<Effect> {
         match cmd {
             Command::Rollback => {
-                let diff = &self.state.diff.diff;
-                match rollback_request(diff, self.state.cursor_hunk(), self.can_rollback) {
+                let diff = self.mode.diff();
+                match rollback_request(diff, self.mode.cursor_hunk(), self.can_rollback) {
                     Ok(request) => {
                         self.overlay.ask_rollback(request);
                         None
@@ -221,20 +220,20 @@ impl DiffView {
                 }
             }
             Command::CopyCursorLocation => {
-                cursor_location(self.state.cursor_location(), &self.paths).map(Effect::Copy)
+                cursor_location(self.mode.cursor_location(), &self.paths).map(Effect::Copy)
             }
             _ => {
                 let viewport = self.viewport()?;
-                let outcome = self.state.execute(cmd, viewport, self.horizontal());
+                let outcome = self.mode.execute(cmd, viewport, self.horizontal());
                 if outcome.animate && self.smooth_scroll {
-                    self.scroll.animate(self.state.scroll, Instant::now());
+                    self.scroll.animate(self.mode.scroll(), Instant::now());
                 } else if outcome.changed {
-                    self.scroll.retarget(self.state.scroll, Instant::now());
+                    self.scroll.retarget(self.mode.scroll(), Instant::now());
                 }
                 if cmd != Command::ToggleFolds || !outcome.changed {
                     return None;
                 }
-                self.fold_unchanged = self.state.folding.any_closed();
+                self.fold_unchanged = self.mode.any_fold_closed();
                 let text = if self.fold_unchanged {
                     "Folds closed"
                 } else {
@@ -261,49 +260,43 @@ impl DiffView {
         if self.grab_diff_divider(x, y, now) || !self.area.contains((x, y).into()) {
             return;
         }
-        self.scroll.stop(&mut self.state.scroll);
-        let layout = self.state.folding.layout(1.);
+        self.scroll.stop(self.mode.scroll_mut());
+        let rows = self.rows();
+        let layout = rows.folding.layout(1.);
         let screen = y - self.area.y;
-        let Some(row) = code_viewer::row_at(&layout, self.state.scroll_y(), screen) else {
+        let Some(row) = code_viewer::row_at(&layout, rows.scroll_y(), screen) else {
             return;
         };
-        self.state.click(row);
-        if self.state.folding.fold_at_row(row).is_some() {
+        let target = PointerTarget::Row(row);
+        self.mode.click(target);
+        if self.mode.fold_at(target).is_some() {
             self.execute(Command::FoldOpen);
         }
     }
 
     pub fn wheel(&mut self, down: bool) {
         if let Some(viewport) = self.viewport() {
-            self.scroll.stop(&mut self.state.scroll);
+            self.scroll.stop(self.mode.scroll_mut());
             let rows = WHEEL_ROWS as f32;
-            self.state.wheel(if down { rows } else { -rows }, viewport);
-            self.scroll.jump(self.state.scroll);
+            self.mode
+                .wheel(None, if down { rows } else { -rows }, viewport);
+            self.scroll.jump(self.mode.scroll());
         }
     }
 
     pub fn render(&self, focused: bool, theme: &Theme, buf: &mut Buffer) {
         let shown = UnifiedState {
             scroll: self.scroll.shown(),
-            ..self.state.clone()
+            ..self.rows().clone()
         };
         code_viewer::paint(&shown, self.split_share, focused, self.area, theme, buf);
     }
-}
 
-/// Split is aligned rows.
-fn row_layout(diff: &FileDiff, unified: bool) -> RowLayout {
-    if !unified && diff.can_split() {
-        RowLayout::Split
-    } else {
-        RowLayout::Unified
+    /// The terminal shows Split as Aligned Split, so both diff modes are rows.
+    fn rows(&self) -> &UnifiedState {
+        match self.mode.state() {
+            ModeState::Rows(state) => state,
+            ModeState::Split(_) => unreachable!("DiffMode is made with SplitRows::Aligned"),
+        }
     }
-}
-
-fn state(diff: Rc<FileDiff>, unified: bool, fold_unchanged: bool) -> UnifiedState {
-    let row_layout = row_layout(&diff, unified);
-    UnifiedState::new(
-        Rc::new(UnifiedDiff::with_layout(diff, row_layout)),
-        fold_unchanged,
-    )
 }
