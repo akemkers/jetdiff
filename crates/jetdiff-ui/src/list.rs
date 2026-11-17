@@ -1,7 +1,7 @@
 //! What the tree and the commit list have in common: sizes, keys and how the selection and the
 //! cursor look.
 
-use gpui::{Div, FontWeight, KeyDownEvent, Stateful, prelude::*};
+use gpui::{Div, KeyDownEvent, Stateful, prelude::*};
 
 use crate::theme::UiPalette;
 
@@ -46,8 +46,6 @@ pub fn selection_and_cursor(
             gpui::transparent_black()
         })
         .when(selected, |row| {
-            row.bg(palette.selected)
-                .text_color(palette.strong)
-                .font_weight(FontWeight::SEMIBOLD)
+            row.bg(palette.selected).text_color(palette.strong)
         })
 }

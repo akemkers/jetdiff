@@ -4,9 +4,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use gpui::{
-    App, Context, Div, EventEmitter, FocusHandle, Focusable, FontWeight, ImageSource, KeyDownEvent,
-    Render, Resource, ScrollStrategy, SharedString, UniformListScrollHandle, Window, div, img,
-    prelude::*, px, relative, uniform_list,
+    App, Context, Div, EventEmitter, FocusHandle, Focusable, ImageSource, KeyDownEvent, Render,
+    Resource, ScrollStrategy, SharedString, UniformListScrollHandle, Window, div, img, prelude::*,
+    px, relative, uniform_list,
 };
 use jetdiff_app::{CommitRow, Commits, LOCAL_CHANGES, Selected, age};
 use jetdiff_git::Commit;
@@ -152,7 +152,6 @@ impl CommitList {
                         d.child(
                             div()
                                 .text_size(s(AGE_SIZE))
-                                .font_weight(FontWeight::NORMAL)
                                 .text_color(palette.muted)
                                 .child(age),
                         )
