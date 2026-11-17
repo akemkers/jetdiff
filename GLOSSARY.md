@@ -130,7 +130,7 @@ _Avoid_: snippet, context lines, chunk
 ### User Interface
 
 **Diff mode**:
-Split (the two sides next to each other) or Unified (one column).
+Split (the two sides next to each other) or Unified (one column). The terminal shows Split as Aligned Split.
 _Avoid_: side-by-side, view
 
 **Aligned Split**:
