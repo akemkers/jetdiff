@@ -86,15 +86,18 @@ pub(crate) fn key_label(key: &'static str, palette: &UiPalette, scale: f32) -> D
 
 pub struct KeyHelp {
     pub theme: UiTheme,
+    pub scale: f32,
 }
 
 impl KeyHelp {
     /// Covers the parent and puts the popup in the middle.
     pub fn popup(&self) -> Div {
         let palette = self.theme.palette;
+        let scale = self.scale;
+        let s = |v: f32| px(v * scale);
         let sections = ALL
             .iter()
-            .map(|&(title, keys)| section(title, keys, &palette));
+            .map(|&(title, keys)| section(title, keys, &palette, scale));
         div()
             .absolute()
             .inset_0()
@@ -105,24 +108,24 @@ impl KeyHelp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(POPUP_GAP))
-                    .px(px(POPUP_HORIZONTAL_PADDING))
-                    .py(px(POPUP_VERTICAL_PADDING))
+                    .gap(s(POPUP_GAP))
+                    .px(s(POPUP_HORIZONTAL_PADDING))
+                    .py(s(POPUP_VERTICAL_PADDING))
                     .bg(palette.surface)
                     .border_1()
                     .border_color(palette.border)
-                    .rounded(px(POPUP_RADIUS))
+                    .rounded(s(POPUP_RADIUS))
                     .shadow_lg()
                     .font_family(FAMILY)
-                    .text_size(px(POPUP_TEXT_SIZE))
+                    .text_size(s(POPUP_TEXT_SIZE))
                     .text_color(palette.muted)
                     .child(
                         div()
                             .flex()
                             .flex_wrap()
-                            .max_w(px(2. * SECTION_WIDTH + SECTION_GAP))
-                            .gap_x(px(SECTION_GAP))
-                            .gap_y(px(POPUP_GAP))
+                            .max_w(s(2. * SECTION_WIDTH + SECTION_GAP))
+                            .gap_x(s(SECTION_GAP))
+                            .gap_y(s(POPUP_GAP))
                             .children(sections),
                     )
                     .child("? or Esc closes"),
@@ -130,25 +133,29 @@ impl KeyHelp {
     }
 }
 
-fn section(title: &'static str, keys: &[Keys], palette: &UiPalette) -> Div {
+fn section(title: &'static str, keys: &[Keys], palette: &UiPalette, scale: f32) -> Div {
+    let s = |v: f32| px(v * scale);
     let rows = keys.iter().map(|&(labels, what)| {
         div()
             .flex()
             .items_center()
-            .child(div().w(px(KEYS_WIDTH)).flex().gap(px(LABEL_GAP)).children(
-                // The popup doesn't follow the zoom
-                labels.iter().map(|&label| key_label(label, palette, 1.)),
-            ))
+            .child(
+                div()
+                    .w(s(KEYS_WIDTH))
+                    .flex()
+                    .gap(s(LABEL_GAP))
+                    .children(labels.iter().map(|&label| key_label(label, palette, scale))),
+            )
             .child(what)
     });
     div()
         .flex()
         .flex_col()
-        .gap(px(ROW_GAP))
-        .w(px(SECTION_WIDTH))
+        .gap(s(ROW_GAP))
+        .w(s(SECTION_WIDTH))
         .child(
             div()
-                .pb(px(TITLE_PADDING))
+                .pb(s(TITLE_PADDING))
                 .font_weight(FontWeight::BOLD)
                 .text_color(palette.primary)
                 .child(title),

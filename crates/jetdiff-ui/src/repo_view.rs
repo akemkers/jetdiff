@@ -327,9 +327,9 @@ impl Render for RepoView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let walkthrough = self.walkthrough_view();
         let theme = cx.global::<Settings>().theme;
-        let question = self
-            .question
-            .map(|question| confirm_dialog(self.question_text(question, cx), &theme.palette));
+        let question = self.question.map(|question| {
+            confirm_dialog(self.question_text(question, cx), &theme.palette, self.scale)
+        });
         let keys = match walkthrough {
             Some(_) => WALKTHROUGH_KEYMAP_BAR.as_slice(),
             None => DIFF_KEYMAP_BAR.as_slice(),

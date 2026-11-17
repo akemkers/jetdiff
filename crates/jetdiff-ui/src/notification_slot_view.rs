@@ -18,16 +18,33 @@ const SPINNER: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '�
 /// How long each spinner frame shows. Also how often a progress is drawn again.
 const SPINNER_FRAME: Duration = Duration::from_millis(100);
 
-#[derive(Default)]
 pub struct NotificationSlotView {
     slot: NotificationSlot,
     /// Repaints when the brief notification expires. A new brief notification drops the previous one.
     repaint: Option<Task<()>>,
     /// Moves the spinner while there is a progress.
     spin: Option<Task<()>>,
+    /// Follows the zoom in the diff.
+    scale: f32,
+}
+
+impl Default for NotificationSlotView {
+    fn default() -> Self {
+        Self {
+            slot: Default::default(),
+            repaint: None,
+            spin: None,
+            scale: 1.,
+        }
+    }
 }
 
 impl NotificationSlotView {
+    pub fn set_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
+        self.scale = scale;
+        cx.notify();
+    }
+
     pub fn show_brief(&mut self, notification: Notification, cx: &mut Context<Self>) {
         self.slot.show_brief(notification, Instant::now());
         self.repaint = Some(cx.spawn(async move |this, cx| {
@@ -63,6 +80,7 @@ impl Render for NotificationSlotView {
     /// Lies over the parent without taking space, so the content below doesn't jump.
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = cx.global::<Settings>().theme.palette;
+        let s = |v: f32| px(v * self.scale);
         let now = Instant::now();
         let shown = self.slot.current(now).map(|content| match content {
             SlotContent::Notification(notification) => {
@@ -84,14 +102,14 @@ impl Render for NotificationSlotView {
             .children(shown.map(|(level, text)| {
                 let colors = level.colors(&palette);
                 div()
-                    .px(px(HORIZONTAL_PADDING))
-                    .py(px(VERTICAL_PADDING))
+                    .px(s(HORIZONTAL_PADDING))
+                    .py(s(VERTICAL_PADDING))
                     .bg(colors.background)
                     .border_t_1()
                     .border_color(palette.border)
                     .text_color(colors.text)
                     .font_family(FAMILY)
-                    .text_size(px(TEXT_SIZE))
+                    .text_size(s(TEXT_SIZE))
                     .child(text)
             }))
     }

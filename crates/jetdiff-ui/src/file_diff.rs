@@ -100,7 +100,7 @@ impl FileDiffView {
     ) -> Self {
         let settings = cx.global::<Settings>();
         let (unified, fold_unchanged) = (settings.unified, settings.fold_unchanged);
-        Self {
+        let view = Self {
             max_cols: diff.max_display_width(),
             mode: DiffMode::new(Rc::new(diff), unified, fold_unchanged),
             unified,
@@ -121,7 +121,9 @@ impl FileDiffView {
             draws_keymap_bar: false,
             shared: Rc::new(Shared::new()),
             focus: cx.focus_handle(),
-        }
+        };
+        view.scale_notifications(cx);
+        view
     }
 
     pub fn set_can_rollback(&mut self, can_rollback: bool) {
@@ -304,6 +306,7 @@ impl FileDiffView {
         };
         if let Some(size) = size {
             self.zoom(size, window);
+            self.scale_notifications(cx);
             cx.emit(Zoomed {
                 font_size: self.font_size,
             });
@@ -366,6 +369,12 @@ impl FileDiffView {
             return;
         }
         cx.notify();
+    }
+
+    fn scale_notifications(&self, cx: &mut Context<Self>) {
+        let scale = self.font_size / FONT_SIZE;
+        self.notification_slot
+            .update(cx, |slot, cx| slot.set_scale(scale, cx));
     }
 
     fn show_brief(&self, text: impl Into<String>, cx: &mut Context<Self>) {
@@ -607,7 +616,7 @@ impl Render for FileDiffView {
 
         let scale = self.font_size / FONT_SIZE;
         let diff_header = self.diff_header(scale, cx);
-        let keys = KeyHelp { theme };
+        let keys = KeyHelp { theme, scale };
         let footer = self.draws_keymap_bar.then(|| {
             keymap_bar(
                 &DIFF_KEYMAP_BAR,
@@ -618,7 +627,7 @@ impl Render for FileDiffView {
         });
         let overlay = self.overlay.current().map(|overlay| match overlay {
             Overlay::Help => keys.popup(),
-            Overlay::Rollback(_) => confirm_dialog("Roll back this hunk?", &theme.palette),
+            Overlay::Rollback(_) => confirm_dialog("Roll back this hunk?", &theme.palette, scale),
         });
 
         div()
