@@ -215,15 +215,10 @@ impl FileTree {
                 .child(name.clone()),
             &RowKind::File(file) => {
                 let file = &self.files.changed_files()[file];
-                let name_color = if is_selected {
-                    palette.strong
-                } else {
-                    Self::status_color(&theme, file.status)
-                };
                 base.child(icon(file_icon(&file.path)))
                     .child(
                         div()
-                            .text_color(name_color)
+                            .text_color(Self::status_color(&theme, file.status))
                             .child(file_name(&file.path).to_owned()),
                     )
                     .when_some(file.renamed_from_label(), |row, from| {

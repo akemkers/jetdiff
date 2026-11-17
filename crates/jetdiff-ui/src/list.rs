@@ -30,8 +30,7 @@ pub fn list_key(ev: &KeyDownEvent) -> Option<ListKey> {
 }
 
 /// The selection is filled, whatever else the row shows. The cursor, shown only with focus, is an
-/// outline in the accent color. On the same row both show. Text in the row that has a color of its
-/// own takes the strong color while selected.
+/// outline in the accent color. On the same row both show.
 pub fn selection_and_cursor(
     row: Stateful<Div>,
     selected: bool,
@@ -45,7 +44,5 @@ pub fn selection_and_cursor(
         } else {
             gpui::transparent_black()
         })
-        .when(selected, |row| {
-            row.bg(palette.selected).text_color(palette.strong)
-        })
+        .when(selected, |row| row.bg(palette.selected))
 }
