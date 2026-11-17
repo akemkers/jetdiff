@@ -136,3 +136,32 @@ fn a_pointer_target_that_does_not_fit_the_diff_mode_is_ignored() {
     mode.click(PointerTarget::Line(Side::Left, 20));
     assert_eq!(mode.cursor_location(), Cursor::new(Side::Right, 10));
 }
+
+#[test]
+fn fold_at_ignores_a_pointer_target_that_does_not_fit_the_diff_mode() {
+    let left_side: String = (0..100).map(|i| format!("a{i}\n")).collect();
+    let right_side = left_side.replace("a50\n", "x\n");
+    let changed = diff(&left_side, &right_side);
+
+    let aligned = DiffMode::new(changed.clone(), false, true, SplitRows::Aligned);
+    assert!(aligned.fold_at(PointerTarget::Row(0)).is_some());
+    assert_eq!(aligned.fold_at(PointerTarget::Line(Side::Left, 0)), None);
+
+    let synced = DiffMode::new(changed, false, true, SplitRows::Synced);
+    assert!(synced.fold_at(PointerTarget::Line(Side::Left, 0)).is_some());
+    assert_eq!(synced.fold_at(PointerTarget::Row(0)), None);
+}
+
+#[test]
+fn an_added_file_that_gets_a_left_side_keeps_the_cursor_in_aligned_split() {
+    let right_side: String = (0..100).map(|i| format!("a{i}\n")).collect();
+    let mut mode = DiffMode::new(diff("", &right_side), false, false, SplitRows::Aligned);
+    mode.init(VIEWPORT);
+    mode.click(PointerTarget::Row(30));
+    assert_eq!(mode.cursor_location(), Cursor::new(Side::Right, 30));
+
+    let left_side = right_side.replace("a50\n", "x\n");
+    mode.replace_diff(diff(&left_side, &right_side), false, false, VIEWPORT);
+    assert!(is_aligned_split(&mode));
+    assert_eq!(mode.cursor_location(), Cursor::new(Side::Right, 30));
+}
