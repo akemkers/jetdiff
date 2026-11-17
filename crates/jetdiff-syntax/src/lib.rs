@@ -732,6 +732,11 @@ mod tests {
                 ("className", Attribute),
             ],
         );
+        has(
+            Language::Tsx,
+            "const a = <Link to=\"/\"><Icon /></Link>;",
+            &[("Link", Tag), ("Icon", Tag), ("to", Attribute)],
+        );
     }
 
     #[test]
