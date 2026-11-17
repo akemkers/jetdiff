@@ -127,7 +127,9 @@ impl DiffView {
         let rows = self.rows();
         let diff = &rows.diff.diff;
         match rows.diff.row_layout() {
-            RowLayout::Split => geometry::aligned(diff, self.area, self.split_share).text_width(),
+            RowLayout::AlignedSplit => {
+                geometry::aligned(diff, self.area, self.split_share).text_width()
+            }
             RowLayout::Unified => geometry::unified(diff, self.area).columns.text_width(),
         }
     }

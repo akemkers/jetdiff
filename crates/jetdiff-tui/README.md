@@ -8,7 +8,7 @@ The same diff as the GPUI view, where there is no GPU. The logic is in `jetdiff-
 
 In GPUI, each side has its own scroll, and the diff divider between them shows which lines belong together. The diff divider is drawn with curves, which a terminal can't do. Here the Left and Right lines sit on the same row instead. If a hunk is shorter on one side, it is filled in with hatched rows, so the rest of the file stays aligned. Lines with text in common are put on the same row.
 
-The rows are made by `UnifiedDiff::with_layout` with `RowLayout::Split`, so Split and Unified use the same `UnifiedState` for cursor and scroll.
+The rows are made by `UnifiedDiff::with_layout` with `RowLayout::AlignedSplit`, so Split and Unified use the same `UnifiedState` for cursor and scroll.
 
 ## Usage
 

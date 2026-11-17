@@ -46,7 +46,9 @@ impl DiffMode {
                 let folding = split_folding(&diff, fold_unchanged);
                 Self::Split(DiffState::new(diff, folding))
             }
-            SplitRows::Aligned => Self::AlignedSplit(rows(diff, RowLayout::Split, fold_unchanged)),
+            SplitRows::Aligned => {
+                Self::AlignedSplit(rows(diff, RowLayout::AlignedSplit, fold_unchanged))
+            }
         }
     }
 
@@ -63,9 +65,11 @@ impl DiffMode {
             }
             Self::Unified(state) => match split_rows {
                 SplitRows::Synced => Self::Split(state.to_split(fold_unchanged, viewport)),
-                SplitRows::Aligned => {
-                    Self::AlignedSplit(state.realign(RowLayout::Split, fold_unchanged, viewport))
-                }
+                SplitRows::Aligned => Self::AlignedSplit(state.realign(
+                    RowLayout::AlignedSplit,
+                    fold_unchanged,
+                    viewport,
+                )),
             },
         };
     }

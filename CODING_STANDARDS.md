@@ -29,7 +29,7 @@ pub fn paint(state: &UnifiedState, focused: bool, area: Rect, theme: &Theme, buf
     let mut painter = Painter::new(state, theme, focused, buf);
     painter.background(area);
     let scrollbar = match state.diff.row_layout() {
-        RowLayout::Split => split::paint(&mut painter, area),
+        RowLayout::AlignedSplit => split::paint(&mut painter, area),
         RowLayout::Unified => unified::paint(&mut painter, area),
     };
     scrollbar::paint(&mut painter, scrollbar, area);
