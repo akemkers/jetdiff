@@ -30,8 +30,8 @@
   (inheritance_modifier)
 ] @keyword
 [
-  "val" "var" "enum" "class" "object" "interface" "fun" "typealias" "import" "package" "if"
-  "else" "when" "for" "do" "while" "try" "catch" "throw" "finally" "is" "in" "as" "as?"
+  "val" "var" "enum" "class" "object" "companion" "interface" "fun" "typealias" "import" "package"
+  "if" "else" "when" "for" "do" "while" "try" "catch" "throw" "finally" "is" "in" "as" "as?"
   "return" "return@" "break" "break@" "continue" "continue@"
 ] @keyword
 [(null_literal) (boolean_literal) (this_expression) (super_expression)] @keyword

@@ -540,6 +540,11 @@ mod tests {
             "data class A(val b: C?)",
             &[("A", Type), ("C", Type)],
         );
+        has(
+            Language::Kotlin,
+            "class A { companion object { } }",
+            &[("companion", Keyword), ("object", Keyword)],
+        );
         let text = "fun f() { return visible }";
         has(Language::Kotlin, text, &[("return", Keyword)]);
         lacks(Language::Kotlin, text, &["visible"]);
