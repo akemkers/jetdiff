@@ -205,15 +205,11 @@ impl FileTree {
             &palette,
         );
         match &row.kind {
-            RowKind::Dir {
-                name, count, open, ..
-            } => base
+            RowKind::Dir { name, open, .. } => base
                 .text_color(palette.secondary)
                 .child(icon(chevron_icon(*open)))
                 .child(icon(folder_icon()))
-                .child(name.clone())
-                .child(div().flex_1())
-                .child(div().text_color(palette.muted).child(count.to_string())),
+                .child(name.clone()),
             &RowKind::File(file) => {
                 let file = &self.files.changed_files()[file];
                 let name_color = if is_selected {
@@ -275,9 +271,7 @@ fn content_width(changed_files: &[ChangedFile], measure: impl Fn(&str) -> f32) -
         .iter()
         .map(|row| {
             let content = match &row.kind {
-                RowKind::Dir { name, count, .. } => {
-                    2. * (ICON_SIZE + GAP) + measure(name) + GAP + measure(&count.to_string())
-                }
+                RowKind::Dir { name, .. } => 2. * (ICON_SIZE + GAP) + measure(name),
                 &RowKind::File(file) => {
                     let file = &changed_files[file];
                     let from = file
@@ -306,8 +300,8 @@ mod tests {
         };
         let measure = |text: &str| text.chars().count() as f32 * 10.;
         let edges = PAD_LEFT + PAD_RIGHT + CURSOR_OUTLINE;
-        // The folder `source` with its count 1 is wider than `a.rs` one level in
-        let folder = 2. * (ICON_SIZE + GAP) + 60. + GAP + 10.;
+        // The folder `source` is wider than `a.rs` one level in
+        let folder = 2. * (ICON_SIZE + GAP) + 60.;
         assert_eq!(
             content_width(&[changed_file("source/a.rs")], measure),
             edges + folder
