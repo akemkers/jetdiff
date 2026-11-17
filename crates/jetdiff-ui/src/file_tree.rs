@@ -17,7 +17,8 @@ use crate::settings::Settings;
 use crate::text::SANS;
 use crate::theme::UiPalette;
 
-const INDENT: f32 = 17.;
+/// One level in puts the row under the folder icon of its parent.
+const INDENT: f32 = ICON_SIZE + GAP;
 const ICON_SIZE: f32 = 16.;
 const TEXT_SIZE: f32 = 14.;
 const ROW_HEIGHT: f32 = 26.;
