@@ -14,6 +14,7 @@ pub enum Language {
     JavaScript,
     Json,
     Kotlin,
+    Lua,
     Markdown,
     Python,
     Rust,
@@ -26,13 +27,14 @@ pub enum Language {
 }
 
 /// The same order as the enum, so `language as usize` is the index.
-const LANGUAGES: [Language; 15] = [
+const LANGUAGES: [Language; 16] = [
     Language::Dockerfile,
     Language::Go,
     Language::Java,
     Language::JavaScript,
     Language::Json,
     Language::Kotlin,
+    Language::Lua,
     Language::Markdown,
     Language::Python,
     Language::Rust,
@@ -57,6 +59,7 @@ impl Language {
             "js" | "jsx" | "mjs" | "cjs" => Self::JavaScript,
             "json" => Self::Json,
             "kt" | "kts" => Self::Kotlin,
+            "lua" => Self::Lua,
             "md" | "markdown" => Self::Markdown,
             "py" | "pyi" | "pyw" => Self::Python,
             "rs" => Self::Rust,
@@ -237,6 +240,11 @@ fn build(language: Language) -> HighlightConfiguration {
         Kotlin => (
             tree_sitter_kotlin_sg::LANGUAGE,
             include_str!("../queries/kotlin.scm").to_owned(),
+            "",
+        ),
+        Lua => (
+            tree_sitter_lua::LANGUAGE,
+            include_str!("../queries/lua.scm").to_owned(),
             "",
         ),
         Markdown => (
@@ -548,6 +556,40 @@ mod tests {
         let text = "fun f() { return visible }";
         has(Language::Kotlin, text, &[("return", Keyword)]);
         lacks(Language::Kotlin, text, &["visible"]);
+    }
+
+    #[test]
+    fn lua() {
+        use Token::*;
+        let text = "#!/usr/bin/env lua\n--- Doc\nlocal MAX <const> = 10\n\
+            function M.f(self, x) return self.n + x end\nfunction M:g() print(\"a\\n\" .. x, ...) end\n\
+            local t = { n = 1, h = function() end }\nt.k = nil -- c\n";
+        has(
+            Language::Lua,
+            text,
+            &[
+                ("#!/usr/bin/env lua", Comment),
+                ("--- Doc", DocComment),
+                ("local", Keyword),
+                ("MAX", Constant),
+                ("<const>", Keyword),
+                ("f", Function),
+                ("g", Function),
+                ("h", Function),
+                ("self", SelfValue),
+                ("n", Property),
+                ("k", Property),
+                ("print", FunctionCall),
+                ("\\n", Escape),
+                ("...", Keyword),
+                ("nil", Keyword),
+                ("10", Number),
+                ("..", Operator),
+                ("-- c", Comment),
+            ],
+        );
+        lacks(Language::Lua, text, &["x", "M", "t"]);
+        assert_eq!(Language::from_path("a/init.lua"), Some(Language::Lua));
     }
 
     #[test]

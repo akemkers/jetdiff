@@ -1,6 +1,7 @@
 //! File type icons and the branch icon from New UI in IntelliJ (`expui/fileTypes`, `expui/general/vcs`),
 //! Apache 2.0. The Rust icon is from intellij-rust (MIT, see `icons/LICENSE-intellij-rust.txt`). Go
-//! has an icon only in GoLand, so the Go icon is from Seti UI (MIT, see `icons/LICENSE-seti-ui.txt`).
+//! has an icon only in GoLand and Lua has none in IntelliJ, so those are from Seti UI (MIT, see
+//! `icons/LICENSE-seti-ui.txt`).
 
 use std::borrow::Cow;
 
@@ -15,7 +16,7 @@ macro_rules! icons {
     };
 }
 
-const ICONS: [(&str, &[u8]); 19] = icons!(
+const ICONS: [(&str, &[u8]); 20] = icons!(
     "branch",
     "chevronDown",
     "chevronRight",
@@ -26,6 +27,7 @@ const ICONS: [(&str, &[u8]); 19] = icons!(
     "javaScript",
     "json",
     "kotlin",
+    "lua",
     "markdown",
     "python",
     "rust",
@@ -60,6 +62,7 @@ pub fn file_icon(path: &str) -> String {
         Some(JavaScript) => "javaScript",
         Some(Json) => "json",
         Some(Kotlin) => "kotlin",
+        Some(Lua) => "lua",
         Some(Markdown) => "markdown",
         Some(Python) => "python",
         Some(Sql) => "sql",
@@ -113,6 +116,7 @@ mod tests {
             "a.js",
             "a.json",
             "a.kt",
+            "a.lua",
             "a.md",
             "a.py",
             "a.rs",
