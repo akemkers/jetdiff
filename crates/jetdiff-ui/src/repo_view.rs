@@ -11,6 +11,7 @@ use gpui::{
     actions, div, prelude::*,
 };
 use jetdiff_app::help::{DIFF_KEYMAP_BAR, WALKTHROUGH_KEYMAP_BAR};
+use jetdiff_app::neovim;
 use jetdiff_app::{
     Applied, Commits, DiskChange, Notification, ReadJob, RepoSource, Show, Shown, empty_diff,
 };
@@ -18,7 +19,7 @@ use jetdiff_viewmodel::metrics::FONT_SIZE;
 
 use crate::commit_list::{CommitList, SelectRow};
 use crate::confirm_dialog::confirm_dialog;
-use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
+use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ShowInNeovim, ZoomIn, ZoomOut, Zoomed};
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp, keymap_bar};
 use crate::notification_slot_view::NotificationSlotView;
@@ -90,6 +91,9 @@ impl RepoView {
                 this.zoomed(e.font_size, cx)
             }),
             cx.subscribe(&diff, |this, _, e: &Rollback, cx| this.rollback(e, cx)),
+            cx.subscribe(&diff, |this, _, e: &ShowInNeovim, cx| {
+                this.show_in_neovim(e, cx)
+            }),
         ];
 
         let (mut commit_list, mut watcher) = (None, None);
@@ -142,6 +146,21 @@ impl RepoView {
             commits.update(cx, |c, cx| c.set_scale(scale, cx));
         }
         self.walkthrough_zoomed(cx);
+    }
+
+    /// Only where Right is the file on disk.
+    fn show_in_neovim(&mut self, e: &ShowInNeovim, cx: &mut Context<Self>) {
+        let repo = self.repo_source.repo();
+        let result = if repo.reads_working_tree() {
+            neovim::open(repo.root(), &e.path, e.line)
+        } else {
+            Err("Only Branch and Local changes can be opened in Neovim".to_owned())
+        };
+        if let Err(text) = result {
+            self.notification_slot.update(cx, |slot, cx| {
+                slot.show_brief(Notification::warning(text), cx)
+            });
+        }
     }
 
     /// Shows the file after the rollback and reads the repo source again, without waiting for the watcher.

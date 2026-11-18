@@ -41,6 +41,12 @@ const SIDES: [Side; 2] = [Side::Left, Side::Right];
 /// The user wants to roll back a hunk. Sent to whoever can write the file.
 pub struct Rollback(pub RollbackRequest);
 
+/// The cursor location in the newest version, with the line from 1.
+pub struct ShowInNeovim {
+    pub path: String,
+    pub line: usize,
+}
+
 /// New font size after zoom, so the rest of the window can follow.
 pub struct Zoomed {
     pub font_size: f32,
@@ -299,6 +305,10 @@ impl FileDiffView {
                 self.rollback(cx);
                 return;
             }
+            Command::OpenInNeovim => {
+                self.show_in_neovim(cx);
+                return;
+            }
             Command::CopyCursorLocation => {
                 if let Some(cursor_location) =
                     cursor_location(self.mode.cursor_location(), &self.paths)
@@ -350,6 +360,17 @@ impl FileDiffView {
     }
 
     /// Checks that the hunk can be rolled back and opens the dialog. `on_key_down` sends
+    fn show_in_neovim(&self, cx: &mut Context<Self>) {
+        if self.mode.diff().single_side() == Some(Side::Left) {
+            return self.show_brief("The file is deleted", cx);
+        }
+        let cursor = self.mode.cursor_location();
+        cx.emit(ShowInNeovim {
+            path: self.paths[1].clone(),
+            line: cursor.line + 1,
+        });
+    }
+
     /// `Rollback` on Enter.
     fn rollback(&mut self, cx: &mut Context<Self>) {
         match rollback_request(self.mode.diff(), self.mode.cursor_hunk(), self.can_rollback) {
@@ -555,6 +576,7 @@ impl FileDiffView {
 
 impl EventEmitter<Zoomed> for FileDiffView {}
 impl EventEmitter<Rollback> for FileDiffView {}
+impl EventEmitter<ShowInNeovim> for FileDiffView {}
 
 impl Focusable for FileDiffView {
     fn focus_handle(&self, _: &gpui::App) -> FocusHandle {

@@ -196,7 +196,9 @@ impl DiffState {
                 f.set_all_open(any_closed)
             }),
             // Owned by the UI. After zoom, `rescale` is called.
-            CopyCursorLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
+            CopyCursorLocation | OpenInNeovim | Rollback | ZoomIn | ZoomOut | ResetZoom => {
+                Outcome::default()
+            }
         }
     }
 

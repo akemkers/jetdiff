@@ -61,6 +61,7 @@ pub const ALL: [(&str, &[Keys]); 4] = [
         &[
             (&["v"], "split/unified"),
             (&["y"], "copy file:line"),
+            (&["e"], "open in Neovim"),
             (&["r"], "reload"),
             (&["z"], "roll back hunk"),
             ZOOM,

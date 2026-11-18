@@ -191,7 +191,9 @@ impl UnifiedState {
             // One side
             FocusSide(_) => Outcome::default(),
             // Owned by the UI, as in Split
-            CopyCursorLocation | Rollback | ZoomIn | ZoomOut | ResetZoom => Outcome::default(),
+            CopyCursorLocation | OpenInNeovim | Rollback | ZoomIn | ZoomOut | ResetZoom => {
+                Outcome::default()
+            }
         }
     }
 

@@ -7,6 +7,7 @@ pub mod file_pair;
 pub mod files;
 pub mod help;
 pub mod keys;
+pub mod neovim;
 pub mod notification;
 pub mod notification_slot;
 pub mod overlay_slot;

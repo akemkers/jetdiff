@@ -26,6 +26,8 @@ pub enum Command {
     ToggleFolds,
     /// The cursor location to the clipboard.
     CopyCursorLocation,
+    /// The cursor location in Neovim, in a tmux tab.
+    OpenInNeovim,
     /// Roll back the hunk on the cursor's line to Left, in the file on disk.
     Rollback,
     ZoomIn,

@@ -119,6 +119,7 @@ fn command(key: Key) -> Option<Command> {
             'o' => FoldOpen,
             'f' => ToggleFolds,
             'y' => CopyCursorLocation,
+            'e' => OpenInNeovim,
             'z' => Rollback,
             'G' => GoToBottom,
             'H' => FocusSide(Side::Left),
