@@ -8,7 +8,7 @@ use gpui::{App, Bounds, Pixels, Window};
 use jetdiff_viewmodel::{UnifiedDiff, UnifiedFolding};
 
 use super::super::code_paint::HunkMinimapRects;
-use super::super::unified::{RowCache, UnifiedPainter};
+use super::super::unified::{RowCache, UnifiedPainter, text_width};
 use super::super::{CACHE_CAPACITY, snap};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
@@ -39,14 +39,20 @@ impl UnifiedExcerpt {
         self.rows.len()
     }
 
+    pub(super) fn text_width(&self, style: &TextStyle, bounds: Bounds<Pixels>) -> f32 {
+        text_width(&self.diff, style, bounds)
+    }
+
+    /// Returns the width of the widest row.
     pub(super) fn paint(
         &self,
         style: TextStyle,
+        scroll_x: f32,
         theme: UiTheme,
         bounds: Bounds<Pixels>,
         window: &mut Window,
         cx: &mut App,
-    ) {
+    ) -> f32 {
         let scroll_y = self.rows.start as f32 * style.line_height();
         let painter = UnifiedPainter {
             diff: self.diff.clone(),
@@ -54,7 +60,7 @@ impl UnifiedExcerpt {
             theme,
             style,
             scroll_y: snap(scroll_y, window.scale_factor()),
-            scroll_x: 0.,
+            scroll_x,
             cursor_row: None,
             hunk_minimap: false,
         };
@@ -64,6 +70,6 @@ impl UnifiedExcerpt {
             &mut self.hunk_minimap.borrow_mut(),
             window,
             cx,
-        );
+        )
     }
 }

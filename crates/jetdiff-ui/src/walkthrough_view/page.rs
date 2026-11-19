@@ -1,7 +1,9 @@
 //! A page of the walkthrough: where it is, the step's title, explanation and notes, then its code
 //! file by file. After the last step, the files no step covers.
 
-use gpui::{AnyElement, Context, Div, FontWeight, canvas, div, prelude::*, px, relative};
+use gpui::{
+    AnyElement, Context, Div, FontWeight, ScrollWheelEvent, canvas, div, prelude::*, px, relative,
+};
 use jetdiff_app::walkthrough::{Page, Reading};
 use jetdiff_files::FileStatus;
 
@@ -51,7 +53,7 @@ impl WalkthroughView {
             })
             .collect();
         let s = |v: f32| px(v * self.scale);
-        let page = div()
+        let mut page = div()
             .id("walkthrough-page")
             .flex_1()
             .min_w_0()
@@ -65,6 +67,8 @@ impl WalkthroughView {
             .flex_col()
             .gap(s(GAP))
             .children(children);
+        // Otherwise a sideways swipe over an excerpt also scrolls the page down
+        page.style().restrict_scroll_to_axis = Some(true);
         div().size_full().flex().child(page)
     }
 
@@ -150,7 +154,8 @@ impl WalkthroughView {
                 let Some(style) = self.style.clone() else {
                     return div().into_any_element();
                 };
-                let height = excerpt.line_count() as f32 * style.line_height();
+                let line_height = style.line_height();
+                let height = excerpt.line_count() as f32 * line_height;
                 let split_share = self.split_share;
                 let code = {
                     let (excerpt, theme) = (excerpt.clone(), *theme);
@@ -177,6 +182,15 @@ impl WalkthroughView {
                     .rounded(s(4.))
                     .overflow_hidden()
                     .child(self.with_split_share_handle(item, excerpt, code, cx))
+                    .on_scroll_wheel({
+                        let excerpt = excerpt.clone();
+                        cx.listener(move |_, ev: &ScrollWheelEvent, _, cx| {
+                            let delta_x = f32::from(ev.delta.pixel_delta(px(line_height)).x);
+                            if excerpt.scroll_x_by(-delta_x) {
+                                cx.notify();
+                            }
+                        })
+                    })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.cursor = Some(item);
                         cx.notify();

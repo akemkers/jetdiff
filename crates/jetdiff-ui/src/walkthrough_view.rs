@@ -38,6 +38,8 @@ use crate::text::{FAMILY, TextStyle};
 const HUNK_MARGIN: f32 = 48.;
 /// A file with more rows than this on the Not covered page is only a card, so the page stays short.
 const MAX_NOT_COVERED_ROWS: usize = 200;
+/// How far `h` and `l` scroll sideways, as in the diff.
+const SCROLL_COLUMNS: f32 = 4.;
 
 pub enum WalkthroughEvent {
     /// The diff is read, so `status` says what can be done.
@@ -373,6 +375,18 @@ impl WalkthroughView {
         }
     }
 
+    /// Scrolls the excerpt at the cursor sideways.
+    fn scroll_x_by(&mut self, columns: f32, cx: &mut Context<Self>) {
+        let (Some(cursor), Some(style)) = (self.cursor, &self.style) else {
+            return;
+        };
+        if let Some(Item::Excerpt { excerpt, .. }) = self.items.get(cursor)
+            && excerpt.scroll_x_by(columns * style.char_width)
+        {
+            cx.notify();
+        }
+    }
+
     fn open_at_cursor(&mut self, cx: &mut Context<Self>) {
         let (Some(cursor), Some(digest), State::Ready(reading)) =
             (self.cursor, &self.digest, &self.state)
@@ -460,6 +474,14 @@ impl WalkthroughView {
             }
             (State::Ready(_), "left") => {
                 self.step_by(false, cx);
+                true
+            }
+            (State::Ready(_), "h") => {
+                self.scroll_x_by(-SCROLL_COLUMNS, cx);
+                true
+            }
+            (State::Ready(_), "l") => {
+                self.scroll_x_by(SCROLL_COLUMNS, cx);
                 true
             }
             (State::Ready(_), "n") => {

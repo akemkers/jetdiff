@@ -1,5 +1,6 @@
 //! Rows of a file drawn over all of their bounds without a cursor or a scrollbar, for a walkthrough.
-//! Split or Unified as in the diff, and added and deleted files are always shown Unified.
+//! Split or Unified as in the diff, and added and deleted files are always shown Unified. Each
+//! excerpt has its own horizontal scroll.
 
 mod split;
 mod unified;
@@ -13,6 +14,7 @@ use jetdiff_viewmodel::{SplitShare, UnifiedDiff, diff_divider_offset};
 
 use self::split::SplitExcerpt;
 use self::unified::UnifiedExcerpt;
+use super::{CodeLayout, snap};
 use crate::text::TextStyle;
 use crate::theme::UiTheme;
 
@@ -22,6 +24,10 @@ pub struct Excerpt {
     mode: Mode,
     /// The width it was drawn with last, for the handle over the diff divider.
     width: Cell<Option<f32>>,
+    scroll_x: Cell<f32>,
+    /// From the last time it was drawn, for max horizontal scroll.
+    widest: Cell<f32>,
+    text_width: Cell<f32>,
 }
 
 enum Mode {
@@ -47,6 +53,9 @@ impl Excerpt {
             row_count,
             mode,
             width: Cell::new(None),
+            scroll_x: Cell::new(0.),
+            widest: Cell::new(0.),
+            text_width: Cell::new(0.),
         }
     }
 
@@ -73,6 +82,17 @@ impl Excerpt {
         }
     }
 
+    /// Kept within the widest line. Returns whether it moved.
+    pub fn scroll_x_by(&self, delta: f32) -> bool {
+        let x = self.clamped_scroll_x(self.scroll_x.get() + delta);
+        self.scroll_x.replace(x) != x
+    }
+
+    fn clamped_scroll_x(&self, x: f32) -> f32 {
+        let max = self.widest.get() - self.text_width.get();
+        x.clamp(0., max.max(0.))
+    }
+
     pub fn paint(
         &self,
         style: TextStyle,
@@ -87,9 +107,22 @@ impl Excerpt {
         if self.width.replace(Some(width)) != Some(width) {
             window.refresh();
         }
-        match &self.mode {
-            Mode::Split(excerpt) => excerpt.paint(style, split_share, theme, bounds, window, cx),
-            Mode::Unified(excerpt) => excerpt.paint(style, theme, bounds, window, cx),
-        }
+        let code_layout = CodeLayout {
+            style: &style,
+            split_share,
+        };
+        // A wider window has less to scroll
+        self.text_width.set(match &self.mode {
+            Mode::Split(excerpt) => excerpt.text_width(code_layout, bounds),
+            Mode::Unified(excerpt) => excerpt.text_width(&style, bounds),
+        });
+        self.scroll_x
+            .set(self.clamped_scroll_x(self.scroll_x.get()));
+        let scroll_x = snap(self.scroll_x.get(), window.scale_factor());
+        let widest = match &self.mode {
+            Mode::Split(excerpt) => excerpt.paint(code_layout, scroll_x, theme, bounds, window, cx),
+            Mode::Unified(excerpt) => excerpt.paint(style, scroll_x, theme, bounds, window, cx),
+        };
+        self.widest.set(widest);
     }
 }
