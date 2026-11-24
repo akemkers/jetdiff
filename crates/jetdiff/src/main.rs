@@ -159,6 +159,10 @@ fn with_progress<T>(text: &str, work: impl FnOnce() -> Result<T, String>) -> Res
 }
 
 fn main() -> ExitCode {
+    if std::env::args().any(|arg| arg == "--version") {
+        println!("jetdiff {}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
     let ((source, frontend), config) = match parse_args().and_then(|a| Ok((a, config::load()?))) {
         Ok(a) => a,
         Err(e) => {

@@ -1,0 +1,44 @@
+name: Release
+
+# A tag like v0.2.0 builds jetdiff.app for Apple Silicon and puts it in a GitHub release,
+# together with scripts/install.sh, which fetches it from there.
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    # Apple Silicon
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check that the tag, the crate and the plugin have the same version
+      run: |
+        version=${GITHUB_REF_NAME#v}
+        crate=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "jetdiff") | .version')
+        plugin=$(jq -r .version claude-plugin/.claude-plugin/plugin.json)
+        if [ "$crate" != "$version" ] || [ "$plugin" != "$version" ]; then
+          echo "The tag is $version, the crate $crate and the plugin $plugin"
+          exit 1
+        fi
+    - name: Run tests
+      run: cargo test --workspace --locked
+    - name: Build
+      run: cargo build --release --locked -p jetdiff
+    - name: Bundle
+      run: |
+        archive=jetdiff-aarch64-apple-darwin.tar.gz
+        scripts/bundle.sh target/release/jetdiff "${GITHUB_REF_NAME#v}" dist
+        tar -czf "$archive" -C dist jetdiff.app
+        shasum -a 256 "$archive" > "$archive.sha256"
+    # gh uploads the files before the release is published, so install.sh never finds a release without them
+    - name: Release
+      run: gh release create "$GITHUB_REF_NAME" --generate-notes jetdiff-aarch64-apple-darwin.tar.gz jetdiff-aarch64-apple-darwin.tar.gz.sha256 scripts/install.sh
+      env:
+        GH_TOKEN: ${{ github.token }}

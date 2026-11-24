@@ -59,3 +59,13 @@ Other folders:
 - `docs/`: the solution overview and research on the IntelliJ code
 
 Commit messages are in English, in the imperative, e.g. "Add b to hide the side panel".
+
+## Releasing
+
+Set the same version in `crates/jetdiff/Cargo.toml` and `claude-plugin/.claude-plugin/plugin.json`, run `cargo build` so `Cargo.lock` follows, and commit. Then push a tag:
+
+```
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` builds `jetdiff.app` for Apple Silicon with `scripts/bundle.sh` and puts it in a GitHub release, together with `scripts/install.sh`. The workflow stops if the tag and the two versions don't match.

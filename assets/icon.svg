@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#313244"/>
+      <stop offset="1" stop-color="#181825"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="100.5" y="100.5" width="823" height="823" rx="185" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2"/>
+
+  <!-- Modified hunk: Left 3-4, Right 3-4 -->
+  <rect x="190" y="384" width="268" height="104" fill="#89b4fa" fill-opacity="0.22"/>
+  <path d="M458 384 C512 384 512 384 566 384 L566 488 C512 488 512 488 458 488 Z" fill="#89b4fa" fill-opacity="0.22"/>
+  <rect x="566" y="384" width="268" height="104" fill="#89b4fa" fill-opacity="0.22"/>
+
+  <!-- Inserted hunk: nothing on Left, Right 7-9 -->
+  <path d="M458 636 L458 644 C512 644 512 796 566 796 L566 640 C512 640 512 636 458 636 Z" fill="#a6e3a1" fill-opacity="0.30"/>
+  <rect x="566" y="640" width="268" height="156" fill="#a6e3a1" fill-opacity="0.30"/>
+
+  <!-- Divider between the sides -->
+  <line x1="512" y1="230" x2="512" y2="820" stroke="#ffffff" stroke-opacity="0.06" stroke-width="2"/>
+
+  <g stroke-linecap="round" stroke-width="22">
+    <!-- Left -->
+    <line x1="218" y1="280" x2="400" y2="280" stroke="#cba6f7"/>
+    <line x1="218" y1="332" x2="350" y2="332" stroke="#cdd6f4" stroke-opacity="0.55"/>
+    <line x1="218" y1="410" x2="420" y2="410" stroke="#cdd6f4"/>
+    <line x1="218" y1="462" x2="330" y2="462" stroke="#cdd6f4"/>
+    <line x1="218" y1="536" x2="380" y2="536" stroke="#cba6f7"/>
+    <line x1="218" y1="588" x2="300" y2="588" stroke="#cdd6f4" stroke-opacity="0.55"/>
+    <!-- Right -->
+    <line x1="594" y1="280" x2="776" y2="280" stroke="#cba6f7"/>
+    <line x1="594" y1="332" x2="726" y2="332" stroke="#cdd6f4" stroke-opacity="0.55"/>
+    <line x1="594" y1="410" x2="806" y2="410" stroke="#cdd6f4"/>
+    <line x1="594" y1="462" x2="690" y2="462" stroke="#cdd6f4"/>
+    <line x1="594" y1="536" x2="756" y2="536" stroke="#cba6f7"/>
+    <line x1="594" y1="588" x2="676" y2="588" stroke="#cdd6f4" stroke-opacity="0.55"/>
+    <line x1="594" y1="666" x2="790" y2="666" stroke="#a6e3a1"/>
+    <line x1="594" y1="718" x2="740" y2="718" stroke="#a6e3a1"/>
+    <line x1="594" y1="770" x2="700" y2="770" stroke="#a6e3a1" stroke-opacity="0.7"/>
+  </g>
+</svg>
