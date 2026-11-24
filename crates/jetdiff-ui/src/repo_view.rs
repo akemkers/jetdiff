@@ -336,6 +336,7 @@ impl Render for RepoView {
         };
         let keymap_bar = keymap_bar(
             keys,
+            cx.global::<Settings>().version,
             self.notification_slot.clone(),
             &theme.palette,
             self.scale,

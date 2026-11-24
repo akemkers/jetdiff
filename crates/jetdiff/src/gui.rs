@@ -35,6 +35,7 @@ pub fn run(content: Content, title: String, config: Config) {
                     model: config.walkthrough.model.clone(),
                     language: config.walkthrough.language.clone(),
                 },
+                version: env!("CARGO_PKG_VERSION"),
             });
             match content {
                 Content::FilePair(file_pair, diff) => {

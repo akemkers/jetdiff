@@ -609,6 +609,7 @@ impl Render for FileDiffView {
         let footer = self.draws_keymap_bar.then(|| {
             keymap_bar(
                 &DIFF_KEYMAP_BAR,
+                cx.global::<Settings>().version,
                 self.notification_slot.clone(),
                 &theme.palette,
                 scale,

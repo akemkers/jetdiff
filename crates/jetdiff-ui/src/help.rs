@@ -12,7 +12,8 @@ actions!(jetdiff, [ToggleHelp, HideHelp]);
 
 /// The bar keeps one height in both modes, so it doesn't wrap.
 pub const KEYMAP_BAR_HEIGHT: f32 = 48.;
-const KEYMAP_BAR_PADDING: f32 = 16.;
+/// The same as the diff header, so the version lines up with the buttons above it.
+const KEYMAP_BAR_PADDING: f32 = 20.;
 const KEYS_GAP: f32 = 16.;
 const LABEL_GAP: f32 = 4.;
 const TEXT_SIZE: f32 = 14.;
@@ -35,12 +36,14 @@ const POPUP_TEXT_SIZE: f32 = 13.;
 /// The bar with the notification slot lying over whatever is above it.
 pub fn keymap_bar(
     keys: &[Keys],
+    version: &str,
     notification_slot: Entity<NotificationSlotView>,
     palette: &UiPalette,
     scale: f32,
 ) -> Div {
     let scaled = |size: f32| px(size * scale);
     let bar = div()
+        .w_full()
         .h(scaled(KEYMAP_BAR_HEIGHT))
         .px(scaled(KEYMAP_BAR_PADDING))
         .flex()
@@ -61,7 +64,9 @@ pub fn keymap_bar(
                 .gap(scaled(LABEL_GAP))
                 .children(labels.iter().map(|&label| key_label(label, palette, scale)))
                 .child(div().ml(scaled(LABEL_GAP)).child(what))
-        }));
+        }))
+        .child(div().flex_1())
+        .child(div().flex_none().child(version.to_owned()));
     div()
         .relative()
         .flex_none()
