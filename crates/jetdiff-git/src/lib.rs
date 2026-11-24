@@ -14,7 +14,17 @@ use std::thread;
 
 use jetdiff_files::{ChangedFile, FileStatus};
 
+use branch::BranchLog;
 pub use git_dirs::GitDirs;
+
+/// The commits in the commit list.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct History {
+    pub commits: Vec<Commit>,
+    /// The branch's own commits. On the base branch without any, the newest commits on HEAD, so older
+    /// ones can be looked at.
+    pub own: bool,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Commit {
@@ -60,8 +70,10 @@ pub struct Repo {
     right_side: Option<String>,
     /// Only Local changes, so rollback always means back to HEAD.
     can_rollback: bool,
-    /// The branch's own commits as a revision range. Only for Branch, and `None` when it has none.
-    history: Option<String>,
+    /// What the commit list shows. Only for Branch.
+    branch_log: Option<BranchLog>,
+    /// Only for Branch, read with the rest.
+    branch_name: Option<String>,
 }
 
 impl Repo {
@@ -78,7 +90,8 @@ impl Repo {
             left_side,
             right_side: Some(right_side),
             can_rollback: false,
-            history: None,
+            branch_log: None,
+            branch_name: None,
         })
     }
 
@@ -136,7 +149,8 @@ impl Repo {
             left_side: fork.trim_end().to_owned(),
             right_side: Some(right_side),
             can_rollback: false,
-            history: None,
+            branch_log: None,
+            branch_name: None,
         })
     }
 
@@ -157,7 +171,8 @@ impl Repo {
             left_side,
             right_side: None,
             can_rollback: true,
-            history: None,
+            branch_log: None,
+            branch_name: None,
         })
     }
 

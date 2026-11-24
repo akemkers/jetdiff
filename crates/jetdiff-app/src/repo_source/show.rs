@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use jetdiff_files::ChangedFile;
-use jetdiff_git::Commit;
+use jetdiff_git::History;
 use jetdiff_viewmodel::FileDiff;
 
 use crate::commits::Selected;
@@ -18,7 +18,7 @@ pub enum Applied {
     Done {
         /// For the commit list, which shows what was read.
         branch_name: Option<String>,
-        commits: Vec<Commit>,
+        history: History,
         selected: Selected,
         /// Only when the list has changed.
         changed_files: Option<Rc<[ChangedFile]>>,

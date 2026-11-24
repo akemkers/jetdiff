@@ -76,7 +76,7 @@ impl RepoSource {
             repo,
             changed_files,
             branch_name,
-            commits,
+            history,
             ..
         } = job.run()?;
         let source = Self {
@@ -87,7 +87,7 @@ impl RepoSource {
             changed_files: changed_files.into(),
             shown: None,
         };
-        Ok((source, Commits::new(branch_name, commits)))
+        Ok((source, Commits::new(branch_name, history)))
     }
 
     pub fn repo(&self) -> &Repo {
@@ -144,7 +144,7 @@ impl RepoSource {
             repo,
             changed_files,
             branch_name,
-            commits,
+            history,
         } = match read {
             Ok(read) => read,
             Err(error) => {
@@ -191,7 +191,7 @@ impl RepoSource {
         };
         Applied::Done {
             branch_name,
-            commits,
+            history,
             selected,
             changed_files: changed,
             file,

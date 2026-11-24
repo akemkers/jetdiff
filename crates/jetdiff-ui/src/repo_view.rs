@@ -197,7 +197,7 @@ impl RepoView {
             }
             Applied::Done {
                 branch_name,
-                commits,
+                history,
                 selected,
                 changed_files,
                 file,
@@ -205,7 +205,7 @@ impl RepoView {
             } => {
                 if let Some(list) = &self.commits {
                     list.update(cx, |commit_list, cx| {
-                        commit_list.set_commits(branch_name, commits, selected, cx)
+                        commit_list.set_commits(branch_name, history, selected, cx)
                     });
                 }
                 if let Some(changed_files) = changed_files {

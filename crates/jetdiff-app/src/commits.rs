@@ -1,8 +1,9 @@
 //! The commit list: Branch at the top, with Local changes and the branch's own commits under it as its
-//! slices. Without own commits Branch is the same as Local changes, so its row is hidden. The cursor and
-//! the selection are kept as what the row shows, not as a row, so they survive a read.
+//! slices. Without own commits Branch is the same as Local changes, so its row is hidden. On the base
+//! branch the newest commits on HEAD follow Local changes instead. The cursor and the selection are kept as what
+//! the row shows, not as a row, so they survive a read.
 
-use jetdiff_git::Commit;
+use jetdiff_git::{Commit, History};
 
 use crate::step;
 
@@ -21,14 +22,14 @@ pub enum Selected {
 }
 
 impl Selected {
-    /// Where the selection goes when its row is gone: a commit to Branch, and Branch to Local
-    /// changes when the branch has no commits of its own.
-    pub(crate) fn within(self, commits: &[Commit]) -> Self {
+    /// Where the selection goes when its row is gone: to Branch, or to Local changes when the branch
+    /// has no commits of its own and Branch is hidden.
+    pub(crate) fn within(self, history: &History) -> Self {
         match self {
-            Self::Commit(hash) if commits.iter().any(|commit| commit.hash == hash) => {
+            Self::Commit(hash) if history.commits.iter().any(|commit| commit.hash == hash) => {
                 Self::Commit(hash)
             }
-            Self::Commit(_) | Self::Branch if !commits.is_empty() => Self::Branch,
+            Self::Commit(_) | Self::Branch if history.own => Self::Branch,
             Self::Commit(_) | Self::Branch | Self::LocalChanges => Self::LocalChanges,
         }
     }
@@ -43,25 +44,25 @@ pub enum CommitRow<'a> {
 
 pub struct Commits {
     branch_name: Option<String>,
-    commits: Vec<Commit>,
+    history: History,
     selected: Selected,
     cursor: Selected,
 }
 
 impl Commits {
     /// Branch is selected, or Local changes when it is hidden.
-    pub fn new(branch_name: Option<String>, commits: Vec<Commit>) -> Self {
-        let selected = Selected::Branch.within(&commits);
+    pub fn new(branch_name: Option<String>, history: History) -> Self {
+        let selected = Selected::Branch.within(&history);
         Self {
             branch_name,
-            commits,
+            history,
             cursor: selected.clone(),
             selected,
         }
     }
 
     pub fn len(&self) -> usize {
-        self.first_commit_row() + self.commits.len()
+        self.first_commit_row() + self.history.commits.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -74,7 +75,7 @@ impl Commits {
 
     pub fn row(&self, row: usize) -> CommitRow<'_> {
         match row.checked_sub(self.first_commit_row()) {
-            Some(commit) => CommitRow::Commit(&self.commits[commit]),
+            Some(commit) => CommitRow::Commit(&self.history.commits[commit]),
             None if row == 0 && self.has_branch_row() => CommitRow::Branch(self.branch_label()),
             None => CommitRow::LocalChanges,
         }
@@ -104,7 +105,11 @@ impl Commits {
                 "Local changes, everything not committed, against HEAD".into()
             }
             Selected::Commit(hash) => {
-                let commit = self.commits.iter().find(|commit| &commit.hash == hash);
+                let commit = self
+                    .history
+                    .commits
+                    .iter()
+                    .find(|commit| &commit.hash == hash);
                 let subject = commit.map_or("", |commit| commit.subject.as_str());
                 format!("Commit {}: {subject}", &hash[..hash.len().min(SHORT_HASH)])
             }
@@ -115,12 +120,12 @@ impl Commits {
     pub fn set_commits(
         &mut self,
         branch_name: Option<String>,
-        commits: Vec<Commit>,
+        history: History,
         selected: Selected,
     ) {
         self.branch_name = branch_name;
-        self.commits = commits;
-        self.cursor = self.cursor.clone().within(&self.commits);
+        self.history = history;
+        self.cursor = self.cursor.clone().within(&self.history);
         self.selected = selected;
     }
 
@@ -156,7 +161,7 @@ impl Commits {
     }
 
     fn has_branch_row(&self) -> bool {
-        !self.commits.is_empty()
+        self.history.own
     }
 
     /// Branch and Local changes come before the commits.
@@ -167,11 +172,15 @@ impl Commits {
     /// A row that is gone gives where `Selected::within` sends it.
     fn row_of(&self, selected: &Selected) -> usize {
         let branch_row = usize::from(self.has_branch_row());
-        match selected.clone().within(&self.commits) {
+        match selected.clone().within(&self.history) {
             Selected::Branch => 0,
             Selected::LocalChanges => branch_row,
             Selected::Commit(hash) => {
-                let commit = self.commits.iter().position(|commit| commit.hash == hash);
+                let commit = self
+                    .history
+                    .commits
+                    .iter()
+                    .position(|commit| commit.hash == hash);
                 self.first_commit_row() + commit.unwrap_or_default()
             }
         }
@@ -214,6 +223,20 @@ mod tests {
         }
     }
 
+    fn own(hashes: &[&str]) -> History {
+        History {
+            commits: hashes.iter().map(|hash| commit(hash)).collect(),
+            own: true,
+        }
+    }
+
+    fn earlier(hashes: &[&str]) -> History {
+        History {
+            own: false,
+            ..own(hashes)
+        }
+    }
+
     #[test]
     fn age_text() {
         assert_eq!(age(-5), "now");
@@ -241,7 +264,7 @@ mod tests {
 
     #[test]
     fn branch_with_its_slices_under_it() {
-        let commits = Commits::new(Some("feature".into()), vec![commit("a"), commit("b")]);
+        let commits = Commits::new(Some("feature".into()), own(&["a", "b"]));
         assert_eq!(
             subjects(&commits),
             [
@@ -252,20 +275,26 @@ mod tests {
             ]
         );
         assert!(commits.is_selected(0) && commits.is_cursor(0));
-        let detached = Commits::new(None, vec![commit("a")]);
+        let detached = Commits::new(None, own(&["a"]));
         assert!(matches!(detached.row(0), CommitRow::Branch(BRANCH)));
     }
 
     #[test]
-    fn without_own_commits_only_local_changes() {
-        let commits = Commits::new(Some("main".into()), Vec::new());
-        assert_eq!(subjects(&commits), [(0, LOCAL_CHANGES.into())]);
+    fn without_own_commits_local_changes_and_the_earlier_ones() {
+        let mut commits = Commits::new(Some("main".into()), earlier(&["a", "b"]));
+        assert_eq!(
+            subjects(&commits),
+            [(0, LOCAL_CHANGES.into()), (0, "a".into()), (0, "b".into()),]
+        );
         assert!(commits.is_selected(0) && commits.is_cursor(0));
+        assert_eq!(commits.select(2), Some(Selected::Commit("b".into())));
+        let empty = Commits::new(Some("main".into()), History::default());
+        assert_eq!(subjects(&empty), [(0, LOCAL_CHANGES.into())]);
     }
 
     #[test]
     fn selects_only_on_change() {
-        let mut commits = Commits::new(None, vec![commit("a"), commit("b")]);
+        let mut commits = Commits::new(None, own(&["a", "b"]));
         assert_eq!(commits.select(0), None);
         commits.move_cursor(true);
         assert_eq!(commits.move_cursor(true), 2);
@@ -279,7 +308,7 @@ mod tests {
 
     #[test]
     fn steps_from_the_selection() {
-        let mut commits = Commits::new(None, vec![commit("a"), commit("b")]);
+        let mut commits = Commits::new(None, own(&["a", "b"]));
         commits.move_cursor(true);
         commits.move_cursor(true);
         assert_eq!(commits.row_next_to_selected(true), 1);
@@ -290,46 +319,46 @@ mod tests {
 
     #[test]
     fn cursor_and_selection_survive_a_read() {
-        let mut commits = Commits::new(None, vec![commit("a"), commit("b")]);
+        let mut commits = Commits::new(None, own(&["a", "b"]));
         commits.select(3);
         commits.move_cursor(false);
         // A new commit on top moves the rows
-        commits.set_commits(
-            None,
-            vec![commit("c"), commit("a"), commit("b")],
-            Selected::Commit("b".into()),
-        );
+        commits.set_commits(None, own(&["c", "a", "b"]), Selected::Commit("b".into()));
         assert!(commits.is_selected(4) && commits.is_cursor(3));
     }
 
     #[test]
     fn a_commit_that_is_gone_gives_branch() {
-        let mut commits = Commits::new(None, vec![commit("a")]);
+        let mut commits = Commits::new(None, own(&["a"]));
         commits.move_cursor(true);
         commits.move_cursor(true);
-        commits.set_commits(None, vec![commit("b")], Selected::Branch);
+        commits.set_commits(None, own(&["b"]), Selected::Branch);
         assert!(commits.is_cursor(0));
         // Without own commits Branch is hidden, so Local changes instead
-        commits.set_commits(None, Vec::new(), Selected::LocalChanges);
+        commits.set_commits(None, earlier(&["b"]), Selected::LocalChanges);
         assert!(commits.is_cursor(0) && commits.is_selected(0));
     }
 
     #[test]
     fn selection_within_the_commits() {
-        let commits = [commit("a")];
-        let within = |selected: Selected, commits: &[Commit]| selected.within(commits);
+        let commits = own(&["a"]);
         let a = Selected::Commit("a".into());
-        assert_eq!(within(a.clone(), &commits), a);
+        assert_eq!(a.clone().within(&commits), a);
         assert_eq!(
-            within(Selected::Commit("gone".into()), &commits),
+            Selected::Commit("gone".into()).within(&commits),
             Selected::Branch
         );
-        assert_eq!(within(Selected::Branch, &commits), Selected::Branch);
-        assert_eq!(within(Selected::Branch, &[]), Selected::LocalChanges);
-        assert_eq!(within(a, &[]), Selected::LocalChanges);
+        assert_eq!(Selected::Branch.within(&commits), Selected::Branch);
         assert_eq!(
-            within(Selected::LocalChanges, &commits),
+            Selected::LocalChanges.within(&commits),
             Selected::LocalChanges
         );
+        // Without own commits, an earlier commit stays and Branch is gone
+        assert_eq!(a.clone().within(&earlier(&["a"])), a);
+        assert_eq!(
+            Selected::Branch.within(&earlier(&["a"])),
+            Selected::LocalChanges
+        );
+        assert_eq!(a.within(&History::default()), Selected::LocalChanges);
     }
 }

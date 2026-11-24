@@ -166,7 +166,7 @@ The files in the current source, grouped in folders, each with its file status.
 _Avoid_: changes tree, file list
 
 **Commit list**:
-Branch at the top, with Local changes and the branch's own commits under it as its slices, to pick between.
+Branch at the top, with Local changes and the branch's own commits under it as its slices, to pick between. On the base branch without own commits, Local changes and the newest commits on HEAD, since Branch would be the same as Local changes.
 
 **Diff header**:
 The row above the diff with the file's path and the counts of added and deleted lines at the left, and the file controls at the right.

@@ -158,14 +158,14 @@ impl App {
             }
             Applied::Done {
                 branch_name,
-                commits,
+                history,
                 selected,
                 changed_files,
                 file,
                 brief,
             } => {
                 if let Some(list) = &mut side_panel.commits {
-                    list.set_commits(branch_name, commits, selected);
+                    list.set_commits(branch_name, history, selected);
                 }
                 if let Some(changed_files) = changed_files {
                     side_panel.files.set_changed_files(changed_files);

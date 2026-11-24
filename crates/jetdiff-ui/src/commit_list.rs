@@ -9,7 +9,7 @@ use gpui::{
     px, relative, uniform_list,
 };
 use jetdiff_app::{CommitRow, Commits, LOCAL_CHANGES, Selected, age};
-use jetdiff_git::Commit;
+use jetdiff_git::History;
 
 use crate::icons::branch_icon;
 use crate::list::{GAP, ListKey, PAD_LEFT, PAD_RIGHT, TEXT_SIZE, list_key, selection_and_cursor};
@@ -52,11 +52,11 @@ impl CommitList {
     pub fn set_commits(
         &mut self,
         branch_name: Option<String>,
-        commits: Vec<Commit>,
+        history: History,
         selected: Selected,
         cx: &mut Context<Self>,
     ) {
-        self.commits.set_commits(branch_name, commits, selected);
+        self.commits.set_commits(branch_name, history, selected);
         cx.notify();
     }
 

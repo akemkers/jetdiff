@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use jetdiff_files::ChangedFile;
-use jetdiff_git::{Commit, Repo};
+use jetdiff_git::{History, Repo};
 
 use crate::commits::Selected;
 
@@ -36,7 +36,7 @@ pub struct RepoRead {
     pub(super) repo: Repo,
     pub(super) changed_files: Vec<ChangedFile>,
     pub(super) branch_name: Option<String>,
-    pub(super) commits: Vec<Commit>,
+    pub(super) history: History,
 }
 
 impl RepoRead {
@@ -45,7 +45,7 @@ impl RepoRead {
         selected: Selected,
         repo: Repo,
         branch_name: Option<String>,
-        commits: Vec<Commit>,
+        history: History,
     ) -> Result<Self, String> {
         let changed_files = repo.changed_files()?;
         Ok(Self {
@@ -54,7 +54,7 @@ impl RepoRead {
             repo,
             changed_files,
             branch_name,
-            commits,
+            history,
         })
     }
 }
@@ -76,7 +76,9 @@ impl ReadJob {
         } = self;
         match opened {
             Opened::Branch => read_branch(&root, selected, trigger),
-            Opened::Commit(repo) => RepoRead::new(trigger, selected, repo, None, Vec::new()),
+            Opened::Commit(repo) => {
+                RepoRead::new(trigger, selected, repo, None, History::default())
+            }
             Opened::PullRequest => Err("A pull request can't be reloaded yet".into()),
         }
     }
@@ -85,13 +87,13 @@ impl ReadJob {
 /// The commit list is read again every time, since a commit or rebase changes it.
 fn read_branch(root: &Path, selected: Selected, trigger: Trigger) -> Result<RepoRead, String> {
     let branch = Repo::branch(root)?;
-    let commits = branch.commits()?;
+    let history = branch.commits()?;
     let branch_name = branch.branch_name();
-    let selected = selected.within(&commits);
+    let selected = selected.within(&history);
     let repo = match &selected {
         Selected::Branch => branch,
         Selected::LocalChanges => Repo::local_changes(root)?,
         Selected::Commit(hash) => Repo::commit(root, hash)?,
     };
-    RepoRead::new(trigger, selected, repo, branch_name, commits)
+    RepoRead::new(trigger, selected, repo, branch_name, history)
 }

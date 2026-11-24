@@ -150,9 +150,11 @@ fn starts_on_local_changes_without_own_commits() {
     temp_repo.commit();
     temp_repo.write("a.rs", "a2\n");
     let (mut source, commits) = temp_repo.open();
-    // Only the Local changes row, so no commits from main
-    assert_eq!(commits.len(), 1);
+    // No Branch row, and main's own commit under Local changes
+    assert_eq!(commits.len(), 2);
     assert!(matches!(commits.row(0), CommitRow::LocalChanges));
+    assert!(matches!(commits.row(1), CommitRow::Commit(_)));
+    assert!(commits.is_selected(0));
     assert!(can_rollback(&mut source, "a.rs"));
 }
 
@@ -182,7 +184,7 @@ fn a_commit_keeps_the_shown_file() {
     temp_repo.commit();
     let job = source.changed_on_disk(DiskChange::HeadMoved);
     let Applied::Done {
-        commits,
+        history,
         changed_files,
         file,
         brief,
@@ -191,7 +193,7 @@ fn a_commit_keeps_the_shown_file() {
     else {
         panic!("read failed");
     };
-    assert_eq!(commits.len(), 2);
+    assert_eq!(history.commits.len(), 2);
     assert!(changed_files.is_none());
     assert_eq!(brief, None);
     assert!(matches!(source.load(file), Show::Unchanged));

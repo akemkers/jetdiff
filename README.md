@@ -59,7 +59,7 @@ jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]
 - `<left-side> <right-side>`: two files, the old one first
 - `--tui`: show the diff in the terminal instead of in a window
 
-The side panel on the left has the changed files. For a branch, the commit list is under them: the whole branch, Local changes and each commit on the branch. Click a row to see it. `b` hides and shows the panel.
+The side panel on the left has the changed files. For a branch, the commit list is under them: the whole branch, Local changes and each commit on the branch. On the base branch with everything pushed, like `main`, the list has Local changes and the newest commits instead, to look back at. Click a row to see it. `b` hides and shows the panel.
 
 The diff updates by itself when files change on disk or you commit, rebase or switch branch. `r` reloads by hand.
 
