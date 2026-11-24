@@ -2,13 +2,13 @@
 # Wraps the jetdiff binary in jetdiff.app, so macOS shows the icon and the name
 # in the Dock and the app switcher.
 #
-# usage: scripts/bundle.sh <binary> <version> <out-dir>
+# usage: scripts/release/bundle.sh <binary> <version> <out-dir>
 set -eu
 
 binary=$1
 version=$2
 out=$3
-root=$(cd "$(dirname "$0")/.." && pwd)
+root=$(cd "$(dirname "$0")/../.." && pwd)
 app=$out/jetdiff.app
 
 rm -rf "$app"
