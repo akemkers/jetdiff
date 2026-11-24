@@ -16,6 +16,8 @@ pub struct Settings {
     pub unified: bool,
     pub side_panel_open: bool,
     pub walkthrough: Writer,
+    /// Shown at the right of the keymap bar.
+    pub version: &'static str,
 }
 
 impl Global for Settings {}
