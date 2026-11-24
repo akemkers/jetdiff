@@ -4,9 +4,9 @@ A fast diff viewer for macOS, with the diff from the JetBrains IDEs. Rendered on
 
 It shows a branch, Local changes, a commit or a file pair in Split, with the two sides next to each other and the diff divider between them, inline highlights, folding of unchanged lines and syntax colors. `v` switches to Unified, where deleted lines sit above the added ones in a single code view. The diff algorithm is ported from IntelliJ and gives the same result. Everything is read-only; nothing can be edited.
 
-![Local changes with the file tree and commits](docs/screenshots/local-changes.png)
+![A branch in Split, with the file tree and commits](docs/screenshots/diff.png)
 
-![A file pair in Split](docs/screenshots/file-pair.png)
+![The walkthrough of a branch](docs/screenshots/walkthrough.png)
 
 ## Installing
 
