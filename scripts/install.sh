@@ -60,10 +60,23 @@ install_command() {
 # stdin is this script under curl | sh, so claude gets none. $claude is split on purpose.
 run_claude() { $claude "$@" </dev/null; }
 
+# The installed plugin's version, empty if it isn't installed. JavaScript for Automation reads
+# the JSON, since every Mac has it and not every Mac has jq.
+plugin_version() {
+  json=$(run_claude plugin list --json 2>/dev/null) || return 0
+  osascript -l JavaScript -e 'function run(argv) {
+    const plugin = JSON.parse(argv[0]).find((p) => p.id === "jetdiff@jetdiff")
+    return plugin ? plugin.version : ""
+  }' "$json" 2>/dev/null || true
+}
+
+# Compares with the release, not with what this run did, so a plugin that failed to update
+# last time is updated now.
 install_plugin() {
-  if ! run_claude plugin list --json 2>/dev/null | grep -q '"jetdiff@jetdiff"'; then
+  plugin=$(plugin_version)
+  if [ -z "$plugin" ]; then
     run_claude plugin marketplace add akemkers/jetdiff && run_claude plugin install jetdiff@jetdiff
-  elif [ "$updated" = yes ]; then
+  elif newer "$version" "$plugin"; then
     run_claude plugin marketplace update jetdiff && run_claude plugin update jetdiff@jetdiff
   fi
 }
@@ -87,11 +100,9 @@ case $tag in
 esac
 version=${tag#v}
 
-updated=no
 if [ -z "$installed" ] || newer "$version" "$installed" ||
   { [ -n "${JETDIFF_VERSION:-}" ] && [ "$version" != "$installed" ]; }; then
   install_app
-  updated=yes
   say "Installed jetdiff $version"
 else
   say "jetdiff $installed is installed and up to date"
