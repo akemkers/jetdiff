@@ -14,15 +14,29 @@ It shows a branch, Local changes, a commit, a pull request or a file pair, side 
 
 ## Installing
 
-Requires [rustup](https://rustup.rs). It installs the right Rust version by itself.
+On macOS with Apple Silicon:
 
 ```
-git clone git@github.com:akemkers/jetdiff.git
+curl -fsSL https://github.com/akemkers/jetdiff/releases/latest/download/install.sh | sh
+```
+
+This puts `jetdiff` in `~/.local/bin` and the app in `~/.local/share/jetdiff`, without admin rights. If [Claude Code](https://claude.com/claude-code) is installed, the [plugin](#claude-code-plugin) is installed too. To update, run the same command again. It only changes something when a newer version is out.
+
+If `claude` needs arguments of its own, give the whole command in `JETDIFF_CLAUDE`. `JETDIFF_CLAUDE=no` leaves the plugin out.
+
+```
+curl -fsSL https://github.com/akemkers/jetdiff/releases/latest/download/install.sh | JETDIFF_CLAUDE="claude --team x" sh
+```
+
+### Building it yourself
+
+On other machines, or for the newest code on `main`. Requires [rustup](https://rustup.rs), which installs the Rust version in `rust-toolchain.toml` by itself:
+
+```
+git clone https://github.com/akemkers/jetdiff.git
 cd jetdiff
 cargo install --locked --path crates/jetdiff
 ```
-
-This puts `jetdiff` on your PATH. To update, run `git pull` and the same `cargo install` again.
 
 On a server without a screen, install only the terminal view:
 
@@ -112,13 +126,11 @@ A small, vim-inspired keymap for reading. The bar at the bottom shows the most i
 
 ## Claude Code plugin
 
-`claude-plugin/` adds `/jetdiff` to Claude Code. It opens jetdiff for the repo the session is in, and takes the same arguments as `jetdiff`. It also works while Claude is busy. Install it at the prompt of a Claude Code session:
+`claude-plugin/` adds `/jetdiff` to Claude Code. It opens jetdiff for the repo the session is in, and takes the same arguments as `jetdiff`. It also works while Claude is busy. The install script installs it. Without the script, install it at the prompt of a Claude Code session:
 
 ```
 /plugin install jetdiff --marketplace akemkers/jetdiff
 ```
-
-The repo is private, so this needs read access on GitHub and an SSH key or `gh auth setup-git` for github.com.
 
 ## Development
 
