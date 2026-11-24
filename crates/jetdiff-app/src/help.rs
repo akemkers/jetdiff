@@ -7,7 +7,7 @@ pub const DIFF_KEYMAP_BAR: [Keys; 6] = [
     (&["Tab", "⇧Tab"], "file"),
     (&["j", "k"], "line"),
     (&["n", "p"], "hunk"),
-    (&["w"], "walkthrough"),
+    WALKTHROUGH,
     (&["?"], "all keys"),
     (&["q"], "quit"),
 ];
@@ -22,6 +22,10 @@ pub const WALKTHROUGH_KEYMAP_BAR: [Keys; 7] = [
     (&["w"], "diff"),
     (&["q"], "quit"),
 ];
+
+/// The walkthrough is only in the window so far, so the terminal leaves these out.
+pub const WALKTHROUGH: Keys = (&["w"], "walkthrough");
+pub const WALKTHROUGH_HELP: Keys = (&["w"], "walkthrough, in steps");
 
 /// Zoom is on the secondary modifier, which is Cmd only on macOS.
 pub const ZOOM: Keys = if cfg!(target_os = "macos") {
@@ -48,7 +52,7 @@ pub const ALL: [(&str, &[Keys]); 4] = [
         "Files",
         &[
             (&["Tab", "⇧Tab"], "next/previous file"),
-            (&["w"], "walkthrough, in steps"),
+            WALKTHROUGH_HELP,
             (&["J", "K"], "next/previous file"),
             (&["N", "P"], "next/previous commit"),
             (&["⌃hjkl"], "move focus"),

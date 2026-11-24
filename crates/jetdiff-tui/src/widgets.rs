@@ -1,7 +1,7 @@
 //! The path, the keymap bar, the notification, the help and the rollback dialog.
 
 use jetdiff_app::Notification;
-use jetdiff_app::help::{ALL, DIFF_KEYMAP_BAR, ZOOM};
+use jetdiff_app::help::{ALL, DIFF_KEYMAP_BAR, WALKTHROUGH, WALKTHROUGH_HELP, ZOOM};
 use jetdiff_viewmodel::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -39,7 +39,7 @@ pub fn keymap_bar(area: Rect, theme: &Theme, buf: &mut Buffer) {
     let keys = Style::default().fg(color(theme.editor_fg));
     let what = Style::default().fg(color(theme.line_number));
     let mut spans = vec![Span::raw(" ")];
-    for (labels, description) in DIFF_KEYMAP_BAR {
+    for (labels, description) in DIFF_KEYMAP_BAR.iter().filter(|&&row| row != WALKTHROUGH) {
         spans.push(Span::styled(labels.join(" "), keys));
         spans.push(Span::styled(format!(" {description}   "), what));
     }
@@ -89,7 +89,10 @@ pub fn help(area: Rect, theme: &Theme, buf: &mut Buffer) {
     for (section, rows) in ALL {
         lines.push(Line::styled(section, title));
         // A terminal can't zoom
-        for (labels, description) in rows.iter().filter(|&&row| row != ZOOM) {
+        let rows = rows
+            .iter()
+            .filter(|&&row| row != ZOOM && row != WALKTHROUGH_HELP);
+        for (labels, description) in rows {
             let key = labels.join(" ");
             lines.push(Line::from(vec![
                 Span::styled(format!("{key:<KEY_COLUMN$}"), keys),
@@ -128,5 +131,16 @@ mod tests {
         let text: String = buf.content().iter().map(|cell| cell.symbol()).collect();
         assert!(text.contains("split/unified"));
         assert!(!text.contains("zoom"));
+    }
+
+    #[test]
+    fn leaves_out_the_walkthrough_since_the_terminal_has_none() {
+        let area = Rect::new(0, 0, 120, 40);
+        let mut buf = Buffer::empty(area);
+        keymap_bar(Rect::new(0, 0, 120, 1), &Theme::built_in(), &mut buf);
+        help(area, &Theme::built_in(), &mut buf);
+        let text: String = buf.content().iter().map(|cell| cell.symbol()).collect();
+        assert!(text.contains("all keys"));
+        assert!(!text.contains("walkthrough"));
     }
 }
