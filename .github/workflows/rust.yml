@@ -1,13 +1,13 @@
 name: Rust
 
-# Changes to documentation alone don't run CI
+# Every PR runs CI, since build is a required check and a PR without it can't be merged.
+# On main, changes to documentation alone don't.
 on:
   push:
     branches: [ "main" ]
     paths-ignore: [ "**.md", "docs/**", "claude-plugin/**", ".claude-plugin/**" ]
   pull_request:
     branches: [ "main" ]
-    paths-ignore: [ "**.md", "docs/**", "claude-plugin/**", ".claude-plugin/**" ]
 
 # A new push to a PR cancels its run in progress. Runs on main always finish.
 concurrency:
