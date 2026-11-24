@@ -1,32 +1,36 @@
 # jetdiff
 
-A fast diff viewer for macOS, with the diff from the JetBrains IDEs. Rendered on the GPU with [GPUI](https://www.gpui.rs), or in the terminal over SSH.
+A fast, read-only diff viewer for macOS, with the diff from the JetBrains IDEs. It runs in its own window, or in the terminal.
 
-It shows a branch, Local changes, a commit or a file pair in Split, with the two sides next to each other and the diff divider between them, inline highlights, folding of unchanged lines and syntax colors. `v` switches to Unified, where deleted lines sit above the added ones in a single code view. The diff algorithm is ported from IntelliJ and gives the same result. Everything is read-only; nothing can be edited.
+It shows a branch, Local changes, a commit, a pull request or a file pair, side by side in Split or as one code view in Unified. With `w`, Claude writes a walkthrough that explains the changes step by step.
 
 ![A branch in Split, with the file tree and commits](docs/screenshots/diff.png)
 
 ![The walkthrough of a branch](docs/screenshots/walkthrough.png)
 
+`jetdiff --tui` shows the same diff in the terminal, with the same keys.
+
+![The same branch in the terminal](docs/screenshots/tui.png)
+
 ## Installing
 
+Requires [rustup](https://rustup.rs). It installs the right Rust version by itself.
+
 ```
+git clone git@github.com:akemkers/jetdiff.git
+cd jetdiff
 cargo install --locked --path crates/jetdiff
 ```
 
-This puts `jetdiff` on your PATH. `--locked` builds with the versions in `Cargo.lock`, since newer ones may not compile. rustup installs the Rust version pinned in `rust-toolchain.toml` by itself.
+This puts `jetdiff` on your PATH. To update, run `git pull` and the same `cargo install` again.
 
-The `gui` and `tui` features are both on by default. On a server without a screen, the terminal view is enough and GPUI isn't needed:
+On a server without a screen, install only the terminal view:
 
 ```
 cargo install --locked --path crates/jetdiff --no-default-features --features tui
 ```
 
-## Setup
-
-The terminal view shows file icons using characters from [Nerd Fonts](https://www.nerdfonts.com), so the terminal must use a Nerd Font with file icons, for example Hack Nerd Font Mono. Pick the Mono variant, otherwise the icons are too wide. Over SSH, it's the font in the terminal on your own machine that counts.
-
-Without such a font, the icons show as empty squares. Turn them off with `icons = false` under `[terminal]` in the [settings](#settings).
+The terminal view shows file icons from [Nerd Fonts](https://www.nerdfonts.com), so the terminal needs a Nerd Font, for example Hack Nerd Font Mono. Pick the Mono variant, otherwise the icons are too wide. Without one, the icons show as empty squares. Turn them off with `icons = false` under `[terminal]` in the [settings](#settings).
 
 ## Usage
 
@@ -34,35 +38,40 @@ Without such a font, the icons show as empty squares. Turn them off with `icons 
 jetdiff [--tui] [<folder> | <commit> | <pr-link> | <left-side> <right-side>]
 ```
 
-- No arguments: Branch, everything on the current branch that is not on its base branch, committed or not and including new files git doesn't know about. Against the merge base, as in a pull request. The base branch is `origin/HEAD`, else `main`, else `master`
-- `<folder>`: as without arguments, but for the repo or worktree the folder is in
+- No arguments: everything on the current branch that isn't on its base branch, committed or not, including new files. Compared with the merge base, as in a pull request. The base branch is `origin/HEAD`, else `main`, else `master`
+- `<folder>`: the same, for the repo or worktree the folder is in
 - `<commit>`: the commit against its parent, e.g. `HEAD~2`
-- `<pr-link>`: a pull request on GitHub, e.g. `https://github.com/owner/repo/pull/12`, as it is shown there. Must be run in the repo the PR belongs to, and fetches it from `origin`. Requires `gh`
-- `<left-side> <right-side>`: a file pair, with the file on Left first
-- `--tui`: shows the diff in the terminal instead of in a window. Built without `gui`, the terminal is the default
+- `<pr-link>`: a pull request on GitHub, e.g. `https://github.com/owner/repo/pull/12`. Run it in the repo the PR belongs to. Requires `gh`
+- `<left-side> <right-side>`: two files, the old one first
+- `--tui`: show the diff in the terminal instead of in a window
 
-The title of the window, or the terminal, starts with the repo's folder name, so several windows can be told apart.
+The side panel on the left has the changed files. For a branch, the commit list is under them: the whole branch, Local changes and each commit on the branch. Click a row to see it. `b` hides and shows the panel.
 
-On the left is a file tree of changed files. Added and deleted files are always shown Unified; binary files are not shown. Drag the edge to change the width, and double-click to go back.
+The diff updates by itself when files change on disk or you commit, rebase or switch branch. `r` reloads by hand.
 
-Without arguments or with a folder, the commit list sits under the tree. Branch is the top row, with the branch name, and jetdiff starts there. Under it are its slices: Local changes, everything not yet committed against HEAD, and the branch's own commits, at most 50. Click a row to see it. On a branch without commits of its own, such as `main` with everything pushed, Branch is the same as Local changes, so only Local changes is shown. Click «Files» or «Commits» to open or close the section.
+Syntax colors for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, Python, Lua, JSON, YAML, TOML, XML, Markdown, SQL and Dockerfile.
 
-Branch and Local changes are read again automatically when files change on disk, and so is the commit list when HEAD moves, after a commit, amend, reset or rebase. This also works in a worktree. The selected file is kept, and so are the cursor and scroll.
+## Walkthrough
 
-`r` reads the source again by hand, in every source except a pull request so far. The selected file, cursor and scroll are kept the same way, and it also works when the watcher couldn't start. A file pair shows edits made since startup.
+`w` asks Claude to group the changes into steps in reading order and explain each one, with notes on decisions, divergences and what isn't tested. `w` again goes back to the diff. Only in the window, not the terminal view.
 
-Unchanged lines are folded, with 4 lines of context, in Split and Unified. Click a fold to open it.
+Requires [Claude Code](https://claude.com/claude-code), with `claude` on your PATH and logged in. The diff is sent to Claude, without tools or access to anything else. A large diff can take a few minutes. A finished walkthrough is saved in `~/.cache/jetdiff/walkthroughs`, so the same diff opens at once the next time.
 
-Syntax colors for Kotlin, Java, TypeScript/TSX/JavaScript, Rust, Go, Python, Lua, JSON, YAML, TOML, XML, Markdown, SQL and Dockerfile. The language is picked from the file extension, or the file name for `Dockerfile` and `Containerfile`.
+The model, the language and the `claude` command are in the [settings](#settings).
 
-### Settings
+## Settings
 
-Read from `$XDG_CONFIG_HOME/jetdiff/config.toml`, or `~/.config/jetdiff/config.toml`. The file is created the first time jetdiff starts, with the defaults:
+In `~/.config/jetdiff/config.toml`, or `$XDG_CONFIG_HOME/jetdiff/config.toml`. The file is created the first time jetdiff starts, with the defaults:
 
 ```toml
 font_size = 14             # between 8 and 40, Cmd-0 goes back to this
 fold_unchanged = true      # false shows the whole file
 diff_mode = "split"        # or "unified", v switches while the app is running
+
+[walkthrough]
+command = ["claude"]       # with any arguments it needs first, like ["claude", "--team", "x"]
+model = "opus"             # opus, sonnet or haiku. Haiku is faster and costs less
+language = "English"       # the language the walkthrough is written in
 
 [side_panel]
 open = false               # true shows the file tree and the commit list at startup
@@ -72,36 +81,38 @@ icons = true               # file icons in the terminal view, requires a Nerd Fo
 smooth_scroll = true       # animated jumps like n, d and G in the terminal view
 ```
 
-### Keys
+## Keys
 
-A small, vim-inspired keymap for reading. The cursor is a whole line, with no column. The keymap bar at the bottom shows the most important keys, and `?` shows all of them.
+A small, vim-inspired keymap for reading. The bar at the bottom shows the most important keys, and `?` shows all of them.
 
 | Key                                 | Does                                                                                                 |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `J` `K`, Tab Shift+Tab              | Next and previous file in the tree                                                                   |
+| `J` `K`, Tab Shift+Tab              | Next and previous file. In the walkthrough: next and previous step                                   |
 | `N` `P`                             | Next and previous row in the commit list                                                             |
-| Ctrl+h Ctrl+j Ctrl+k Ctrl+l         | Move focus between the diff, the tree and the commit list. There `j` `k` and the arrows move, and Enter or `l` selects |
+| Ctrl+h Ctrl+j Ctrl+k Ctrl+l         | Move focus between the diff, the file tree and the commit list. There `j` `k` move, and Enter or `l` selects |
 | `b`                                 | Hide or show the side panel                                                                          |
-| `j` `k`, arrow up and down          | Move the cursor. Skips closed folds                                                                  |
-| `h` `l`, arrow left and right       | Scroll sideways 4 characters                                                                         |
-| `0` `$`                             | Scroll to the start of the line and to the end of the cursor's line                                  |
+| `j` `k`, arrow up and down          | Move the cursor                                                                                      |
+| `h` `l`, arrow left and right       | Scroll sideways                                                                                      |
+| `0` `$`                             | Scroll to the start and the end of the line                                                          |
 | `gg` `G`                            | First and last line                                                                                  |
 | `d` `u`, Ctrl+d Ctrl+u              | Half a page down and up                                                                              |
-| `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Next and previous hunk                                                                               |
-| `H` `L`                             | To Left and Right. Split only                                                                        |
-| `o`                                 | Open the fold at the cursor                                                                          |
-| `f`                                 | Open all folds, or close all if none are closed, for all files                                       |
-| `v`                                 | Switch between Split and Unified for all files. The cursor stays where it is                         |
-| `y`                                 | Copy the cursor location (`file:line`). The line is in the newest version, also from Left            |
-| `z`                                 | Roll back the hunk at the cursor to Left, after Enter. Local changes only                            |
-| `r`                                 | Read the source again. Also in the walkthrough, where the walkthrough stays as it is                 |
-| Cmd/Ctrl+Plus, Minus, 0             | Zoom in, out and back to 14pt. The tree follows                                                      |
+| `n` `p`, Ctrl+n Ctrl+p, F7 Shift+F7 | Next and previous change                                                                             |
+| `H` `L`                             | To the left and the right side. Split only                                                           |
+| `o`                                 | Open the fold at the cursor. Clicking a fold also opens it                                           |
+| `f`                                 | Open all folds, or close them all                                                                    |
+| `v`                                 | Switch between Split and Unified                                                                     |
+| `w`                                 | Show the walkthrough, or go back to the diff                                                         |
+| Enter                               | In the walkthrough: open the change in the diff                                                      |
+| `y`                                 | Copy the cursor location as `file:line`                                                              |
+| `z`                                 | Roll back the change at the cursor, after Enter. Local changes only                                  |
+| `r`                                 | Reload                                                                                               |
+| Cmd/Ctrl+Plus, Minus, 0             | Zoom in, out and back                                                                                |
 | `?`                                 | Show or hide all the keys. Esc also closes                                                           |
 | `q`, Cmd/Ctrl+Q, Cmd/Ctrl+W         | Quit                                                                                                 |
 
-## Claude Code
+## Claude Code plugin
 
-`claude-plugin/` is a Claude Code plugin that adds `/jetdiff`. It opens jetdiff for the repo the session is in, and takes the same arguments as `jetdiff`. It also runs while Claude is working. Install it at the prompt of a Claude Code session:
+`claude-plugin/` adds `/jetdiff` to Claude Code. It opens jetdiff for the repo the session is in, and takes the same arguments as `jetdiff`. It also works while Claude is busy. Install it at the prompt of a Claude Code session:
 
 ```
 /plugin install jetdiff --marketplace akemkers/jetdiff
@@ -111,64 +122,6 @@ The repo is private, so this needs read access on GitHub and an SSH key or `gh a
 
 ## Development
 
-Requirements:
-
-- Rust: the version in `rust-toolchain.toml`, which rustup installs by itself (edition 2024)
-- For the golden generator: JDK 25 and Gradle 9.x
-
-```
-cargo run --release -p jetdiff -- examples/kotlin/a.kt examples/kotlin/b.kt
-cargo test
-```
-
-`examples/` has a file pair per language to try the viewer on.
-
-GPUI is built with `runtime_shaders`, so the Metal shaders are compiled at startup and Xcode's Metal Toolchain isn't needed.
-
-How the code is organized is in [CODING_STANDARDS.md](CODING_STANDARDS.md). The domain language is in [GLOSSARY.md](GLOSSARY.md).
-
-The code is split into crates with one responsibility each. Only `jetdiff-ui` and the binary know GPUI, and only `jetdiff-tui` knows the terminal. All the logic for scroll, folding and geometry is in `jetdiff-viewmodel`, and the state around the diff (the repo source, tree and commits) is in `jetdiff-app`. Both are tested without a window.
-
-```mermaid
-graph TD
-    jetdiff --> ui[jetdiff-ui]
-    jetdiff --> tui[jetdiff-tui]
-    tui --> app
-    tui --> view
-    jetdiff --> view[jetdiff-viewmodel]
-    jetdiff --> git[jetdiff-git]
-    jetdiff --> files[jetdiff-files]
-    ui --> app[jetdiff-app]
-    ui --> view
-    ui --> git
-    ui --> files
-    ui --> core[jetdiff-core]
-    app --> view
-    app --> git
-    app --> files
-    view --> core
-    view --> syntax[jetdiff-syntax]
-    git --> files
-```
-
-| Crate                                           | Responsibility                                                    |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-| [`jetdiff`](crates/jetdiff)                     | The binary: arguments, config and window                          |
-| [`jetdiff-ui`](crates/jetdiff-ui)               | The GPUI view                                                     |
-| [`jetdiff-tui`](crates/jetdiff-tui)             | The terminal view                                                 |
-| [`jetdiff-app`](crates/jetdiff-app)             | The state around the diff, without a GUI: repo source, tree, commits |
-| [`jetdiff-viewmodel`](crates/jetdiff-viewmodel) | View model without a GUI: scroll, folding, cursor, keys           |
-| [`jetdiff-core`](crates/jetdiff-core)           | The diff algorithm, ported from IntelliJ                          |
-| [`jetdiff-syntax`](crates/jetdiff-syntax)       | Syntax colors with tree-sitter                                    |
-| [`jetdiff-git`](crates/jetdiff-git)             | Changed files, file content and commits from `git`                |
-| [`jetdiff-files`](crates/jetdiff-files)         | Changed files and the tree they are shown in                      |
-
-Other folders:
-
-- `fixtures/`: test cases for the diff algorithm, with expected results from IntelliJ. See [`fixtures/README.md`](fixtures/README.md)
-- `tools/golden/`: the Kotlin generator that produces the expected results. See [`tools/golden/README.md`](tools/golden/README.md)
-- `docs/`: the solution overview and research on the IntelliJ code
-
-Commit messages are in English, in the imperative, e.g. "Add b to hide the side panel".
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 The font is JetBrains Mono (SIL Open Font License). The icons are from intellij-community (Apache 2.0), intellij-rust (MIT) and Seti UI (MIT).
