@@ -62,10 +62,17 @@ Commit messages are in English, in the imperative, e.g. "Add b to hide the side 
 
 ## Releasing
 
-Set the same version in `crates/jetdiff/Cargo.toml` and `claude-plugin/.claude-plugin/plugin.json`, run `cargo build` so `Cargo.lock` follows, and commit. Then push a tag:
+Set the same version in `crates/jetdiff/Cargo.toml` and `claude-plugin/.claude-plugin/plugin.json`, run `cargo build` so `Cargo.lock` follows, and commit. Then push an annotated tag. Its message is the release notes, in Markdown:
 
 ```
-git tag v0.2.0 && git push origin v0.2.0
+git tag -a v0.2.0 -m "The walkthrough in the terminal view
+
+- w shows the walkthrough in --tui too"
+git push origin v0.2.0
 ```
 
-`.github/workflows/release.yml` builds `jetdiff.app` for Apple Silicon with `scripts/bundle.sh` and puts it in a GitHub release, together with `scripts/install.sh`. The workflow stops if the tag and the two versions don't match.
+Write the notes for users: what is new or different for them, not how the code changed. GitHub's list of the merged PRs is added under them.
+
+`.github/workflows/release.yml` builds `jetdiff.app` for Apple Silicon with the scripts in `scripts/release/` and puts it in a GitHub release, together with `scripts/install.sh`. The workflow stops if the tag has no message, or if the tag and the two versions don't match.
+
+To change the notes afterwards: `gh release edit v0.2.0 --notes-file notes.md`.
