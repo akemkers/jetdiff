@@ -25,6 +25,7 @@ graph TD
     tui --> app
     tui --> view
     jetdiff --> view[jetdiff-viewmodel]
+    jetdiff --> app
     jetdiff --> git[jetdiff-git]
     jetdiff --> files[jetdiff-files]
     ui --> app[jetdiff-app]
@@ -42,10 +43,10 @@ graph TD
 
 | Crate                                           | Responsibility                                                    |
 | ----------------------------------------------- | ----------------------------------------------------------------- |
-| [`jetdiff`](crates/jetdiff)                     | The binary: arguments, config and window                          |
+| [`jetdiff`](crates/jetdiff)                     | The binary: arguments and window                                  |
 | [`jetdiff-ui`](crates/jetdiff-ui)               | The GPUI view                                                     |
 | [`jetdiff-tui`](crates/jetdiff-tui)             | The terminal view                                                 |
-| [`jetdiff-app`](crates/jetdiff-app)             | The state around the diff, without a GUI: repo source, tree, commits |
+| [`jetdiff-app`](crates/jetdiff-app)             | The state around the diff, without a GUI: repo source, tree, commits, config |
 | [`jetdiff-viewmodel`](crates/jetdiff-viewmodel) | View model without a GUI: scroll, folding, cursor, keys           |
 | [`jetdiff-core`](crates/jetdiff-core)           | The diff algorithm, ported from IntelliJ                          |
 | [`jetdiff-syntax`](crates/jetdiff-syntax)       | Syntax colors with tree-sitter                                    |

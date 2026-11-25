@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod commits;
+pub mod config;
 pub mod content;
 pub mod file_pair;
 pub mod files;
@@ -16,6 +17,7 @@ pub mod watcher;
 
 pub use actions::{RollbackRequest, cursor_location, rollback_request};
 pub use commits::{CommitRow, Commits, LOCAL_CHANGES, Selected, age};
+pub use config::Config;
 pub use content::{build_diff, empty_diff};
 pub use file_pair::FilePair;
 pub use files::{Files, count_label, file_name};

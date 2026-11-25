@@ -12,6 +12,7 @@ mod file_pair_view;
 mod file_tree;
 mod help;
 mod icons;
+mod key_bindings;
 mod keystroke;
 mod list;
 mod notification_slot_view;
@@ -27,6 +28,7 @@ pub use file_diff::{ResetZoom, ToggleDiffMode, ZoomIn, ZoomOut};
 pub use file_pair_view::FilePairView;
 pub use help::{HideHelp, ToggleHelp};
 pub use icons::Assets;
+pub use key_bindings::{KEY_CONTEXT, Quit, key_bindings};
 pub use repo_view::{
     FocusDown, FocusLeft, FocusRight, FocusUp, NextCommit, NextFile, PrevCommit, PrevFile,
     RepoView, SourceReload, ToggleSidePanel, ToggleWalkthrough,

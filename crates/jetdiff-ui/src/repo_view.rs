@@ -21,6 +21,7 @@ use crate::confirm_dialog::confirm_dialog;
 use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp, keymap_bar};
+use crate::key_bindings::KEY_CONTEXT;
 use crate::notification_slot_view::NotificationSlotView;
 use crate::settings::Settings;
 use crate::side_panel_size::{SectionHeight, SidePanelWidth};
@@ -297,7 +298,7 @@ impl RepoView {
     }
 
     fn focus_right(&mut self, _: &FocusRight, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.diff.focus_handle(cx));
+        window.focus(&self.focus_handle(cx));
     }
 
     fn focus_down(&mut self, _: &FocusDown, window: &mut Window, cx: &mut Context<Self>) {
@@ -317,9 +318,14 @@ impl RepoView {
     }
 }
 
+/// The walkthrough when it is shown, since the diff isn't drawn then. Focus on what isn't drawn
+/// takes the keys away from the view.
 impl Focusable for RepoView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.diff.focus_handle(cx)
+        match self.walkthrough_view() {
+            Some(walkthrough) => walkthrough.focus_handle(cx),
+            None => self.diff.focus_handle(cx),
+        }
     }
 }
 
@@ -362,6 +368,7 @@ impl Render for RepoView {
                     .child(keymap_bar),
             );
         div()
+            .key_context(KEY_CONTEXT)
             .relative()
             .size_full()
             .flex()

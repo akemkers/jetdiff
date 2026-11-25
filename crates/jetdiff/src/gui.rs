@@ -1,22 +1,13 @@
 //! The GPUI window.
 
 use gpui::{
-    App, AppContext, Application, Bounds, Context, Focusable, KeyBinding, Render, WindowBounds,
-    WindowOptions, actions, px, size,
+    App, AppContext, Application, Bounds, Context, Focusable, Render, WindowBounds, WindowOptions,
+    px, size,
 };
-use jetdiff_app::walkthrough::Writer;
-use jetdiff_app::{AppCommand, BINDINGS};
-use jetdiff_ui::{
-    Assets, FilePairView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextCommit,
-    NextFile, PrevCommit, PrevFile, RepoView, ResetZoom, Settings, SourceReload, ToggleDiffMode,
-    ToggleHelp, ToggleSidePanel, ToggleWalkthrough, UiTheme, ZoomIn, ZoomOut, load_font,
-};
-use jetdiff_viewmodel::Theme;
+use jetdiff_app::Config;
+use jetdiff_ui::{Assets, FilePairView, Quit, RepoView, Settings, key_bindings, load_font};
 
 use crate::Content;
-use crate::config::Config;
-
-actions!(jetdiff, [Quit]);
 
 pub fn run(content: Content, title: String, config: Config) {
     Application::new()
@@ -24,19 +15,7 @@ pub fn run(content: Content, title: String, config: Config) {
         .run(move |cx: &mut App| {
             bind_keys(cx);
             load_font(cx);
-            cx.set_global(Settings {
-                theme: UiTheme::new(&Theme::built_in()),
-                font_size: config.font_size,
-                fold_unchanged: config.fold_unchanged,
-                unified: config.unified,
-                side_panel_open: config.side_panel.open,
-                walkthrough: Writer {
-                    command: config.walkthrough.command.clone(),
-                    model: config.walkthrough.model.clone(),
-                    language: config.walkthrough.language.clone(),
-                },
-                version: env!("CARGO_PKG_VERSION"),
-            });
+            cx.set_global(Settings::new(&config, env!("CARGO_PKG_VERSION")));
             match content {
                 Content::FilePair(file_pair, diff) => {
                     open(cx, title, move |cx| FilePairView::new(file_pair, *diff, cx))
@@ -51,32 +30,8 @@ pub fn run(content: Content, title: String, config: Config) {
 }
 
 fn bind_keys(cx: &mut App) {
-    // The rest of the keys go through the vim parser in `FileDiffView`
-    cx.bind_keys(BINDINGS.iter().map(|&(keys, cmd)| key_binding(keys, cmd)));
+    cx.bind_keys(key_bindings());
     cx.on_action(|_: &Quit, cx| cx.quit());
-}
-
-fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
-    match cmd {
-        AppCommand::ZoomIn => KeyBinding::new(keys, ZoomIn, None),
-        AppCommand::ZoomOut => KeyBinding::new(keys, ZoomOut, None),
-        AppCommand::ResetZoom => KeyBinding::new(keys, ResetZoom, None),
-        AppCommand::FocusLeft => KeyBinding::new(keys, FocusLeft, None),
-        AppCommand::FocusDown => KeyBinding::new(keys, FocusDown, None),
-        AppCommand::FocusUp => KeyBinding::new(keys, FocusUp, None),
-        AppCommand::FocusRight => KeyBinding::new(keys, FocusRight, None),
-        AppCommand::ToggleSidePanel => KeyBinding::new(keys, ToggleSidePanel, None),
-        AppCommand::ToggleDiffMode => KeyBinding::new(keys, ToggleDiffMode, None),
-        AppCommand::NextFile => KeyBinding::new(keys, NextFile, None),
-        AppCommand::PrevFile => KeyBinding::new(keys, PrevFile, None),
-        AppCommand::NextCommit => KeyBinding::new(keys, NextCommit, None),
-        AppCommand::ToggleWalkthrough => KeyBinding::new(keys, ToggleWalkthrough, None),
-        AppCommand::PrevCommit => KeyBinding::new(keys, PrevCommit, None),
-        AppCommand::SourceReload => KeyBinding::new(keys, SourceReload, None),
-        AppCommand::ToggleHelp => KeyBinding::new(keys, ToggleHelp, None),
-        AppCommand::HideHelp => KeyBinding::new(keys, HideHelp, None),
-        AppCommand::Quit => KeyBinding::new(keys, Quit, None),
-    }
 }
 
 fn open<V: Render + Focusable>(

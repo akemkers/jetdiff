@@ -8,6 +8,7 @@ license.workspace = true
 notify = "8"
 serde.workspace = true
 serde_json.workspace = true
+toml = "1.1.6"
 jetdiff-files = { path = "../jetdiff-files" }
 jetdiff-git = { path = "../jetdiff-git" }
 jetdiff-viewmodel = { path = "../jetdiff-viewmodel" }
