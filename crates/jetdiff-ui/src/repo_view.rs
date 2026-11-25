@@ -21,6 +21,7 @@ use crate::confirm_dialog::confirm_dialog;
 use crate::file_diff::{FileDiffView, ResetZoom, Rollback, ZoomIn, ZoomOut, Zoomed};
 use crate::file_tree::{FileTree, Selection};
 use crate::help::{HideHelp, ToggleHelp, keymap_bar};
+use crate::key_bindings::KEY_CONTEXT;
 use crate::notification_slot_view::NotificationSlotView;
 use crate::settings::Settings;
 use crate::side_panel_size::{SectionHeight, SidePanelWidth};
@@ -362,6 +363,7 @@ impl Render for RepoView {
                     .child(keymap_bar),
             );
         div()
+            .key_context(KEY_CONTEXT)
             .relative()
             .size_full()
             .flex()

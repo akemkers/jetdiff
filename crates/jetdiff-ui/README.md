@@ -13,12 +13,14 @@ The modules don't know each other. Shared state, like the selected file, lives i
 Two views are public:
 
 ```rust
-use jetdiff_ui::{Assets, FilePairView, RepoView, Settings, load_font};
+use jetdiff_ui::{Assets, FilePairView, Quit, RepoView, Settings, key_bindings, load_font};
 
 let config = jetdiff_app::config::load()?;
 Application::new().with_assets(Assets).run(move |cx| {
     load_font(cx);
     cx.set_global(Settings::new(&config, env!("CARGO_PKG_VERSION")));
+    cx.bind_keys(key_bindings());
+    cx.on_action(|_: &Quit, cx| cx.quit());
     // A File pair:
     cx.new(|cx| FilePairView::new(file_pair, diff, cx));
     // A repo source, with the tree and commits:
@@ -28,7 +30,7 @@ Application::new().with_assets(Assets).run(move |cx| {
 
 `Settings` is a GPUI global that all the views read. `font_size` is where zoom starts, `fold_unchanged` closes the folds in each file that is loaded, and `unified` is the diff mode at startup.
 
-The keys go through `KeyParser` in `jetdiff-viewmodel`. Actions like zoom, moving focus and source reload (`ZoomIn`, `ToggleDiffMode`, `FocusLeft`, `ToggleSidePanel`, `SourceReload` etc.) are exported, and whoever makes the window binds them to keys.
+The keys go through `KeyParser` in `jetdiff-viewmodel`. The keys outside the diff, like zoom, moving focus and source reload, are actions (`ZoomIn`, `FocusLeft`, `SourceReload` etc.). `key_bindings` binds them under `KEY_CONTEXT`, which both views set, so they only apply when the focus is inside the view. The views don't handle `Quit`: the standalone app quits, and an app that embeds the view can close it instead.
 
 ```mermaid
 graph TD

@@ -5,6 +5,7 @@ use jetdiff_app::FilePair;
 use jetdiff_viewmodel::FileDiff;
 
 use crate::file_diff::FileDiffView;
+use crate::key_bindings::KEY_CONTEXT;
 use crate::notification_slot_view::NotificationSlotView;
 use crate::repo_view::SourceReload;
 
@@ -49,6 +50,7 @@ impl Focusable for FilePairView {
 impl Render for FilePairView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
+            .key_context(KEY_CONTEXT)
             .size_full()
             .on_action(cx.listener(Self::source_reload))
             .child(self.diff.clone())
