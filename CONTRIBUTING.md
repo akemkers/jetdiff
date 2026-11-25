@@ -25,6 +25,7 @@ graph TD
     tui --> app
     tui --> view
     jetdiff --> view[jetdiff-viewmodel]
+    jetdiff --> app
     jetdiff --> git[jetdiff-git]
     jetdiff --> files[jetdiff-files]
     ui --> app[jetdiff-app]

@@ -28,7 +28,7 @@ Application::new().with_assets(Assets).run(move |cx| {
 });
 ```
 
-`Settings` is a GPUI global that all the views read. `font_size` is where zoom starts, `fold_unchanged` closes the folds in each file that is loaded, and `unified` is the diff mode at startup.
+`Settings` is a GPUI global that all the views read. The version is shown at the right of the keymap bar, and it is the version of the app that shows the views. `font_size` is where zoom starts, `fold_unchanged` closes the folds in each file that is loaded, and `unified` is the diff mode at startup.
 
 The keys go through `KeyParser` in `jetdiff-viewmodel`. The keys outside the diff, like zoom, moving focus and source reload, are actions (`ZoomIn`, `FocusLeft`, `SourceReload` etc.). `key_bindings` binds them under `KEY_CONTEXT`, which both views set, so they only apply when the focus is inside the view. The views don't handle `Quit`: the standalone app quits, and an app that embeds the view can close it instead.
 

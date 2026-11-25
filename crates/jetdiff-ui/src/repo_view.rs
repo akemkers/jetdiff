@@ -298,7 +298,7 @@ impl RepoView {
     }
 
     fn focus_right(&mut self, _: &FocusRight, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.diff.focus_handle(cx));
+        window.focus(&self.focus_handle(cx));
     }
 
     fn focus_down(&mut self, _: &FocusDown, window: &mut Window, cx: &mut Context<Self>) {
@@ -318,9 +318,14 @@ impl RepoView {
     }
 }
 
+/// The walkthrough when it is shown, since the diff isn't drawn then. Focus on what isn't drawn
+/// takes the keys away from the view.
 impl Focusable for RepoView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.diff.focus_handle(cx)
+        match self.walkthrough_view() {
+            Some(walkthrough) => walkthrough.focus_handle(cx),
+            None => self.diff.focus_handle(cx),
+        }
     }
 }
 

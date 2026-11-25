@@ -25,7 +25,8 @@ pub struct Settings {
 impl Global for Settings {}
 
 impl Settings {
-    /// `version` is shown at the right of the keymap bar.
+    /// `version` is shown at the right of the keymap bar. It is the version of the app that shows
+    /// the views, which is jetdiff's own only in the jetdiff app.
     pub fn new(config: &Config, version: &'static str) -> Self {
         Self {
             theme: UiTheme::new(&Theme::built_in()),

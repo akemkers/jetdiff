@@ -20,13 +20,13 @@ actions!(jetdiff, [Quit]);
 pub fn key_bindings() -> Vec<KeyBinding> {
     BINDINGS
         .iter()
-        .map(|&(keys, cmd)| key_binding(keys, cmd))
+        .map(|&(keys, command)| key_binding(keys, command))
         .collect()
 }
 
-fn key_binding(keys: &str, cmd: AppCommand) -> KeyBinding {
+fn key_binding(keys: &str, command: AppCommand) -> KeyBinding {
     let context = Some(KEY_CONTEXT);
-    match cmd {
+    match command {
         AppCommand::ZoomIn => KeyBinding::new(keys, ZoomIn, context),
         AppCommand::ZoomOut => KeyBinding::new(keys, ZoomOut, context),
         AppCommand::ResetZoom => KeyBinding::new(keys, ResetZoom, context),
