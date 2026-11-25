@@ -4,9 +4,8 @@
 //! base branch, with Local changes and the branch's commits in the commit list. A folder does the
 //! same there. With one commit, it is shown against its parent.
 //! A PR link is fetched into the repo you are in. The settings
-//! are in the config file; see `config.rs`. `--tui` shows the diff in the terminal.
+//! are in the config file; see `config.rs` in `jetdiff-app`. `--tui` shows the diff in the terminal.
 
-mod config;
 #[cfg(feature = "gui")]
 mod gui;
 #[cfg(feature = "tui")]
@@ -22,7 +21,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use jetdiff_app::{Commits, FilePair, RepoSource};
+use jetdiff_app::{Commits, FilePair, RepoSource, config};
 use jetdiff_git::{PullRequest, Repo};
 use jetdiff_viewmodel::FileDiff;
 

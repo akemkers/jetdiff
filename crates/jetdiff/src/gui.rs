@@ -4,17 +4,14 @@ use gpui::{
     App, AppContext, Application, Bounds, Context, Focusable, KeyBinding, Render, WindowBounds,
     WindowOptions, actions, px, size,
 };
-use jetdiff_app::walkthrough::Writer;
-use jetdiff_app::{AppCommand, BINDINGS};
+use jetdiff_app::{AppCommand, BINDINGS, Config};
 use jetdiff_ui::{
     Assets, FilePairView, FocusDown, FocusLeft, FocusRight, FocusUp, HideHelp, NextCommit,
     NextFile, PrevCommit, PrevFile, RepoView, ResetZoom, Settings, SourceReload, ToggleDiffMode,
-    ToggleHelp, ToggleSidePanel, ToggleWalkthrough, UiTheme, ZoomIn, ZoomOut, load_font,
+    ToggleHelp, ToggleSidePanel, ToggleWalkthrough, ZoomIn, ZoomOut, load_font,
 };
-use jetdiff_viewmodel::Theme;
 
 use crate::Content;
-use crate::config::Config;
 
 actions!(jetdiff, [Quit]);
 
@@ -24,19 +21,7 @@ pub fn run(content: Content, title: String, config: Config) {
         .run(move |cx: &mut App| {
             bind_keys(cx);
             load_font(cx);
-            cx.set_global(Settings {
-                theme: UiTheme::new(&Theme::built_in()),
-                font_size: config.font_size,
-                fold_unchanged: config.fold_unchanged,
-                unified: config.unified,
-                side_panel_open: config.side_panel.open,
-                walkthrough: Writer {
-                    command: config.walkthrough.command.clone(),
-                    model: config.walkthrough.model.clone(),
-                    language: config.walkthrough.language.clone(),
-                },
-                version: env!("CARGO_PKG_VERSION"),
-            });
+            cx.set_global(Settings::new(&config, env!("CARGO_PKG_VERSION")));
             match content {
                 Content::FilePair(file_pair, diff) => {
                     open(cx, title, move |cx| FilePairView::new(file_pair, *diff, cx))

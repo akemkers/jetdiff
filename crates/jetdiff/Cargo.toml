@@ -16,5 +16,3 @@ jetdiff-git = { path = "../jetdiff-git" }
 jetdiff-ui = { path = "../jetdiff-ui", optional = true }
 jetdiff-tui = { path = "../jetdiff-tui", optional = true }
 jetdiff-viewmodel = { path = "../jetdiff-viewmodel" }
-serde.workspace = true
-toml = "1.1.6"

@@ -3112,8 +3112,6 @@ dependencies = [
  "jetdiff-tui",
  "jetdiff-ui",
  "jetdiff-viewmodel",
- "serde",
- "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -3126,6 +3124,7 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]

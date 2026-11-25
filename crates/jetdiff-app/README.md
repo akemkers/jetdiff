@@ -18,6 +18,7 @@ The state around the diff: the changed files in the repo, the file being shown, 
 | Rollback and `file:line` for the cursor's line: what is rolled back, or why it can't be               | `actions` |
 | The keys in the keymap bar and in the help on `?`                                                     | `help`    |
 | The keys outside the diff: switching files, moving focus, the side panel, source reload, help, zoom and quit | `keys`    |
+| The config file, `~/.config/jetdiff/config.toml`: made from the template if it is missing, and read with the template's defaults for missing keys | `config` |
 | Paths changed on disk, and whether HEAD moved, collected until it is quiet                             | `watcher` |
 | A notification and its level (`Notification`, `NotificationLevel`)                                    | `notification` |
 | One pinned and one brief notification, and which one shows now (`NotificationSlot`)                  | `notification_slot` |
@@ -31,7 +32,7 @@ The state around the diff: the changed files in the repo, the file being shown, 
 | `jetdiff-git`                       | Talking to `git`                                                           |
 | `jetdiff-files`                     | `ChangedFile` and the tree model                                           |
 | The UI (`jetdiff-ui`, `jetdiff-tui`) | Drawing, focus, mouse, animation, zoom, clipboard, timers and threads      |
-| The binary (`jetdiff`)              | Arguments and the config file                                              |
+| The binary (`jetdiff`)              | Arguments                                                                  |
 
 The boundary is that this crate decides **what** is shown, and the UI decides **how**. An `if` that changes what is shown belongs here.
 

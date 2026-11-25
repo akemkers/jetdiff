@@ -4,7 +4,7 @@ use jetdiff_tui::Settings;
 use jetdiff_viewmodel::Theme;
 
 use crate::Content;
-use crate::config::Config;
+use jetdiff_app::Config;
 
 pub fn run(content: Content, title: &str, config: Config) -> Result<(), String> {
     let settings = Settings {

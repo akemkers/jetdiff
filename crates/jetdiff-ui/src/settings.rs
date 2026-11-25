@@ -2,7 +2,9 @@
 
 use gpui::Global;
 
+use jetdiff_app::Config;
 use jetdiff_app::walkthrough::Writer;
+use jetdiff_viewmodel::Theme;
 
 use crate::theme::UiTheme;
 
@@ -21,3 +23,22 @@ pub struct Settings {
 }
 
 impl Global for Settings {}
+
+impl Settings {
+    /// `version` is shown at the right of the keymap bar.
+    pub fn new(config: &Config, version: &'static str) -> Self {
+        Self {
+            theme: UiTheme::new(&Theme::built_in()),
+            font_size: config.font_size,
+            fold_unchanged: config.fold_unchanged,
+            unified: config.unified,
+            side_panel_open: config.side_panel.open,
+            walkthrough: Writer {
+                command: config.walkthrough.command.clone(),
+                model: config.walkthrough.model.clone(),
+                language: config.walkthrough.language.clone(),
+            },
+            version,
+        }
+    }
+}

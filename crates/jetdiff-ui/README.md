@@ -13,21 +13,16 @@ The modules don't know each other. Shared state, like the selected file, lives i
 Two views are public:
 
 ```rust
-use jetdiff_ui::{Assets, FilePairView, RepoView, Settings, UiTheme, load_font};
+use jetdiff_ui::{Assets, FilePairView, RepoView, Settings, load_font};
 
-Application::new().with_assets(Assets).run(|cx| {
+let config = jetdiff_app::config::load()?;
+Application::new().with_assets(Assets).run(move |cx| {
     load_font(cx);
-    cx.set_global(Settings {
-        theme: UiTheme::mocha(),
-        font_size: 14.,
-        fold_unchanged: true,
-        unified: false,
-        side_panel_open: false,
-    });
+    cx.set_global(Settings::new(&config, env!("CARGO_PKG_VERSION")));
     // A File pair:
     cx.new(|cx| FilePairView::new(file_pair, diff, cx));
     // A repo source, with the tree and commits:
-    cx.new(|cx| RepoView::new(repo, changed_files, cx));
+    cx.new(|cx| RepoView::new(repo_source, commits, cx));
 });
 ```
 
