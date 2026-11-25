@@ -1,1 +1,5 @@
-{ "name": "jetdiff", "version": "0.2.0", "description": "Open the session's repo in jetdiff with /jetdiff" }
+{
+  "name": "jetdiff",
+  "version": "0.3.0",
+  "description": "Open the session's repo in jetdiff with /jetdiff"
+}
